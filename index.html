@@ -253,6 +253,11 @@ table.materials td.rank{color:var(--muted);width:38px;font-family:var(--mono)}
         <p class="muted small" id="top-status">Open this tab to rank items.</p>
       </div>
       <div class="top-filters">
+        <label>Category
+          <select id="f-cat">
+            <option value="">All</option>
+          </select>
+        </label>
         <label>Meta group
           <select id="f-tech">
             <option value="">All</option>
@@ -268,7 +273,7 @@ table.materials td.rank{color:var(--muted);width:38px;font-family:var(--mono)}
         <tbody id="top-body"></tbody>
       </table>
     </div>
-    <p class="muted small">Two-stage ranking: every buildable item is pre-scored on CCP <em>average</em> prices, then top candidates are checked against the <em>live</em> market at the hub selected on the Calculator tab — items not actually for sale are dropped. Ranked by <em>net</em> profit using real sell-order prices minus materials, the live job install fee, sales tax and broker fee (all from the Calculator tab's cost settings). Filter by meta group and optionally hide collectibles. Click a row to open it with full hub pricing.</p>
+    <p class="muted small">Two-stage ranking: every buildable item is pre-scored on CCP <em>average</em> prices, then top candidates are checked against the <em>live</em> market at the hub selected on the Calculator tab — items not actually for sale are dropped. Ranked by <em>net</em> profit using real sell-order prices minus materials, the live job install fee, sales tax and broker fee (all from the Calculator tab's cost settings). Filter by category (ships, weapons, ammo, components…) and meta group, and optionally hide collectibles. Click a row to open it with full hub pricing.</p>
   </div>
 </main>
 
@@ -342,6 +347,9 @@ async function loadMeta(){
     for(const it of ITEMS){ const g=meta[it.id]||1; it.meta=g; it.metaName=METAGROUPS[g]||METAGROUPS[String(g)]||""; if(it.metaName) it.cat=it.metaName; }
   }catch(e){}
 }
+async function loadCat(){
+  try{const r=await fetch("data/cat.json",{cache:"no-cache"});if(!r.ok)return;const d=await r.json();const k=d.kinds||{};for(const it of ITEMS){it.kind=k[it.id]||"Other";}}catch(e){}
+}
 function isCollectible(it){ const g=it.meta||1; return g===17||g===19||/\bedition\b/i.test(it.name); }
 function populateTechFilter(){
   const sel=$("f-tech"); if(!sel) return;
@@ -355,6 +363,13 @@ function populateTechFilter(){
     o.textContent=`${name} (${counts[g].toLocaleString()})`;
     sel.appendChild(o);
   }
+}
+function populateCatFilter(){
+  const sel=$("f-cat"); if(!sel) return;
+  const counts={};
+  for(const it of ITEMS){ const k=it.kind||"Other"; counts[k]=(counts[k]||0)+1; }
+  const keys=Object.keys(counts).sort((a,b)=>counts[b]-counts[a]);
+  for(const k of keys){ const o=document.createElement("option"); o.value=k; o.textContent=`${k} (${counts[k].toLocaleString()})`; sel.appendChild(o); }
 }
 
 // ---- live market stats (average + adjusted) and system cost indices ----
@@ -424,7 +439,6 @@ async function getHistory(typeId,hubKey){
   try{ const r=await fetch(`${ESI}/markets/${hub.region}/history/?datasource=tranquility&type_id=${typeId}`); if(r.ok) data=await r.json(); }catch(e){}
   historyCache.set(key,data); return data;
 }
-// Holt's linear exponential smoothing (level + trend)
 function holt(ys,alpha,beta){
   const n=ys.length;
   let level=ys[0], trend=(n>1?ys[1]-ys[0]:0);
@@ -485,7 +499,6 @@ async function renderHistory(){
   const change=first>0?((last-first)/first)*100:0;
   const high=Math.max(...slice.map(p=>p.highest)), low=Math.min(...slice.map(p=>p.lowest));
   const vol=slice.reduce((a,p)=>a+(p.volume||0),0)/slice.length;
-  // Holt forecast + ±1σ cone
   const {level,trend,fitted}=holt(ys,0.35,0.12);
   let se=0,cnt=0,mape=0,mc=0;
   for(let i=1;i<n;i++){const r=ys[i]-fitted[i];se+=r*r;cnt++;if(ys[i]>0){mape+=Math.abs(r)/ys[i];mc++;}}
@@ -610,10 +623,11 @@ async function renderTop(force){
   const hubKey=els.hub.value;
   const rates=readRates();
   const feeRate=rates.sci+rates.facility+rates.scc;
-  const techSel=$("f-tech").value, noCollect=$("f-nocollect").checked;
+  const techSel=$("f-tech").value, noCollect=$("f-nocollect").checked, catSel=$("f-cat").value;
   const hideC = noCollect && techSel!=="17" && techSel!=="19";
   const cand=[];
   for(const it of ITEMS){
+    if(catSel && (it.kind||"Other")!==catSel) continue;
     if(techSel && String(it.meta||1)!==techSel) continue;
     if(hideC && isCollectible(it)) continue;
     const pp=avg[it.id]; if(pp==null) continue;
@@ -643,9 +657,9 @@ async function renderTop(force){
   if(myRun!==topRunId) return;
   verified.sort((a,b)=>b.profit-a.profit);
   const top=verified.slice(0,10);
-  status.textContent=`Net profit at ${HUBS[hubKey].name} · ${techLabel} · live sell − materials − job fee − ${(rates.sales*100).toFixed(1)}% tax − ${(rates.broker*100).toFixed(1)}% broker · ME ${me}% (scanned ${cand.length.toLocaleString()}, checked ${pool.length}).`;
+  status.textContent=`Net profit at ${HUBS[hubKey].name} · ${catSel||"all categories"} · ${techLabel} · live sell − materials − job fee − ${(rates.sales*100).toFixed(1)}% tax − ${(rates.broker*100).toFixed(1)}% broker · ME ${me}% (scanned ${cand.length.toLocaleString()}, checked ${pool.length}).`;
   body.innerHTML="";
-  if(!top.length){ body.innerHTML=`<tr><td colspan="6" class="muted">No tradeable items found for this filter — try another meta group or Refresh.</td></tr>`; return; }
+  if(!top.length){ body.innerHTML=`<tr><td colspan="6" class="muted">No tradeable items found for this filter — try another category/meta group or Refresh.</td></tr>`; return; }
   top.forEach((r,i)=>{
     const tr=document.createElement("tr");
     tr.className="click";
@@ -663,13 +677,15 @@ function switchTab(name){
 }
 document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>switchTab(b.dataset.tab)));
 $("top-refresh").addEventListener("click",()=>renderTop(true));
-["f-tech","f-nocollect"].forEach(id=>$(id).addEventListener("change",()=>renderTop(false)));
+["f-cat","f-tech","f-nocollect"].forEach(id=>$(id).addEventListener("change",()=>renderTop(false)));
 
 (async function init(){
   try{
     await loadRecipes();
     await loadMeta();
+    await loadCat();
     populateTechFilter();
+    populateCatFilter();
     els.search.placeholder=`Start typing… ${ITEMS.length} items loaded`;
     fillSCI();
   }catch(err){els.banner.hidden=false;els.banner.textContent="Failed to load recipe data: "+err.message;}
