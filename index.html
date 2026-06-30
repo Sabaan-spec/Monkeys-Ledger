@@ -142,11 +142,9 @@ table.materials td.rank{color:var(--muted);width:38px}
         <p class="muted small" id="top-status">Open this tab to rank items.</p>
       </div>
       <div class="top-filters">
-        <label>Tech level
+        <label>Meta group
           <select id="f-tech">
             <option value="">All</option>
-            <option value="1">Tech I only</option>
-            <option value="2">Tech II only</option>
           </select>
         </label>
         <label><input type="checkbox" id="f-nocollect" checked /> Hide collectibles</label>
@@ -159,7 +157,7 @@ table.materials td.rank{color:var(--muted);width:38px}
         <tbody id="top-body"></tbody>
       </table>
     </div>
-    <p class="muted small">Two-stage ranking: every buildable item is pre-scored on CCP <em>average</em> prices, then the top candidates are checked against the <em>live</em> market at the hub selected on the Calculator tab — anything not actually for sale is dropped, and the rest are ranked using real sell-order prices (materials still valued at CCP average). Uses the ME% from the Calculator tab. Excludes job fees and taxes. Click a row to open it with full hub pricing.</p>
+    <p class="muted small">Two-stage ranking: every buildable item is pre-scored on CCP <em>average</em> prices, then the top candidates are checked against the <em>live</em> market at the hub selected on the Calculator tab — anything not actually for sale is dropped, and the rest are ranked using real sell-order prices (materials still valued at CCP average). Filter by meta group (Tech I/II, Faction, Officer, etc.) and optionally hide collectibles. Uses the ME% from the Calculator tab. Excludes job fees and taxes. Click a row to open it with full hub pricing.</p>
   </div>
 </main>
 
@@ -188,7 +186,7 @@ const HUBS={
 const ESI="https://esi.evetech.net/latest";
 const PRICE_TTL=5*60*1000;
 
-let RECIPES={},ITEMS=[],priceCache=new Map(),current=null,activeSuggestion=-1;
+let RECIPES={},ITEMS=[],priceCache=new Map(),current=null,activeSuggestion=-1,METAGROUPS={};
 const $=(id)=>document.getElementById(id);
 const els={};
 ["search","suggestions","hub","me","runs","buystrat","sellstrat","banner","result","empty","product-name","product-meta","refresh","s-matcost","s-revenue","s-profit","s-margin","mat-body","price-note"].forEach(id=>els[id]=$(id));
@@ -212,7 +210,6 @@ async function loadRecipes(){
   ITEMS=Object.entries(items).filter(([k])=>!k.startsWith("_")).map(([id,r])=>({id:Number(id),name:r.name,productQty:r.productQty||1,materials:r.materials||[],cat:r.cat||""})).sort((a,b)=>a.name.localeCompare(b.name));
 }
 
-let METAGROUPS={};
 async function loadMeta(){
   try{
     const r=await fetch("data/meta.json",{cache:"no-cache"});
@@ -225,6 +222,19 @@ async function loadMeta(){
 }
 // collectible = Premium (17) + Limited Time (19), plus special "Edition" items
 function isCollectible(it){ const g=it.meta||1; return g===17||g===19||/\bedition\b/i.test(it.name); }
+function populateTechFilter(){
+  const sel=$("f-tech"); if(!sel) return;
+  const counts={};
+  for(const it of ITEMS){ const g=it.meta||1; counts[g]=(counts[g]||0)+1; }
+  const ids=Object.keys(counts).map(Number).sort((a,b)=>a-b);
+  for(const g of ids){
+    const name=METAGROUPS[g]||METAGROUPS[String(g)]||("Meta group "+g);
+    const o=document.createElement("option");
+    o.value=String(g);
+    o.textContent=`${name} (${counts[g].toLocaleString()})`;
+    sel.appendChild(o);
+  }
+}
 
 async function getPrice(typeId,hubKey){
   const hub=HUBS[hubKey];const key=`${hub.region}:${typeId}`;
@@ -326,10 +336,11 @@ async function renderTop(force){
   const me=Math.max(0,Math.min(10,Number(els.me.value)||0));
   const hubKey=els.hub.value;
   const techSel=$("f-tech").value, noCollect=$("f-nocollect").checked;
+  const hideC = noCollect && techSel!=="17" && techSel!=="19";
   const cand=[];
   for(const it of ITEMS){
     if(techSel && String(it.meta||1)!==techSel) continue;
-    if(noCollect && isCollectible(it)) continue;
+    if(hideC && isCollectible(it)) continue;
     const pp=prices[it.id]; if(pp==null) continue;
     let cost=0, ok=true;
     for(const m of it.materials){ const mp=prices[m.id]; if(mp==null){ok=false;break;} cost+=mp*meAdjust(m.qty,1,me); }
@@ -338,6 +349,7 @@ async function renderTop(force){
   }
   cand.sort((a,b)=>b.avgProfit-a.avgProfit);
   const pool=cand.slice(0,120);
+  const techLabel = techSel ? (METAGROUPS[techSel]||METAGROUPS[String(techSel)]||("meta "+techSel)) : "all meta groups";
   status.textContent=`Checking live ${HUBS[hubKey].name} market for top candidates…`;
   const verified=[]; let idx=0;
   async function worker(){
@@ -354,9 +366,9 @@ async function renderTop(force){
   if(myRun!==topRunId) return;
   verified.sort((a,b)=>b.profit-a.profit);
   const top=verified.slice(0,10);
-  status.textContent=`Top buildable items actually selling at ${HUBS[hubKey].name} · product at live sell, materials at CCP average · ME ${me}% (scanned ${cand.length.toLocaleString()}, checked ${pool.length}).`;
+  status.textContent=`Top items selling at ${HUBS[hubKey].name} · ${techLabel} · product at live sell, materials at CCP average · ME ${me}% (scanned ${cand.length.toLocaleString()}, checked ${pool.length}).`;
   body.innerHTML="";
-  if(!top.length){ body.innerHTML=`<tr><td colspan="6" class="muted">No tradeable items found — try Refresh.</td></tr>`; return; }
+  if(!top.length){ body.innerHTML=`<tr><td colspan="6" class="muted">No tradeable items found for this filter — try another meta group or Refresh.</td></tr>`; return; }
   top.forEach((r,i)=>{
     const tr=document.createElement("tr");
     tr.className="click";
@@ -375,7 +387,7 @@ document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>swit
 $("top-refresh").addEventListener("click",()=>renderTop(true));
 ["f-tech","f-nocollect"].forEach(id=>$(id).addEventListener("change",()=>renderTop(false)));
 
-(async function init(){try{await loadRecipes();await loadMeta();els.search.placeholder=`Start typing… ${ITEMS.length} items loaded`;}catch(err){els.banner.hidden=false;els.banner.textContent="Failed to load recipe data: "+err.message;}})();
+(async function init(){try{await loadRecipes();await loadMeta();populateTechFilter();els.search.placeholder=`Start typing… ${ITEMS.length} items loaded`;}catch(err){els.banner.hidden=false;els.banner.textContent="Failed to load recipe data: "+err.message;}})();
 </script>
 </body>
 </html>
