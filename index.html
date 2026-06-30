@@ -51,6 +51,15 @@ table.materials td.miss{color:var(--bad)}
 .site-footer a{color:var(--accent);text-decoration:none}
 .site-footer a:hover{text-decoration:underline}
 .spin{opacity:.55}
+.tabs{display:flex;gap:8px;margin:0 0 18px}
+.tab{background:transparent;border:1px solid var(--border);color:var(--muted);padding:9px 18px;border-radius:8px;cursor:pointer;font-size:.9rem;font-weight:600;letter-spacing:.3px;transition:all .15s}
+.tab:hover{color:var(--text);border-color:var(--accent-dim)}
+.tab.active{background:var(--accent-dim);color:#eaf6ff;border-color:var(--accent-dim)}
+.top-head{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:16px 18px;flex-wrap:wrap}
+.top-head h2{margin:0;font-size:1.2rem}
+table.materials tr.click{cursor:pointer}
+table.materials tr.click:hover td{background:rgba(54,193,255,.08)}
+table.materials td.rank{color:var(--muted);width:38px}
 @media (max-width:760px){.summary-grid{grid-template-columns:repeat(2,1fr)}.field.narrow{width:calc(50% - 8px)}}
 </style>
 </head>
@@ -63,6 +72,12 @@ table.materials td.miss{color:var(--bad)}
 </header>
 
 <main class="wrap">
+  <nav class="tabs">
+    <button class="tab active" data-tab="calc">Calculator</button>
+    <button class="tab" data-tab="top">Top 10 Profitable</button>
+  </nav>
+
+  <div id="tab-calc">
   <section class="controls panel">
     <div class="field grow">
       <label for="search">Item to manufacture</label>
@@ -113,6 +128,24 @@ table.materials td.miss{color:var(--bad)}
     <p>Search for an item above to see its build cost and profitability.</p>
     <p class="muted small">Profit = product value − material cost. It does not yet include manufacturing job fees, taxes, or facility/rig bonuses — treat it as a clean material-vs-output comparison.</p>
   </section>
+  </div>
+
+  <div id="tab-top" hidden>
+    <div class="panel top-head">
+      <div>
+        <h2>Top 10 most profitable to manufacture</h2>
+        <p class="muted small" id="top-status">Open this tab to rank items.</p>
+      </div>
+      <button id="top-refresh" class="btn">↻ Refresh</button>
+    </div>
+    <div class="panel">
+      <table class="materials">
+        <thead><tr><th class="rank">#</th><th>Item</th><th class="num">Build cost</th><th class="num">Sell value</th><th class="num">Profit / run</th><th class="num">Margin</th></tr></thead>
+        <tbody id="top-body"></tbody>
+      </table>
+    </div>
+    <p class="muted small">Ranked by estimated profit per single run using CCP <em>average</em> prices (one market-wide figure per item), adjusted for the ME% set on the Calculator tab. This is a fast approximation for spotting opportunities — open an item on the Calculator tab for precise, hub-specific buy/sell pricing. Excludes job fees and taxes.</p>
+  </div>
 </main>
 
 <footer class="site-footer wrap">
@@ -253,6 +286,55 @@ els.search.addEventListener("keydown",(e)=>{
 document.addEventListener("click",(e)=>{if(!els.suggestions.contains(e.target)&&e.target!==els.search)els.suggestions.hidden=true;});
 ["hub","me","runs","buystrat","sellstrat"].forEach(id=>els[id].addEventListener("change",()=>current&&calculate()));
 els.refresh.addEventListener("click",()=>{priceCache.clear();calculate();});
+
+// ---- Tabs + Top 10 leaderboard ----
+let BULK_PRICES=null, bulkTs=0;
+async function getBulkPrices(force){
+  if(!force && BULK_PRICES && (Date.now()-bulkTs)<10*60*1000) return BULK_PRICES;
+  const r=await fetch(ESI+"/markets/prices/?datasource=tranquility");
+  if(!r.ok) throw new Error("ESI "+r.status);
+  const arr=await r.json();
+  const map={};
+  for(const p of arr){ const v=(p.average_price!=null)?p.average_price:p.adjusted_price; if(v!=null) map[p.type_id]=v; }
+  BULK_PRICES=map; bulkTs=Date.now(); return map;
+}
+async function renderTop(force){
+  const status=$("top-status"), body=$("top-body");
+  status.textContent="Loading CCP average prices…"; if(force) body.innerHTML="";
+  let prices;
+  try{ prices=await getBulkPrices(force); }catch(e){ status.textContent="Failed to load prices: "+e.message; return; }
+  const me=Math.max(0,Math.min(10,Number(els.me.value)||0));
+  const rows=[];
+  for(const it of ITEMS){
+    const pp=prices[it.id]; if(pp==null) continue;
+    let cost=0, ok=true;
+    for(const m of it.materials){ const mp=prices[m.id]; if(mp==null){ok=false;break;} cost+=mp*meAdjust(m.qty,1,me); }
+    if(!ok || cost<=0) continue;
+    const revenue=pp*it.productQty;
+    const profit=revenue-cost;
+    if(!isFinite(profit)) continue;
+    rows.push({it,cost,revenue,profit,margin:revenue>0?profit/revenue*100:0});
+  }
+  rows.sort((a,b)=>b.profit-a.profit);
+  const top=rows.slice(0,10);
+  status.textContent=`Ranked ${rows.length.toLocaleString()} buildable items by est. profit / run · CCP average prices · ME ${me}%.`;
+  body.innerHTML="";
+  top.forEach((r,i)=>{
+    const tr=document.createElement("tr");
+    tr.className="click";
+    tr.innerHTML=`<td class="rank">${i+1}</td><td>${r.it.name}</td><td class="num">${isk(r.cost)}</td><td class="num">${isk(r.revenue)}</td><td class="num ${r.profit>=0?'':'miss'}" style="${r.profit>=0?'color:var(--good)':''}">${isk(r.profit)}</td><td class="num">${r.margin.toFixed(1)}%</td>`;
+    tr.addEventListener("click",()=>{ switchTab("calc"); selectItem(r.it); });
+    body.appendChild(tr);
+  });
+}
+function switchTab(name){
+  document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));
+  $("tab-calc").hidden = name!=="calc";
+  $("tab-top").hidden = name!=="top";
+  if(name==="top" && ITEMS.length) renderTop(false);
+}
+document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>switchTab(b.dataset.tab)));
+$("top-refresh").addEventListener("click",()=>renderTop(true));
 
 (async function init(){try{await loadRecipes();els.search.placeholder=`Start typing… ${ITEMS.length} items loaded`;}catch(err){els.banner.hidden=false;els.banner.textContent="Failed to load recipe data: "+err.message;}})();
 </script>
