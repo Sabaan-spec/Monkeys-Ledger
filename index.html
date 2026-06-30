@@ -162,7 +162,14 @@ function meAdjust(b,runs,me){const mod=1-(me/100);const raw=Math.round(b*runs*mo
 async function loadRecipes(){
   let data=EMBEDDED_RECIPES;
   try{const r=await fetch("data/recipes.json",{cache:"no-cache"});if(r.ok)data=await r.json();}catch(e){}
-  if(data._note){els.banner.hidden=false;els.banner.textContent=data._note;}
+  if(data._note){els.banner.hidden=false;els.banner.textContent=data._note;}else{els.banner.hidden=true;}
+  if(data.schema==="compact"){
+    const N=data.names||{}, R=data.recipes||{};
+    ITEMS=Object.keys(R).map(pid=>({id:Number(pid),name:N[pid]||("Type "+pid),productQty:R[pid].q||1,
+      materials:(R[pid].m||[]).map(a=>({id:a[0],name:N[a[0]]||("Type "+a[0]),qty:a[1]})),cat:""}))
+      .filter(i=>i.name).sort((a,b)=>a.name.localeCompare(b.name));
+    return;
+  }
   const items=data.recipes||data;RECIPES=items;
   ITEMS=Object.entries(items).filter(([k])=>!k.startsWith("_")).map(([id,r])=>({id:Number(id),name:r.name,productQty:r.productQty||1,materials:r.materials||[],cat:r.cat||""})).sort((a,b)=>a.name.localeCompare(b.name));
 }
