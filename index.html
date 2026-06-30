@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EVE Forge — Manufacturing Profit Calculator</title>
+<meta name="description" content="Live EVE Online manufacturing cost & profit calculator. Pick an item, see material requirements priced from the in-game market via CCP's ESI API." />
+<style>
+:root{--bg:#0a0e14;--bg-2:#111824;--panel:#141d2b;--panel-2:#1b2738;--border:#243349;--text:#d7e2f0;--muted:#7e8ea3;--accent:#36c1ff;--accent-dim:#1d6f96;--good:#4ade80;--bad:#f87171;--warn:#fbbf24;--shadow:0 6px 24px rgba(0,0,0,.45)}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;background:radial-gradient(1200px 600px at 80% -10%,rgba(54,193,255,.10),transparent 60%),radial-gradient(900px 500px at -10% 10%,rgba(54,193,255,.06),transparent 55%),var(--bg);color:var(--text);line-height:1.5;min-height:100vh}
+.wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+.site-header{border-bottom:1px solid var(--border);background:linear-gradient(180deg,rgba(20,29,43,.8),rgba(10,14,20,0));padding:28px 0 22px}
+.site-header h1{margin:0;font-size:1.7rem;letter-spacing:.5px;font-weight:700}
+.site-header h1 .sub{display:block;font-size:.9rem;font-weight:500;color:var(--accent);letter-spacing:2px;text-transform:uppercase;margin-top:4px}
+.tag{color:var(--muted);margin:8px 0 0;font-size:.95rem}
+main.wrap{padding-top:24px;padding-bottom:40px}
+.panel{background:linear-gradient(180deg,var(--panel),var(--bg-2));border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow)}
+.controls{display:flex;flex-wrap:wrap;gap:16px;padding:18px;align-items:flex-end;position:relative;z-index:5}
+.field{display:flex;flex-direction:column;gap:6px;position:relative}
+.field.grow{flex:1 1 320px;min-width:260px}
+.field.narrow{width:120px}
+.field label{font-size:.72rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
+.field input,.field select{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:8px;font-size:.95rem;outline:none;transition:border-color .15s,box-shadow .15s}
+.field input:focus,.field select:focus{border-color:var(--accent-dim);box-shadow:0 0 0 3px rgba(54,193,255,.15)}
+.suggestions{list-style:none;margin:4px 0 0;padding:6px;position:absolute;top:100%;left:0;right:0;background:var(--panel-2);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow);max-height:320px;overflow-y:auto;z-index:50}
+.suggestions li{padding:9px 12px;border-radius:7px;cursor:pointer;display:flex;justify-content:space-between;gap:10px}
+.suggestions li:hover,.suggestions li.active{background:rgba(54,193,255,.14)}
+.suggestions li .cat{color:var(--muted);font-size:.8rem}
+.banner{margin:16px 0 0;padding:12px 16px;border-radius:10px;border:1px solid var(--warn);background:rgba(251,191,36,.08);color:#f5d98a;font-size:.9rem}
+.result{margin-top:20px;display:flex;flex-direction:column;gap:16px}
+.product-head{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:16px 18px}
+.product-head h2{margin:0;font-size:1.3rem}
+.muted{color:var(--muted)}.small{font-size:.85rem}
+.btn{background:var(--accent-dim);color:#eaf6ff;border:1px solid var(--accent-dim);padding:9px 14px;border-radius:8px;cursor:pointer;font-size:.9rem;white-space:nowrap;transition:background .15s,transform .05s}
+.btn:hover{background:var(--accent);color:#05121b}.btn:active{transform:translateY(1px)}
+.summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.stat{padding:16px;display:flex;flex-direction:column;gap:6px}
+.stat-label{font-size:.72rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
+.stat-val{font-size:1.35rem;font-weight:700;font-variant-numeric:tabular-nums}
+.stat-val.good{color:var(--good)}.stat-val.bad{color:var(--bad)}
+table.materials{width:100%;border-collapse:collapse}
+table.materials th,table.materials td{padding:11px 16px;text-align:left;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums}
+table.materials thead th{font-size:.72rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
+table.materials tbody tr:last-child td{border-bottom:none}
+table.materials .num{text-align:right}
+table.materials td.miss{color:var(--bad)}
+.empty{margin-top:28px;text-align:center;color:var(--muted);padding:30px 10px}
+.empty p{margin:6px 0}
+.site-footer{padding:24px 20px 40px;color:var(--muted);font-size:.8rem;border-top:1px solid var(--border);margin-top:30px}
+.site-footer a{color:var(--accent);text-decoration:none}
+.site-footer a:hover{text-decoration:underline}
+.spin{opacity:.55}
+@media (max-width:760px){.summary-grid{grid-template-columns:repeat(2,1fr)}.field.narrow{width:calc(50% - 8px)}}
+</style>
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap">
+    <h1>EVE&nbsp;Forge <span class="sub">Manufacturing Profit Calculator</span></h1>
+    <p class="tag">Live material &amp; product prices pulled straight from the EVE Online market (CCP ESI).</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="controls panel">
+    <div class="field grow">
+      <label for="search">Item to manufacture</label>
+      <input id="search" type="text" autocomplete="off" placeholder="Start typing… e.g. Rifter, Merlin, Punisher" />
+      <ul id="suggestions" class="suggestions" hidden></ul>
+    </div>
+    <div class="field">
+      <label for="hub">Market hub</label>
+      <select id="hub">
+        <option value="jita" selected>Jita (The Forge)</option>
+        <option value="amarr">Amarr (Domain)</option>
+        <option value="dodixie">Dodixie (Sinq Laison)</option>
+        <option value="rens">Rens (Heimatar)</option>
+        <option value="hek">Hek (Metropolis)</option>
+      </select>
+    </div>
+    <div class="field narrow"><label for="me">Material Eff. (ME%)</label><input id="me" type="number" min="0" max="10" step="1" value="10" /></div>
+    <div class="field narrow"><label for="runs">Runs</label><input id="runs" type="number" min="1" step="1" value="1" /></div>
+    <div class="field narrow"><label for="buystrat">Buy materials at</label>
+      <select id="buystrat"><option value="sell" selected>Sell price (instant)</option><option value="buy">Buy price (orders)</option></select></div>
+    <div class="field narrow"><label for="sellstrat">Sell product at</label>
+      <select id="sellstrat"><option value="sell" selected>Sell price (list)</option><option value="buy">Buy price (instant)</option></select></div>
+  </section>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <section id="result" class="result" hidden>
+    <div class="panel product-head">
+      <div><h2 id="product-name">—</h2><p id="product-meta" class="muted"></p></div>
+      <button id="refresh" class="btn">↻ Refresh prices</button>
+    </div>
+    <div class="summary-grid">
+      <div class="stat panel"><span class="stat-label">Material cost</span><span id="s-matcost" class="stat-val">—</span></div>
+      <div class="stat panel"><span class="stat-label">Product value</span><span id="s-revenue" class="stat-val">—</span></div>
+      <div class="stat panel"><span class="stat-label">Profit</span><span id="s-profit" class="stat-val">—</span></div>
+      <div class="stat panel"><span class="stat-label">Margin</span><span id="s-margin" class="stat-val">—</span></div>
+    </div>
+    <div class="panel">
+      <table class="materials">
+        <thead><tr><th>Material</th><th class="num">Qty / job</th><th class="num">Unit price</th><th class="num">Subtotal</th></tr></thead>
+        <tbody id="mat-body"></tbody>
+      </table>
+    </div>
+    <p class="muted small" id="price-note"></p>
+  </section>
+
+  <section id="empty" class="empty">
+    <p>Search for an item above to see its build cost and profitability.</p>
+    <p class="muted small">Profit = product value − material cost. It does not yet include manufacturing job fees, taxes, or facility/rig bonuses — treat it as a clean material-vs-output comparison.</p>
+  </section>
+</main>
+
+<footer class="site-footer wrap">
+  <p>Prices via <a href="https://esi.evetech.net/" target="_blank" rel="noopener">CCP ESI</a>. EVE Online and all related trademarks are property of CCP hf. This is an unofficial fan tool.</p>
+</footer>
+
+<script>
+"use strict";
+
+/* ---- Embedded sample recipe data (real type IDs; representative T1-frigate
+   quantities for demo). If a data/recipes.json file is present alongside this
+   page (e.g. produced by build_recipes.py), it is loaded instead. ---- */
+const EMBEDDED_RECIPES = {
+  "_note":"SAMPLE DATASET — type IDs are real but material quantities are representative T1-frigate figures for demonstration. Add a data/recipes.json (see build_recipes.py) to load the complete, exact dataset from CCP's Static Data Export.",
+  "recipes":{
+    "587":{"name":"Rifter","cat":"Frigate (Minmatar)","productQty":1,"materials":[{"id":34,"name":"Tritanium","qty":24000},{"id":35,"name":"Pyerite","qty":4500},{"id":36,"name":"Mexallon","qty":1400},{"id":37,"name":"Isogen","qty":200},{"id":38,"name":"Nocxium","qty":75},{"id":39,"name":"Zydrine","qty":20},{"id":40,"name":"Megacyte","qty":6}]},
+    "585":{"name":"Slasher","cat":"Frigate (Minmatar)","productQty":1,"materials":[{"id":34,"name":"Tritanium","qty":22000},{"id":35,"name":"Pyerite","qty":4200},{"id":36,"name":"Mexallon","qty":1300},{"id":37,"name":"Isogen","qty":190},{"id":38,"name":"Nocxium","qty":70},{"id":39,"name":"Zydrine","qty":18},{"id":40,"name":"Megacyte","qty":5}]},
+    "603":{"name":"Merlin","cat":"Frigate (Caldari)","productQty":1,"materials":[{"id":34,"name":"Tritanium","qty":26000},{"id":35,"name":"Pyerite","qty":5200},{"id":36,"name":"Mexallon","qty":1600},{"id":37,"name":"Isogen","qty":240},{"id":38,"name":"Nocxium","qty":82},{"id":39,"name":"Zydrine","qty":22},{"id":40,"name":"Megacyte","qty":7}]},
+    "602":{"name":"Kestrel","cat":"Frigate (Caldari)","productQty":1,"materials":[{"id":34,"name":"Tritanium","qty":25000},{"id":35,"name":"Pyerite","qty":5000},{"id":36,"name":"Mexallon","qty":1550},{"id":37,"name":"Isogen","qty":230},{"id":38,"name":"Nocxium","qty":80},{"id":39,"name":"Zydrine","qty":21},{"id":40,"name":"Megacyte","qty":6}]},
+    "597":{"name":"Punisher","cat":"Frigate (Amarr)","productQty":1,"materials":[{"id":34,"name":"Tritanium","qty":27000},{"id":35,"name":"Pyerite","qty":5400},{"id":36,"name":"Mexallon","qty":1700},{"id":37,"name":"Isogen","qty":250},{"id":38,"name":"Nocxium","qty":85},{"id":39,"name":"Zydrine","qty":24},{"id":40,"name":"Megacyte","qty":7}]},
+    "591":{"name":"Tormentor","cat":"Frigate (Amarr)","productQty":1,"materials":[{"id":34,"name":"Tritanium","qty":23500},{"id":35,"name":"Pyerite","qty":4700},{"id":36,"name":"Mexallon","qty":1450},{"id":37,"name":"Isogen","qty":210},{"id":38,"name":"Nocxium","qty":76},{"id":39,"name":"Zydrine","qty":19},{"id":40,"name":"Megacyte","qty":6}]},
+    "594":{"name":"Incursus","cat":"Frigate (Gallente)","productQty":1,"materials":[{"id":34,"name":"Tritanium","qty":24500},{"id":35,"name":"Pyerite","qty":4900},{"id":36,"name":"Mexallon","qty":1500},{"id":37,"name":"Isogen","qty":220},{"id":38,"name":"Nocxium","qty":78},{"id":39,"name":"Zydrine","qty":20},{"id":40,"name":"Megacyte","qty":6}]},
+    "593":{"name":"Tristan","cat":"Frigate (Gallente)","productQty":1,"materials":[{"id":34,"name":"Tritanium","qty":25500},{"id":35,"name":"Pyerite","qty":5100},{"id":36,"name":"Mexallon","qty":1580},{"id":37,"name":"Isogen","qty":235},{"id":38,"name":"Nocxium","qty":81},{"id":39,"name":"Zydrine","qty":21},{"id":40,"name":"Megacyte","qty":7}]},
+    "608":{"name":"Atron","cat":"Frigate (Gallente)","productQty":1,"materials":[{"id":34,"name":"Tritanium","qty":21500},{"id":35,"name":"Pyerite","qty":4100},{"id":36,"name":"Mexallon","qty":1280},{"id":37,"name":"Isogen","qty":185},{"id":38,"name":"Nocxium","qty":68},{"id":39,"name":"Zydrine","qty":17},{"id":40,"name":"Megacyte","qty":5}]}
+  }
+};
+
+const HUBS={
+  jita:{name:"Jita",region:10000002,station:60003760},
+  amarr:{name:"Amarr",region:10000043,station:60008494},
+  dodixie:{name:"Dodixie",region:10000032,station:60011866},
+  rens:{name:"Rens",region:10000030,station:60004588},
+  hek:{name:"Hek",region:10000042,station:60005686}
+};
+const ESI="https://esi.evetech.net/latest";
+const PRICE_TTL=5*60*1000;
+
+let RECIPES={},ITEMS=[],priceCache=new Map(),current=null,activeSuggestion=-1;
+const $=(id)=>document.getElementById(id);
+const els={};
+["search","suggestions","hub","me","runs","buystrat","sellstrat","banner","result","empty","product-name","product-meta","refresh","s-matcost","s-revenue","s-profit","s-margin","mat-body","price-note"].forEach(id=>els[id]=$(id));
+
+const isk=(n)=>(n==null||isNaN(n))?"—":n.toLocaleString("en-US",{maximumFractionDigits:2})+" ISK";
+const intf=(n)=>n.toLocaleString("en-US");
+function meAdjust(b,runs,me){const mod=1-(me/100);const raw=Math.round(b*runs*mod*100)/100;return Math.max(runs,Math.ceil(raw-1e-9));}
+
+async function loadRecipes(){
+  let data=EMBEDDED_RECIPES;
+  try{const r=await fetch("data/recipes.json",{cache:"no-cache"});if(r.ok)data=await r.json();}catch(e){}
+  if(data._note){els.banner.hidden=false;els.banner.textContent=data._note;}
+  const items=data.recipes||data;RECIPES=items;
+  ITEMS=Object.entries(items).filter(([k])=>!k.startsWith("_")).map(([id,r])=>({id:Number(id),name:r.name,productQty:r.productQty||1,materials:r.materials||[],cat:r.cat||""})).sort((a,b)=>a.name.localeCompare(b.name));
+}
+
+async function getPrice(typeId,hubKey){
+  const hub=HUBS[hubKey];const key=`${hub.region}:${typeId}`;
+  const c=priceCache.get(key);if(c&&(Date.now()-c.ts)<PRICE_TTL)return c;
+  const url=`${ESI}/markets/${hub.region}/orders/?datasource=tranquility&order_type=all&type_id=${typeId}`;
+  let orders=[];
+  try{const res=await fetch(url,{headers:{"Accept":"application/json"}});if(res.ok)orders=await res.json();}catch(e){}
+  const atStation=orders.filter(o=>o.location_id===hub.station);
+  const scope=atStation.length?atStation:orders;
+  const sells=scope.filter(o=>!o.is_buy_order).map(o=>o.price);
+  const buys=scope.filter(o=>o.is_buy_order).map(o=>o.price);
+  const result={ts:Date.now(),sell:sells.length?Math.min(...sells):null,buy:buys.length?Math.max(...buys):null,regionWide:!atStation.length&&orders.length>0};
+  priceCache.set(key,result);return result;
+}
+
+function renderSuggestions(q){
+  const query=q.trim().toLowerCase();els.suggestions.innerHTML="";activeSuggestion=-1;
+  if(!query){els.suggestions.hidden=true;return;}
+  const matches=ITEMS.filter(i=>i.name.toLowerCase().includes(query)).slice(0,40);
+  if(!matches.length){els.suggestions.hidden=true;return;}
+  for(const m of matches){const li=document.createElement("li");li.innerHTML=`<span>${m.name}</span><span class="cat">${m.cat||""}</span>`;li.addEventListener("mousedown",(e)=>{e.preventDefault();selectItem(m);});els.suggestions.appendChild(li);}
+  els.suggestions.hidden=false;
+}
+function selectItem(item){current=item;els.search.value=item.name;els.suggestions.hidden=true;calculate();}
+
+async function calculate(){
+  if(!current)return;
+  const hubKey=els.hub.value;
+  const me=Math.max(0,Math.min(10,Number(els.me.value)||0));
+  const runs=Math.max(1,Math.floor(Number(els.runs.value)||1));
+  const buyStrat=els.buystrat.value,sellStrat=els.sellstrat.value;
+  els.empty.hidden=true;els.result.hidden=false;els.result.classList.add("spin");
+  els["product-name"].textContent=current.name;
+  els["product-meta"].textContent=`${current.materials.length} materials · ${current.productQty*runs} unit(s) output · ME ${me}% · ${runs} run(s) · ${HUBS[hubKey].name}`;
+  const ids=current.materials.map(m=>m.id);ids.push(current.id);
+  const priceMap={};
+  await Promise.all([...new Set(ids)].map(async id=>{priceMap[id]=await getPrice(id,hubKey);}));
+  els["mat-body"].innerHTML="";
+  let matCost=0,anyRegionWide=false,anyMissing=false;
+  for(const m of current.materials){
+    const qty=meAdjust(m.qty,runs,me);const p=priceMap[m.id]||{};
+    const unit=buyStrat==="buy"?p.buy:p.sell;const sub=(unit!=null)?unit*qty:null;
+    if(sub!=null)matCost+=sub;else anyMissing=true;if(p.regionWide)anyRegionWide=true;
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${m.name}</td><td class="num">${intf(qty)}</td><td class="num ${unit==null?'miss':''}">${unit==null?'no orders':isk(unit)}</td><td class="num ${sub==null?'miss':''}">${sub==null?'—':isk(sub)}</td>`;
+    els["mat-body"].appendChild(tr);
+  }
+  const pp=priceMap[current.id]||{};
+  const prodUnit=sellStrat==="buy"?pp.buy:pp.sell;
+  const outputUnits=current.productQty*runs;
+  const revenue=(prodUnit!=null)?prodUnit*outputUnits:null;
+  if(pp.regionWide)anyRegionWide=true;
+  const profit=(revenue!=null)?revenue-matCost:null;
+  const margin=(revenue!=null&&revenue>0)?(profit/revenue)*100:null;
+  els["s-matcost"].textContent=isk(matCost);
+  els["s-revenue"].textContent=revenue==null?"no orders":isk(revenue);
+  const pe=els["s-profit"];pe.textContent=profit==null?"—":isk(profit);pe.className="stat-val "+(profit==null?"":profit>=0?"good":"bad");
+  const mEl=els["s-margin"];mEl.textContent=margin==null?"—":margin.toFixed(1)+"%";mEl.className="stat-val "+(margin==null?"":margin>=0?"good":"bad");
+  const notes=[];
+  notes.push(`Materials priced at hub ${buyStrat==="buy"?"buy orders":"sell orders"}; product at ${sellStrat==="buy"?"buy orders":"sell orders"}.`);
+  if(anyRegionWide)notes.push("Some prices fell back to region-wide orders (no orders at the hub station).");
+  if(anyMissing)notes.push("Some materials had no market orders — material cost is understated.");
+  notes.push("Prices cached up to 5 min. Excludes job install fees, taxes & facility bonuses.");
+  els["price-note"].textContent=notes.join(" ");
+  els.result.classList.remove("spin");
+}
+
+els.search.addEventListener("input",(e)=>renderSuggestions(e.target.value));
+els.search.addEventListener("focus",(e)=>{if(e.target.value)renderSuggestions(e.target.value);});
+els.search.addEventListener("keydown",(e)=>{
+  const items=[...els.suggestions.querySelectorAll("li")];if(!items.length)return;
+  if(e.key==="ArrowDown"){e.preventDefault();activeSuggestion=Math.min(activeSuggestion+1,items.length-1);}
+  else if(e.key==="ArrowUp"){e.preventDefault();activeSuggestion=Math.max(activeSuggestion-1,0);}
+  else if(e.key==="Enter"){e.preventDefault();const name=(activeSuggestion>=0?items[activeSuggestion].textContent:els.search.value).trim();const match=ITEMS.find(i=>i.name===name)||ITEMS.find(i=>i.name.toLowerCase().includes(els.search.value.trim().toLowerCase()));if(match)selectItem(match);return;}
+  else return;
+  items.forEach((li,i)=>li.classList.toggle("active",i===activeSuggestion));
+});
+document.addEventListener("click",(e)=>{if(!els.suggestions.contains(e.target)&&e.target!==els.search)els.suggestions.hidden=true;});
+["hub","me","runs","buystrat","sellstrat"].forEach(id=>els[id].addEventListener("change",()=>current&&calculate()));
+els.refresh.addEventListener("click",()=>{priceCache.clear();calculate();});
+
+(async function init(){try{await loadRecipes();els.search.placeholder=`Start typing… ${ITEMS.length} items loaded`;}catch(err){els.banner.hidden=false;els.banner.textContent="Failed to load recipe data: "+err.message;}})();
+</script>
+</body>
+</html>
