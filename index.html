@@ -67,6 +67,15 @@ table.materials td.miss{color:var(--bad)}
 table.materials tr.click{cursor:pointer}
 table.materials tr.click:hover td{background:rgba(54,193,255,.08)}
 table.materials td.rank{color:var(--muted);width:38px}
+.hist-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 16px 0;flex-wrap:wrap}
+.hist-head select{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:7px;font-size:.85rem;cursor:pointer}
+.hist-head select:focus{outline:none;border-color:var(--accent-dim)}
+.hist-stats{display:flex;gap:22px;flex-wrap:wrap;padding:12px 16px 0;font-variant-numeric:tabular-nums}
+.hist-stats .hs{display:flex;flex-direction:column;gap:2px}
+.hist-stats .hs .l{font-size:.68rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
+.hist-stats .hs .v{font-weight:700}
+#hist-chart{padding:8px 10px 14px}
+#hist-chart svg{width:100%;height:auto;display:block}
 @media (max-width:760px){.summary-grid{grid-template-columns:repeat(2,1fr)}.field.narrow{width:calc(50% - 8px)}}
 </style>
 </head>
@@ -132,6 +141,24 @@ table.materials td.rank{color:var(--muted);width:38px}
       <div class="stat panel"><span class="stat-label">Net profit</span><span id="s-profit" class="stat-val">—</span></div>
       <div class="stat panel"><span class="stat-label">Net margin</span><span id="s-margin" class="stat-val">—</span></div>
     </div>
+
+    <div class="panel" id="history-panel">
+      <div class="hist-head">
+        <div><strong>Price history</strong> <span class="muted small">— region daily average (CCP ESI)</span></div>
+        <label class="muted small">Period
+          <select id="hist-period">
+            <option value="7">7 days</option>
+            <option value="30">30 days</option>
+            <option value="90" selected>90 days</option>
+            <option value="180">180 days</option>
+            <option value="365">1 year</option>
+          </select>
+        </label>
+      </div>
+      <div id="hist-stats" class="hist-stats"></div>
+      <div id="hist-chart"></div>
+    </div>
+
     <div class="panel">
       <table class="materials">
         <thead><tr><th>Material</th><th class="num">Qty / job</th><th class="num">Unit price</th><th class="num">Subtotal</th></tr></thead>
@@ -199,13 +226,14 @@ const HUBS={
 const ESI="https://esi.evetech.net/latest";
 const PRICE_TTL=5*60*1000;
 
-let RECIPES={},ITEMS=[],priceCache=new Map(),current=null,activeSuggestion=-1,METAGROUPS={};
+let RECIPES={},ITEMS=[],priceCache=new Map(),historyCache=new Map(),current=null,activeSuggestion=-1,METAGROUPS={};
 const $=(id)=>document.getElementById(id);
 const els={};
 ["search","suggestions","hub","me","runs","buystrat","sellstrat","banner","result","empty","product-name","product-meta","refresh","s-matcost","s-revenue","s-profit","s-margin","mat-body","price-note","fee-breakdown"].forEach(id=>els[id]=$(id));
 
 const isk=(n)=>(n==null||isNaN(n))?"—":n.toLocaleString("en-US",{maximumFractionDigits:2})+" ISK";
 const intf=(n)=>n.toLocaleString("en-US");
+function iskShort(n){const a=Math.abs(n);if(a>=1e9)return (n/1e9).toFixed(2)+"B";if(a>=1e6)return (n/1e6).toFixed(2)+"M";if(a>=1e3)return (n/1e3).toFixed(1)+"K";return n.toFixed(0);}
 function meAdjust(b,runs,me){const mod=1-(me/100);const raw=Math.round(b*runs*mod*100)/100;return Math.max(runs,Math.ceil(raw-1e-9));}
 function pct(id){return Math.max(0,Number($(id).value)||0)/100;}
 function readRates(){return {sci:pct("f-sci"),facility:pct("f-facility"),scc:pct("f-scc"),sales:pct("f-sales"),broker:pct("f-broker")};}
@@ -290,6 +318,52 @@ async function getPrice(typeId,hubKey){
   priceCache.set(key,result);return result;
 }
 
+async function getHistory(typeId,hubKey){
+  const hub=HUBS[hubKey];const key=`${hub.region}:${typeId}`;
+  if(historyCache.has(key)) return historyCache.get(key);
+  let data=[];
+  try{ const r=await fetch(`${ESI}/markets/${hub.region}/history/?datasource=tranquility&type_id=${typeId}`); if(r.ok) data=await r.json(); }catch(e){}
+  historyCache.set(key,data); return data;
+}
+function buildChart(pts){
+  const W=820,H=240,padL=74,padR=14,padT=14,padB=26;
+  const his=pts.map(p=>p.highest), los=pts.map(p=>p.lowest), avg=pts.map(p=>p.average);
+  let min=Math.min(...los), max=Math.max(...his); if(!isFinite(min))min=0; if(!isFinite(max))max=1; const rng=(max-min)||1;
+  const n=pts.length;
+  const X=i=>padL+(n<=1?0:(i/(n-1))*(W-padL-padR));
+  const Y=v=>padT+(1-(v-min)/rng)*(H-padT-padB);
+  const top=his.map((v,i)=>`${X(i).toFixed(1)},${Y(v).toFixed(1)}`);
+  const bot=los.map((v,i)=>`${X(i).toFixed(1)},${Y(v).toFixed(1)}`).reverse();
+  const band="M "+top.join(" L ")+" L "+bot.join(" L ")+" Z";
+  const line="M "+avg.map((v,i)=>`${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" L ");
+  const gy=[max,(max+min)/2,min]; let grid="";
+  gy.forEach(v=>{const yy=Y(v).toFixed(1);grid+=`<line x1="${padL}" y1="${yy}" x2="${W-padR}" y2="${yy}" stroke="#243349" stroke-width="1"/><text x="${padL-8}" y="${(Y(v)+4).toFixed(1)}" text-anchor="end" font-size="11" fill="#7e8ea3">${iskShort(v)}</text>`;});
+  const xlab=`<text x="${padL}" y="${H-6}" font-size="11" fill="#7e8ea3">${pts[0].date}</text><text x="${W-padR}" y="${H-6}" text-anchor="end" font-size="11" fill="#7e8ea3">${pts[n-1].date}</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="price history chart">${grid}<path d="${band}" fill="rgba(54,193,255,.10)" stroke="none"/><path d="${line}" fill="none" stroke="#36c1ff" stroke-width="2" stroke-linejoin="round"/>${xlab}</svg>`;
+}
+async function renderHistory(){
+  if(!current) return;
+  const host=$("hist-chart"), statsEl=$("hist-stats");
+  host.innerHTML='<p class="muted small">Loading price history…</p>'; statsEl.innerHTML="";
+  const hubKey=els.hub.value;
+  const days=Math.max(1,Number($("hist-period").value)||90);
+  let hist=[];
+  try{ hist=await getHistory(current.id,hubKey); }catch(e){}
+  if(!hist || !hist.length){ host.innerHTML='<p class="muted small">No market history for this item in '+HUBS[hubKey].name+"’s region.</p>"; return; }
+  const slice=hist.slice(-days);
+  const first=slice[0].average, last=slice[slice.length-1].average;
+  const change=first>0?((last-first)/first)*100:0;
+  const high=Math.max(...slice.map(p=>p.highest)), low=Math.min(...slice.map(p=>p.lowest));
+  const vol=slice.reduce((a,p)=>a+(p.volume||0),0)/slice.length;
+  statsEl.innerHTML=`
+    <div class="hs"><span class="l">Latest avg</span><span class="v">${isk(last)}</span></div>
+    <div class="hs"><span class="l">Change (${slice.length}d)</span><span class="v" style="color:${change>=0?'var(--good)':'var(--bad)'}">${change>=0?'+':''}${change.toFixed(1)}%</span></div>
+    <div class="hs"><span class="l">Period high</span><span class="v">${isk(high)}</span></div>
+    <div class="hs"><span class="l">Period low</span><span class="v">${isk(low)}</span></div>
+    <div class="hs"><span class="l">Avg daily volume</span><span class="v">${intf(Math.round(vol))}</span></div>`;
+  host.innerHTML=buildChart(slice);
+}
+
 function renderSuggestions(q){
   const query=q.trim().toLowerCase();els.suggestions.innerHTML="";activeSuggestion=-1;
   if(!query){els.suggestions.hidden=true;return;}
@@ -321,7 +395,7 @@ async function calculate(){
     const qty=meAdjust(m.qty,runs,me);const p=priceMap[m.id]||{};
     const unit=buyStrat==="buy"?p.buy:p.sell;const sub=(unit!=null)?unit*qty:null;
     if(sub!=null)matCost+=sub;else anyMissing=true;if(p.regionWide)anyRegionWide=true;
-    if(ADJ[m.id]!=null) eiv+=ADJ[m.id]*m.qty*runs; // EIV uses adjusted price at base (ME0) quantities
+    if(ADJ[m.id]!=null) eiv+=ADJ[m.id]*m.qty*runs;
     const tr=document.createElement("tr");
     tr.innerHTML=`<td>${m.name}</td><td class="num">${intf(qty)}</td><td class="num ${unit==null?'miss':''}">${unit==null?'no orders':isk(unit)}</td><td class="num ${sub==null?'miss':''}">${sub==null?'—':isk(sub)}</td>`;
     els["mat-body"].appendChild(tr);
@@ -349,6 +423,7 @@ async function calculate(){
   notes.push("Prices cached up to 5 min. Sales tax & broker fee depend on your skills/standings (editable above).");
   els["price-note"].textContent=notes.join(" ");
   els.result.classList.remove("spin");
+  renderHistory();
 }
 
 els.search.addEventListener("input",(e)=>renderSuggestions(e.target.value));
@@ -366,6 +441,7 @@ document.addEventListener("click",(e)=>{if(!els.suggestions.contains(e.target)&&
 els.hub.addEventListener("change",async()=>{ await fillSCI(); if(current) calculate(); });
 els.refresh.addEventListener("click",()=>{priceCache.clear();calculate();});
 $("sci-refresh").addEventListener("click",async()=>{ SYS_INDICES=null; await fillSCI(); if(current) calculate(); });
+$("hist-period").addEventListener("change",renderHistory);
 
 // ---- Top 10 leaderboard (net profit) ----
 let topRunId=0;
