@@ -17,6 +17,8 @@ body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;b
 main.wrap{padding-top:24px;padding-bottom:40px}
 .panel{background:linear-gradient(180deg,var(--panel),var(--bg-2));border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow)}
 .controls{display:flex;flex-wrap:wrap;gap:16px;padding:18px;align-items:flex-end;position:relative;z-index:5}
+.controls.costs{margin-top:14px;z-index:4}
+.section-label{flex-basis:100%;font-size:.72rem;text-transform:uppercase;letter-spacing:1px;color:var(--accent);margin:-2px 0 2px}
 .field{display:flex;flex-direction:column;gap:6px;position:relative}
 .field.grow{flex:1 1 320px;min-width:260px}
 .field.narrow{width:120px}
@@ -107,6 +109,16 @@ table.materials td.rank{color:var(--muted);width:38px}
       <select id="sellstrat"><option value="sell" selected>Sell price (list)</option><option value="buy">Buy price (instant)</option></select></div>
   </section>
 
+  <section class="controls costs panel">
+    <div class="section-label">Industry costs &amp; taxes — folded into net profit on both tabs</div>
+    <div class="field narrow"><label for="f-sci" title="Pulled live from ESI per hub system">System cost index %</label><input id="f-sci" type="number" min="0" step="0.01" value="0" /></div>
+    <div class="field narrow"><label for="f-facility" title="Structure/station job tax">Facility tax %</label><input id="f-facility" type="number" min="0" step="0.01" value="0.25" /></div>
+    <div class="field narrow"><label for="f-scc" title="Flat CCP SCC surcharge on EIV">SCC surcharge %</label><input id="f-scc" type="number" min="0" step="0.01" value="1.5" /></div>
+    <div class="field narrow"><label for="f-sales" title="Depends on Accounting skill">Sales tax %</label><input id="f-sales" type="number" min="0" step="0.01" value="4.5" /></div>
+    <div class="field narrow"><label for="f-broker" title="Sell-order fee; Broker Relations skill + standings">Broker fee %</label><input id="f-broker" type="number" min="0" step="0.01" value="2.5" /></div>
+    <div class="field"><label>&nbsp;</label><button id="sci-refresh" class="btn" type="button">↻ Live system index</button></div>
+  </section>
+
   <div id="banner" class="banner" hidden></div>
 
   <section id="result" class="result" hidden>
@@ -115,10 +127,10 @@ table.materials td.rank{color:var(--muted);width:38px}
       <button id="refresh" class="btn">↻ Refresh prices</button>
     </div>
     <div class="summary-grid">
-      <div class="stat panel"><span class="stat-label">Material cost</span><span id="s-matcost" class="stat-val">—</span></div>
+      <div class="stat panel"><span class="stat-label">Total cost</span><span id="s-matcost" class="stat-val">—</span></div>
       <div class="stat panel"><span class="stat-label">Product value</span><span id="s-revenue" class="stat-val">—</span></div>
-      <div class="stat panel"><span class="stat-label">Profit</span><span id="s-profit" class="stat-val">—</span></div>
-      <div class="stat panel"><span class="stat-label">Margin</span><span id="s-margin" class="stat-val">—</span></div>
+      <div class="stat panel"><span class="stat-label">Net profit</span><span id="s-profit" class="stat-val">—</span></div>
+      <div class="stat panel"><span class="stat-label">Net margin</span><span id="s-margin" class="stat-val">—</span></div>
     </div>
     <div class="panel">
       <table class="materials">
@@ -126,12 +138,13 @@ table.materials td.rank{color:var(--muted);width:38px}
         <tbody id="mat-body"></tbody>
       </table>
     </div>
+    <p class="muted small" id="fee-breakdown"></p>
     <p class="muted small" id="price-note"></p>
   </section>
 
   <section id="empty" class="empty">
     <p>Search for an item above to see its build cost and profitability.</p>
-    <p class="muted small">Profit = product value − material cost. It does not yet include manufacturing job fees, taxes, or facility/rig bonuses — treat it as a clean material-vs-output comparison.</p>
+    <p class="muted small">Net profit = product value − materials − job install fee − sales tax − broker fee. Job fee = EIV × (system cost index + facility tax + SCC surcharge), where EIV uses CCP adjusted prices at base material quantities.</p>
   </section>
   </div>
 
@@ -153,16 +166,16 @@ table.materials td.rank{color:var(--muted);width:38px}
     </div>
     <div class="panel">
       <table class="materials">
-        <thead><tr><th class="rank">#</th><th>Item</th><th class="num">Build cost</th><th class="num">Sell value</th><th class="num">Profit / run</th><th class="num">Margin</th></tr></thead>
+        <thead><tr><th class="rank">#</th><th>Item</th><th class="num">Build cost</th><th class="num">Sell value</th><th class="num">Net profit / run</th><th class="num">Margin</th></tr></thead>
         <tbody id="top-body"></tbody>
       </table>
     </div>
-    <p class="muted small">Two-stage ranking: every buildable item is pre-scored on CCP <em>average</em> prices, then the top candidates are checked against the <em>live</em> market at the hub selected on the Calculator tab — anything not actually for sale is dropped, and the rest are ranked using real sell-order prices (materials still valued at CCP average). Filter by meta group (Tech I/II, Faction, Officer, etc.) and optionally hide collectibles. Uses the ME% from the Calculator tab. Excludes job fees and taxes. Click a row to open it with full hub pricing.</p>
+    <p class="muted small">Two-stage ranking: every buildable item is pre-scored on CCP <em>average</em> prices, then top candidates are checked against the <em>live</em> market at the hub selected on the Calculator tab — items not actually for sale are dropped. Ranked by <em>net</em> profit using real sell-order prices minus materials, the live job install fee, sales tax and broker fee (all from the Calculator tab's cost settings). Filter by meta group and optionally hide collectibles. Click a row to open it with full hub pricing.</p>
   </div>
 </main>
 
 <footer class="site-footer wrap">
-  <p>Prices via <a href="https://esi.evetech.net/" target="_blank" rel="noopener">CCP ESI</a>. EVE Online and all related trademarks are property of CCP hf. This is an unofficial fan tool.</p>
+  <p>Prices &amp; cost indices via <a href="https://esi.evetech.net/" target="_blank" rel="noopener">CCP ESI</a>. EVE Online and all related trademarks are property of CCP hf. This is an unofficial fan tool.</p>
 </footer>
 
 <script>
@@ -177,11 +190,11 @@ const EMBEDDED_RECIPES = {
 };
 
 const HUBS={
-  jita:{name:"Jita",region:10000002,station:60003760},
-  amarr:{name:"Amarr",region:10000043,station:60008494},
-  dodixie:{name:"Dodixie",region:10000032,station:60011866},
-  rens:{name:"Rens",region:10000030,station:60004588},
-  hek:{name:"Hek",region:10000042,station:60005686}
+  jita:{name:"Jita",region:10000002,station:60003760,system:30000142},
+  amarr:{name:"Amarr",region:10000043,station:60008494,system:30002187},
+  dodixie:{name:"Dodixie",region:10000032,station:60011866,system:30002659},
+  rens:{name:"Rens",region:10000030,station:60004588,system:30002510},
+  hek:{name:"Hek",region:10000042,station:60005686,system:30002053}
 };
 const ESI="https://esi.evetech.net/latest";
 const PRICE_TTL=5*60*1000;
@@ -189,11 +202,13 @@ const PRICE_TTL=5*60*1000;
 let RECIPES={},ITEMS=[],priceCache=new Map(),current=null,activeSuggestion=-1,METAGROUPS={};
 const $=(id)=>document.getElementById(id);
 const els={};
-["search","suggestions","hub","me","runs","buystrat","sellstrat","banner","result","empty","product-name","product-meta","refresh","s-matcost","s-revenue","s-profit","s-margin","mat-body","price-note"].forEach(id=>els[id]=$(id));
+["search","suggestions","hub","me","runs","buystrat","sellstrat","banner","result","empty","product-name","product-meta","refresh","s-matcost","s-revenue","s-profit","s-margin","mat-body","price-note","fee-breakdown"].forEach(id=>els[id]=$(id));
 
 const isk=(n)=>(n==null||isNaN(n))?"—":n.toLocaleString("en-US",{maximumFractionDigits:2})+" ISK";
 const intf=(n)=>n.toLocaleString("en-US");
 function meAdjust(b,runs,me){const mod=1-(me/100);const raw=Math.round(b*runs*mod*100)/100;return Math.max(runs,Math.ceil(raw-1e-9));}
+function pct(id){return Math.max(0,Number($(id).value)||0)/100;}
+function readRates(){return {sci:pct("f-sci"),facility:pct("f-facility"),scc:pct("f-scc"),sales:pct("f-sales"),broker:pct("f-broker")};}
 
 async function loadRecipes(){
   let data=EMBEDDED_RECIPES;
@@ -220,7 +235,6 @@ async function loadMeta(){
     for(const it of ITEMS){ const g=meta[it.id]||1; it.meta=g; it.metaName=METAGROUPS[g]||METAGROUPS[String(g)]||""; if(it.metaName) it.cat=it.metaName; }
   }catch(e){}
 }
-// collectible = Premium (17) + Limited Time (19), plus special "Edition" items
 function isCollectible(it){ const g=it.meta||1; return g===17||g===19||/\bedition\b/i.test(it.name); }
 function populateTechFilter(){
   const sel=$("f-tech"); if(!sel) return;
@@ -234,6 +248,32 @@ function populateTechFilter(){
     o.textContent=`${name} (${counts[g].toLocaleString()})`;
     sel.appendChild(o);
   }
+}
+
+// ---- live market stats (average + adjusted) and system cost indices ----
+let MKT=null, mktTs=0, SYS_INDICES=null;
+async function getMarketStats(force){
+  if(!force && MKT && (Date.now()-mktTs)<10*60*1000) return MKT;
+  const r=await fetch(ESI+"/markets/prices/?datasource=tranquility");
+  if(!r.ok) throw new Error("ESI "+r.status);
+  const arr=await r.json();
+  const avg={}, adj={};
+  for(const p of arr){
+    if(p.average_price!=null) avg[p.type_id]=p.average_price; else if(p.adjusted_price!=null) avg[p.type_id]=p.adjusted_price;
+    if(p.adjusted_price!=null) adj[p.type_id]=p.adjusted_price; else if(p.average_price!=null) adj[p.type_id]=p.average_price;
+  }
+  MKT={avg,adj}; mktTs=Date.now(); return MKT;
+}
+async function getSystemIndices(){
+  if(SYS_INDICES) return SYS_INDICES;
+  const r=await fetch(ESI+"/industry/systems/?datasource=tranquility");
+  if(!r.ok) throw new Error("ESI "+r.status);
+  const arr=await r.json(); const m={};
+  for(const s of arr){ const mi=(s.cost_indices||[]).find(c=>c.activity==="manufacturing"); m[s.solar_system_id]= mi? mi.cost_index : 0; }
+  SYS_INDICES=m; return m;
+}
+async function fillSCI(){
+  try{ const m=await getSystemIndices(); const sys=HUBS[els.hub.value].system; const idx=m[sys]||0; $("f-sci").value=(idx*100).toFixed(2); }catch(e){}
 }
 
 async function getPrice(typeId,hubKey){
@@ -266,18 +306,22 @@ async function calculate(){
   const me=Math.max(0,Math.min(10,Number(els.me.value)||0));
   const runs=Math.max(1,Math.floor(Number(els.runs.value)||1));
   const buyStrat=els.buystrat.value,sellStrat=els.sellstrat.value;
+  const rates=readRates();
   els.empty.hidden=true;els.result.hidden=false;els.result.classList.add("spin");
   els["product-name"].textContent=current.name;
   els["product-meta"].textContent=`${current.materials.length} materials · ${current.productQty*runs} unit(s) output · ME ${me}% · ${runs} run(s) · ${HUBS[hubKey].name}`;
+  let stats=null; try{ stats=await getMarketStats(); }catch(e){}
+  const ADJ=stats?stats.adj:{};
   const ids=current.materials.map(m=>m.id);ids.push(current.id);
   const priceMap={};
   await Promise.all([...new Set(ids)].map(async id=>{priceMap[id]=await getPrice(id,hubKey);}));
   els["mat-body"].innerHTML="";
-  let matCost=0,anyRegionWide=false,anyMissing=false;
+  let matCost=0,anyRegionWide=false,anyMissing=false,eiv=0;
   for(const m of current.materials){
     const qty=meAdjust(m.qty,runs,me);const p=priceMap[m.id]||{};
     const unit=buyStrat==="buy"?p.buy:p.sell;const sub=(unit!=null)?unit*qty:null;
     if(sub!=null)matCost+=sub;else anyMissing=true;if(p.regionWide)anyRegionWide=true;
+    if(ADJ[m.id]!=null) eiv+=ADJ[m.id]*m.qty*runs; // EIV uses adjusted price at base (ME0) quantities
     const tr=document.createElement("tr");
     tr.innerHTML=`<td>${m.name}</td><td class="num">${intf(qty)}</td><td class="num ${unit==null?'miss':''}">${unit==null?'no orders':isk(unit)}</td><td class="num ${sub==null?'miss':''}">${sub==null?'—':isk(sub)}</td>`;
     els["mat-body"].appendChild(tr);
@@ -287,17 +331,22 @@ async function calculate(){
   const outputUnits=current.productQty*runs;
   const revenue=(prodUnit!=null)?prodUnit*outputUnits:null;
   if(pp.regionWide)anyRegionWide=true;
-  const profit=(revenue!=null)?revenue-matCost:null;
-  const margin=(revenue!=null&&revenue>0)?(profit/revenue)*100:null;
-  els["s-matcost"].textContent=isk(matCost);
+  const jobCost=eiv*(rates.sci+rates.facility+rates.scc);
+  const salesTaxAmt=(revenue!=null)?revenue*rates.sales:0;
+  const brokerAmt=(revenue!=null&&sellStrat==="sell")?revenue*rates.broker:0;
+  const totalCost=matCost+jobCost+salesTaxAmt+brokerAmt;
+  const netProfit=(revenue!=null)?revenue-totalCost:null;
+  const netMargin=(revenue!=null&&revenue>0)?(netProfit/revenue)*100:null;
+  els["s-matcost"].textContent=isk(totalCost);
   els["s-revenue"].textContent=revenue==null?"no orders":isk(revenue);
-  const pe=els["s-profit"];pe.textContent=profit==null?"—":isk(profit);pe.className="stat-val "+(profit==null?"":profit>=0?"good":"bad");
-  const mEl=els["s-margin"];mEl.textContent=margin==null?"—":margin.toFixed(1)+"%";mEl.className="stat-val "+(margin==null?"":margin>=0?"good":"bad");
+  const pe=els["s-profit"];pe.textContent=netProfit==null?"—":isk(netProfit);pe.className="stat-val "+(netProfit==null?"":netProfit>=0?"good":"bad");
+  const mEl=els["s-margin"];mEl.textContent=netMargin==null?"—":netMargin.toFixed(1)+"%";mEl.className="stat-val "+(netMargin==null?"":netMargin>=0?"good":"bad");
+  els["fee-breakdown"].textContent=`Cost breakdown — materials ${isk(matCost)} · job install fee ${isk(jobCost)} (EIV ${isk(eiv)} × ${((rates.sci+rates.facility+rates.scc)*100).toFixed(2)}%) · sales tax ${isk(salesTaxAmt)} · broker fee ${isk(brokerAmt)}.`;
   const notes=[];
   notes.push(`Materials priced at hub ${buyStrat==="buy"?"buy orders":"sell orders"}; product at ${sellStrat==="buy"?"buy orders":"sell orders"}.`);
   if(anyRegionWide)notes.push("Some prices fell back to region-wide orders (no orders at the hub station).");
   if(anyMissing)notes.push("Some materials had no market orders — material cost is understated.");
-  notes.push("Prices cached up to 5 min. Excludes job install fees, taxes & facility bonuses.");
+  notes.push("Prices cached up to 5 min. Sales tax & broker fee depend on your skills/standings (editable above).");
   els["price-note"].textContent=notes.join(" ");
   els.result.classList.remove("spin");
 }
@@ -313,41 +362,38 @@ els.search.addEventListener("keydown",(e)=>{
   items.forEach((li,i)=>li.classList.toggle("active",i===activeSuggestion));
 });
 document.addEventListener("click",(e)=>{if(!els.suggestions.contains(e.target)&&e.target!==els.search)els.suggestions.hidden=true;});
-["hub","me","runs","buystrat","sellstrat"].forEach(id=>els[id].addEventListener("change",()=>current&&calculate()));
+["me","runs","buystrat","sellstrat","f-facility","f-scc","f-sales","f-broker","f-sci"].forEach(id=>$(id).addEventListener("change",()=>current&&calculate()));
+els.hub.addEventListener("change",async()=>{ await fillSCI(); if(current) calculate(); });
 els.refresh.addEventListener("click",()=>{priceCache.clear();calculate();});
+$("sci-refresh").addEventListener("click",async()=>{ SYS_INDICES=null; await fillSCI(); if(current) calculate(); });
 
-// ---- Tabs + Top 10 leaderboard ----
-let BULK_PRICES=null, bulkTs=0, topRunId=0;
-async function getBulkPrices(force){
-  if(!force && BULK_PRICES && (Date.now()-bulkTs)<10*60*1000) return BULK_PRICES;
-  const r=await fetch(ESI+"/markets/prices/?datasource=tranquility");
-  if(!r.ok) throw new Error("ESI "+r.status);
-  const arr=await r.json();
-  const map={};
-  for(const p of arr){ const v=(p.average_price!=null)?p.average_price:p.adjusted_price; if(v!=null) map[p.type_id]=v; }
-  BULK_PRICES=map; bulkTs=Date.now(); return map;
-}
+// ---- Top 10 leaderboard (net profit) ----
+let topRunId=0;
 async function renderTop(force){
   const status=$("top-status"), body=$("top-body");
   const myRun=++topRunId;
   status.textContent="Loading CCP average prices…"; if(force) body.innerHTML="";
-  let prices;
-  try{ prices=await getBulkPrices(force); }catch(e){ status.textContent="Failed to load prices: "+e.message; return; }
+  let stats;
+  try{ stats=await getMarketStats(force); }catch(e){ status.textContent="Failed to load prices: "+e.message; return; }
+  const avg=stats.avg, adj=stats.adj;
   const me=Math.max(0,Math.min(10,Number(els.me.value)||0));
   const hubKey=els.hub.value;
+  const rates=readRates();
+  const feeRate=rates.sci+rates.facility+rates.scc;
   const techSel=$("f-tech").value, noCollect=$("f-nocollect").checked;
   const hideC = noCollect && techSel!=="17" && techSel!=="19";
   const cand=[];
   for(const it of ITEMS){
     if(techSel && String(it.meta||1)!==techSel) continue;
     if(hideC && isCollectible(it)) continue;
-    const pp=prices[it.id]; if(pp==null) continue;
-    let cost=0, ok=true;
-    for(const m of it.materials){ const mp=prices[m.id]; if(mp==null){ok=false;break;} cost+=mp*meAdjust(m.qty,1,me); }
+    const pp=avg[it.id]; if(pp==null) continue;
+    let cost=0, eiv=0, ok=true;
+    for(const m of it.materials){ const mp=avg[m.id]; if(mp==null){ok=false;break;} cost+=mp*meAdjust(m.qty,1,me); if(adj[m.id]!=null) eiv+=adj[m.id]*m.qty; }
     if(!ok || cost<=0) continue;
-    cand.push({it,cost,avgProfit:pp*it.productQty-cost});
+    const jobCost=eiv*feeRate;
+    cand.push({it,cost,jobCost,avgNet:pp*it.productQty*(1-rates.sales-rates.broker)-cost-jobCost});
   }
-  cand.sort((a,b)=>b.avgProfit-a.avgProfit);
+  cand.sort((a,b)=>b.avgNet-a.avgNet);
   const pool=cand.slice(0,120);
   const techLabel = techSel ? (METAGROUPS[techSel]||METAGROUPS[String(techSel)]||("meta "+techSel)) : "all meta groups";
   status.textContent=`Checking live ${HUBS[hubKey].name} market for top candidates…`;
@@ -359,14 +405,15 @@ async function renderTop(force){
       if(myRun!==topRunId) return;
       if(p.sell==null) continue;
       const revenue=p.sell*c.it.productQty;
-      verified.push({it:c.it,cost:c.cost,revenue,profit:revenue-c.cost,margin:revenue>0?(revenue-c.cost)/revenue*100:0});
+      const net=revenue*(1-rates.sales-rates.broker)-c.cost-c.jobCost;
+      verified.push({it:c.it,cost:c.cost+c.jobCost,revenue,profit:net,margin:revenue>0?net/revenue*100:0});
     }
   }
   await Promise.all(Array.from({length:8},worker));
   if(myRun!==topRunId) return;
   verified.sort((a,b)=>b.profit-a.profit);
   const top=verified.slice(0,10);
-  status.textContent=`Top items selling at ${HUBS[hubKey].name} · ${techLabel} · product at live sell, materials at CCP average · ME ${me}% (scanned ${cand.length.toLocaleString()}, checked ${pool.length}).`;
+  status.textContent=`Net profit at ${HUBS[hubKey].name} · ${techLabel} · live sell − materials − job fee − ${(rates.sales*100).toFixed(1)}% tax − ${(rates.broker*100).toFixed(1)}% broker · ME ${me}% (scanned ${cand.length.toLocaleString()}, checked ${pool.length}).`;
   body.innerHTML="";
   if(!top.length){ body.innerHTML=`<tr><td colspan="6" class="muted">No tradeable items found for this filter — try another meta group or Refresh.</td></tr>`; return; }
   top.forEach((r,i)=>{
@@ -387,7 +434,15 @@ document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>swit
 $("top-refresh").addEventListener("click",()=>renderTop(true));
 ["f-tech","f-nocollect"].forEach(id=>$(id).addEventListener("change",()=>renderTop(false)));
 
-(async function init(){try{await loadRecipes();await loadMeta();populateTechFilter();els.search.placeholder=`Start typing… ${ITEMS.length} items loaded`;}catch(err){els.banner.hidden=false;els.banner.textContent="Failed to load recipe data: "+err.message;}})();
+(async function init(){
+  try{
+    await loadRecipes();
+    await loadMeta();
+    populateTechFilter();
+    els.search.placeholder=`Start typing… ${ITEMS.length} items loaded`;
+    fillSCI();
+  }catch(err){els.banner.hidden=false;els.banner.textContent="Failed to load recipe data: "+err.message;}
+})();
 </script>
 </body>
 </html>
