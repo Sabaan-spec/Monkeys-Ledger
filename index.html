@@ -57,6 +57,9 @@ table.materials td.miss{color:var(--bad)}
 .tab.active{background:var(--accent-dim);color:#eaf6ff;border-color:var(--accent-dim)}
 .top-head{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:16px 18px;flex-wrap:wrap}
 .top-head h2{margin:0;font-size:1.2rem}
+.top-filters{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.top-filters label{display:flex;align-items:center;gap:6px;font-size:.85rem;color:var(--text);cursor:pointer;user-select:none}
+.top-filters input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:pointer}
 table.materials tr.click{cursor:pointer}
 table.materials tr.click:hover td{background:rgba(54,193,255,.08)}
 table.materials td.rank{color:var(--muted);width:38px}
@@ -136,7 +139,11 @@ table.materials td.rank{color:var(--muted);width:38px}
         <h2>Top 10 most profitable to manufacture</h2>
         <p class="muted small" id="top-status">Open this tab to rank items.</p>
       </div>
-      <button id="top-refresh" class="btn">↻ Refresh</button>
+      <div class="top-filters">
+        <label><input type="checkbox" id="f-t2" /> Tech II only</label>
+        <label><input type="checkbox" id="f-nocollect" checked /> Hide collectibles</label>
+        <button id="top-refresh" class="btn">↻ Refresh</button>
+      </div>
     </div>
     <div class="panel">
       <table class="materials">
@@ -196,6 +203,20 @@ async function loadRecipes(){
   const items=data.recipes||data;RECIPES=items;
   ITEMS=Object.entries(items).filter(([k])=>!k.startsWith("_")).map(([id,r])=>({id:Number(id),name:r.name,productQty:r.productQty||1,materials:r.materials||[],cat:r.cat||""})).sort((a,b)=>a.name.localeCompare(b.name));
 }
+
+let METAGROUPS={};
+async function loadMeta(){
+  try{
+    const r=await fetch("data/meta.json",{cache:"no-cache"});
+    if(!r.ok) return;
+    const d=await r.json();
+    METAGROUPS=d.groups||{};
+    const meta=d.meta||{};
+    for(const it of ITEMS){ const g=meta[it.id]||1; it.meta=g; it.metaName=METAGROUPS[g]||METAGROUPS[String(g)]||""; if(it.metaName) it.cat=it.metaName; }
+  }catch(e){}
+}
+// collectible = Premium (17) + Limited Time (19), plus special "Edition" items
+function isCollectible(it){ const g=it.meta||1; return g===17||g===19||/\bedition\b/i.test(it.name); }
 
 async function getPrice(typeId,hubKey){
   const hub=HUBS[hubKey];const key=`${hub.region}:${typeId}`;
@@ -296,8 +317,11 @@ async function renderTop(force){
   try{ prices=await getBulkPrices(force); }catch(e){ status.textContent="Failed to load prices: "+e.message; return; }
   const me=Math.max(0,Math.min(10,Number(els.me.value)||0));
   const hubKey=els.hub.value;
+  const t2only=$("f-t2").checked, noCollect=$("f-nocollect").checked;
   const cand=[];
   for(const it of ITEMS){
+    if(t2only && (it.meta||1)!==2) continue;
+    if(noCollect && isCollectible(it)) continue;
     const pp=prices[it.id]; if(pp==null) continue;
     let cost=0, ok=true;
     for(const m of it.materials){ const mp=prices[m.id]; if(mp==null){ok=false;break;} cost+=mp*meAdjust(m.qty,1,me); }
@@ -341,8 +365,9 @@ function switchTab(name){
 }
 document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>switchTab(b.dataset.tab)));
 $("top-refresh").addEventListener("click",()=>renderTop(true));
+["f-t2","f-nocollect"].forEach(id=>$(id).addEventListener("change",()=>renderTop(false)));
 
-(async function init(){try{await loadRecipes();els.search.placeholder=`Start typing… ${ITEMS.length} items loaded`;}catch(err){els.banner.hidden=false;els.banner.textContent="Failed to load recipe data: "+err.message;}})();
+(async function init(){try{await loadRecipes();await loadMeta();els.search.placeholder=`Start typing… ${ITEMS.length} items loaded`;}catch(err){els.banner.hidden=false;els.banner.textContent="Failed to load recipe data: "+err.message;}})();
 </script>
 </body>
 </html>
