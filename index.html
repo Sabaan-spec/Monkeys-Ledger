@@ -153,6 +153,8 @@ table.materials tr.grp-head td{background:rgba(84,194,218,.07);color:var(--accen
     <button class="tab" data-tab="top">Top 10 Profitable</button>
     <button class="tab" data-tab="ore">Ore &amp; Gas</button>
     <button class="tab" data-tab="research">Blueprint Research</button>
+    <button class="tab" data-tab="repro">Reprocessing</button>
+    <button class="tab" data-tab="arb">Hub Arbitrage</button>
   </nav>
 
   <div id="tab-calc">
@@ -367,6 +369,46 @@ table.materials tr.grp-head td{background:rgba(84,194,218,.07);color:var(--accen
     <p>Search for a blueprint above to see research &amp; copy job cost breakdowns.</p>
     <p class="muted small">Research / copy / invention install fee = EIV × (activity system cost index + facility tax + SCC surcharge). EIV = Σ CCP adjusted price × base input-material quantity. Indices are pulled live per facility system from ESI.</p>
   </section>
+  </div>
+  <div id="tab-repro" hidden>
+  <section class="controls panel">
+    <div class="field grow"><label for="rp-search">Ore / ice to reprocess</label><input id="rp-search" type="text" autocomplete="off" placeholder="Start typing… e.g. Veldspar, Arkonor, Compressed Spodumain" /><ul id="rp-suggestions" class="suggestions" hidden></ul></div>
+    <div class="field"><label for="rp-hub">Market hub</label><select id="rp-hub"><option value="jita" selected>Jita (The Forge)</option><option value="amarr">Amarr (Domain)</option><option value="dodixie">Dodixie (Sinq Laison)</option><option value="rens">Rens (Heimatar)</option><option value="hek">Hek (Metropolis)</option></select></div>
+    <div class="field narrow"><label for="rp-qty">Units</label><input id="rp-qty" type="number" min="1" step="1" value="100" /></div>
+    <div class="field narrow"><label for="rp-yield" title="Base 50%, up to ~90% with skills/structure/rigs">Yield %</label><input id="rp-yield" type="number" min="0" max="100" step="0.1" value="70" /></div>
+    <div class="field narrow"><label for="rp-basis">Value at</label><select id="rp-basis"><option value="sell" selected>Sell (list)</option><option value="buy">Buy (instant)</option></select></div>
+  </section>
+  <section id="rp-result" class="result" hidden>
+    <div class="panel product-head"><div><h2 id="rp-product-name">—</h2><p id="rp-product-meta" class="muted"></p></div><button id="rp-refresh" class="btn">↻ Refresh</button></div>
+    <div class="summary-grid">
+      <div class="stat panel"><span class="stat-label">Refined value</span><span id="rp-refined" class="stat-val">—</span></div>
+      <div class="stat panel"><span class="stat-label">Ore market value</span><span id="rp-orev" class="stat-val">—</span></div>
+      <div class="stat panel"><span class="stat-label">Refine vs sell raw</span><span id="rp-diff" class="stat-val">—</span></div>
+      <div class="stat panel"><span class="stat-label">Refined ISK / m³</span><span id="rp-iskm3" class="stat-val">—</span></div>
+    </div>
+    <div class="panel"><table class="materials"><thead><tr><th>Mineral / material</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Value</th></tr></thead><tbody id="rp-body"></tbody></table></div>
+    <p class="muted small" id="rp-note"></p>
+  </section>
+  <section id="rp-empty" class="empty"><p>Search for an ore to see its refined mineral value vs selling it raw.</p><p class="muted small">Output = SDE perfect-refine yield × your yield %. Compare "Refined value" to "Ore market value" to decide whether to refine or sell raw.</p></section>
+  </div>
+
+  <div id="tab-arb" hidden>
+  <section class="controls panel">
+    <div class="field grow"><label for="ab-search">Item to compare across hubs</label><input id="ab-search" type="text" autocomplete="off" placeholder="Start typing… any item, ore or module" /><ul id="ab-suggestions" class="suggestions" hidden></ul></div>
+    <div class="field narrow"><label for="ab-tax" title="Sales tax when selling to buy orders">Sales tax %</label><input id="ab-tax" type="number" min="0" step="0.01" value="4.5" /></div>
+  </section>
+  <section id="ab-result" class="result" hidden>
+    <div class="panel product-head"><div><h2 id="ab-product-name">—</h2><p id="ab-product-meta" class="muted"></p></div><button id="ab-refresh" class="btn">↻ Refresh</button></div>
+    <div class="summary-grid">
+      <div class="stat panel"><span class="stat-label">Best buy price</span><span id="ab-bestbuy" class="stat-val">—</span></div>
+      <div class="stat panel"><span class="stat-label">Best sell price</span><span id="ab-bestsell" class="stat-val">—</span></div>
+      <div class="stat panel"><span class="stat-label">Net profit / unit</span><span id="ab-net" class="stat-val">—</span></div>
+      <div class="stat panel"><span class="stat-label">Margin</span><span id="ab-margin" class="stat-val">—</span></div>
+    </div>
+    <div class="panel"><table class="materials"><thead><tr><th>Trade hub</th><th class="num">Sell (min)</th><th class="num">Buy (max)</th></tr></thead><tbody id="ab-body"></tbody></table></div>
+    <p class="muted small" id="ab-status"></p>
+  </section>
+  <section id="ab-empty" class="empty"><p>Search for an item to compare prices across all five trade hubs.</p><p class="muted small">Finds the cheapest hub to buy and the priciest hub to sell, with the profit per unit for hauling between them.</p></section>
   </div>
 </main>
 
@@ -828,6 +870,8 @@ function switchTab(name){
   $("tab-top").hidden = name!=="top";
   $("tab-ore").hidden = name!=="ore";
   $("tab-research").hidden = name!=="research";
+  $("tab-repro").hidden = name!=="repro";
+  $("tab-arb").hidden = name!=="arb";
   if(name==="top" && ITEMS.length) renderTop(false);
   if(name==="ore" && !oreRows.length) renderOre();
 }
@@ -908,15 +952,109 @@ document.addEventListener("click",e=>{const b=$("r-suggestions");if(b&&!b.contai
 ["r-hub","r-me","r-te","r-runs","r-facility","r-scc"].forEach(id=>$(id).addEventListener("change",()=>rCurrent&&renderResearch()));
 $("r-refresh").addEventListener("click",()=>renderResearch());
 
+// ---- Reprocessing ----
+let REPRO={mats:{},rows:{}}, oreLookup={}, rpCur=null, rpActive=-1;
+async function loadReprocess(){ try{const r=await fetch("data/reprocess.json",{cache:"no-cache"});if(r.ok)REPRO=await r.json();}catch(e){} }
+function buildOreLookup(){ oreLookup={}; for(const o of (OREGAS.ore||[])) oreLookup[o.id]={name:o.name,vol:o.vol,grp:o.grp}; }
+function rpSuggest(q){
+  const box=$("rp-suggestions"); const query=q.trim().toLowerCase(); box.innerHTML=""; rpActive=-1;
+  if(!query){box.hidden=true;return;}
+  const list=(OREGAS.ore||[]).filter(o=>REPRO.rows[o.id]).filter(o=>o.name.toLowerCase().includes(query)).slice(0,40);
+  if(!list.length){box.hidden=true;return;}
+  for(const o of list){const li=document.createElement("li");li.innerHTML=`<span>${o.name}</span><span class="cat">${o.grp||""}</span>`;li.addEventListener("mousedown",e=>{e.preventDefault();rpSelect(o);});box.appendChild(li);}
+  box.hidden=false;
+}
+function rpSelect(o){rpCur=o;$("rp-search").value=o.name;$("rp-suggestions").hidden=true;renderRepro();}
+async function renderRepro(){
+  if(!rpCur) return;
+  const row=REPRO.rows[rpCur.id]; if(!row) return;
+  const hubKey=$("rp-hub").value, region=HUBS[hubKey].region;
+  const qty=Math.max(1,Math.floor(Number($("rp-qty").value)||1));
+  const yld=Math.max(0,Math.min(100,Number($("rp-yield").value)||0))/100;
+  const basis=$("rp-basis").value;
+  $("rp-empty").hidden=true; $("rp-result").hidden=false; $("rp-result").classList.add("spin");
+  $("rp-product-name").textContent=rpCur.name;
+  const ids=[rpCur.id,...row.o.map(x=>x[0])];
+  let agg={}; try{agg=await fuzzAgg(region,ids);}catch(e){}
+  const px=id=>{const a=agg[id]||{};return basis==="buy"?(a.buy&&Number(a.buy.max)>0?Number(a.buy.max):null):(a.sell&&Number(a.sell.min)>0?Number(a.sell.min):null);};
+  const portions=Math.floor(qty/row.p);
+  let refinedValue=0;
+  const rows=row.o.map(([mid,q])=>{const rq=Math.floor(q*portions*yld);const up=px(mid);const val=(up!=null)?up*rq:null;if(val!=null)refinedValue+=val;return {name:REPRO.mats[mid]||("Type "+mid),qty:rq,up,val};});
+  const orePx=px(rpCur.id);
+  const oreValue=(orePx!=null)?orePx*qty:null;
+  const diff=(oreValue!=null)?refinedValue-oreValue:null;
+  const vol=(oreLookup[rpCur.id]||{}).vol||rpCur.vol||0;
+  const iskm3=(vol>0)?refinedValue/(qty*vol):null;
+  $("rp-product-meta").textContent=`${qty.toLocaleString()} units · ${portions} batch(es) of ${row.p} · ${(yld*100).toFixed(1)}% yield · ${HUBS[hubKey].name}${portions<1?" · below one reprocess batch":""}`;
+  countTo($("rp-refined"),refinedValue,isk);
+  const ov=$("rp-orev"); if(oreValue==null){ov.textContent="no orders";ov._v=0;} else countTo(ov,oreValue,isk);
+  const de=$("rp-diff"); de.className="stat-val "+(diff==null?"":diff>=0?"good":"bad"); if(diff==null){de.textContent="—";de._v=0;} else countTo(de,diff,isk);
+  countTo($("rp-iskm3"),iskm3,isk);
+  document.querySelectorAll("#tab-repro .summary-grid .stat").forEach(flash);
+  $("rp-body").innerHTML=rows.map((r,i)=>`<tr style="animation-delay:${i*30}ms"><td>${r.name}</td><td class="num">${intf(r.qty)}</td><td class="num">${r.up==null?'—':isk(r.up)}</td><td class="num">${r.val==null?'—':isk(r.val)}</td></tr>`).join("");
+  $("rp-note").textContent=`Refined output at ${(yld*100).toFixed(1)}% yield, valued at ${basis==="buy"?"buy orders (instant)":"sell orders (list)"}. "Refine vs sell raw" = refined value − ore market value for the same units (positive = refining wins). SDE quantities are the perfect 100% yield; set your real yield (base 50%, up to ~90% with skills/structure/rigs). Prices live via Fuzzwork.`;
+  $("rp-result").classList.remove("spin");
+}
+$("rp-search").addEventListener("input",e=>rpSuggest(e.target.value));
+$("rp-search").addEventListener("focus",e=>{if(e.target.value)rpSuggest(e.target.value);});
+$("rp-search").addEventListener("keydown",e=>{const items=[...$("rp-suggestions").querySelectorAll("li")];if(!items.length)return;if(e.key==="ArrowDown"){e.preventDefault();rpActive=Math.min(rpActive+1,items.length-1);}else if(e.key==="ArrowUp"){e.preventDefault();rpActive=Math.max(rpActive-1,0);}else if(e.key==="Enter"){e.preventDefault();const name=(rpActive>=0?items[rpActive].textContent:$("rp-search").value).trim();const mt=(OREGAS.ore||[]).find(o=>o.name===name&&REPRO.rows[o.id])||(OREGAS.ore||[]).find(o=>REPRO.rows[o.id]&&o.name.toLowerCase().includes($("rp-search").value.trim().toLowerCase()));if(mt)rpSelect(mt);return;}else return;items.forEach((li,i)=>li.classList.toggle("active",i===rpActive));});
+["rp-hub","rp-qty","rp-yield","rp-basis"].forEach(id=>$(id).addEventListener("change",()=>rpCur&&renderRepro()));
+$("rp-refresh").addEventListener("click",renderRepro);
+
+// ---- Hub Arbitrage ----
+let arbItems=[], abCur=null, abActive=-1;
+const ARB_HUBS=["jita","amarr","dodixie","rens","hek"];
+function buildArbItems(){ const seen=new Set(); arbItems=[]; for(const it of ITEMS){ if(!seen.has(it.id)){seen.add(it.id);arbItems.push({id:it.id,name:it.name});} } for(const o of (OREGAS.ore||[]).concat(OREGAS.gas||[])){ if(!seen.has(o.id)){seen.add(o.id);arbItems.push({id:o.id,name:o.name});} } arbItems.sort((a,b)=>a.name.localeCompare(b.name)); }
+function abSuggest(q){
+  const box=$("ab-suggestions"); const query=q.trim().toLowerCase(); box.innerHTML=""; abActive=-1;
+  if(!query){box.hidden=true;return;}
+  const list=arbItems.filter(o=>o.name.toLowerCase().includes(query)).slice(0,40);
+  if(!list.length){box.hidden=true;return;}
+  for(const o of list){const li=document.createElement("li");li.innerHTML=`<span>${o.name}</span>`;li.addEventListener("mousedown",e=>{e.preventDefault();abSelect(o);});box.appendChild(li);}
+  box.hidden=false;
+}
+function abSelect(it){abCur=it;$("ab-search").value=it.name;$("ab-suggestions").hidden=true;renderArb();}
+async function renderArb(){
+  if(!abCur) return;
+  const tax=Math.max(0,Number($("ab-tax").value)||0)/100;
+  $("ab-empty").hidden=true; $("ab-result").hidden=false; $("ab-result").classList.add("spin");
+  $("ab-product-name").textContent=abCur.name;
+  $("ab-status").textContent="Scanning the five trade hubs…";
+  const per={};
+  await Promise.all(ARB_HUBS.map(async hk=>{ try{const a=await fuzzAgg(HUBS[hk].region,[abCur.id]); const o=a[abCur.id]||{}; per[hk]={sell:o.sell&&Number(o.sell.min)>0?Number(o.sell.min):null, buy:o.buy&&Number(o.buy.max)>0?Number(o.buy.max):null};}catch(e){per[hk]={sell:null,buy:null};} }));
+  let bestSell=null,bestSellHub=null,bestBuy=null,bestBuyHub=null;
+  for(const hk of ARB_HUBS){const p=per[hk];if(p.sell!=null&&(bestSell==null||p.sell<bestSell)){bestSell=p.sell;bestSellHub=hk;}if(p.buy!=null&&(bestBuy==null||p.buy>bestBuy)){bestBuy=p.buy;bestBuyHub=hk;}}
+  const net=(bestBuy!=null&&bestSell!=null)?bestBuy*(1-tax)-bestSell:null;
+  const margin=(net!=null&&bestSell>0)?net/bestSell*100:null;
+  $("ab-body").innerHTML=ARB_HUBS.map((hk,i)=>{const p=per[hk];const bf=hk===bestSellHub,st=hk===bestBuyHub;return `<tr style="animation-delay:${i*30}ms"><td>${HUBS[hk].name}${bf?' <span style="color:var(--warn);font-size:.75rem">◄ BUY</span>':''}${st?' <span style="color:var(--good);font-size:.75rem">SELL ►</span>':''}</td><td class="num">${p.sell==null?'—':isk(p.sell)}</td><td class="num">${p.buy==null?'—':isk(p.buy)}</td></tr>`;}).join("");
+  $("ab-product-meta").textContent=(bestSellHub&&bestBuyHub)?`Buy ${HUBS[bestSellHub].name} → haul → sell ${HUBS[bestBuyHub].name}`:"Insufficient market data";
+  countTo($("ab-bestbuy"),bestSell,isk);
+  countTo($("ab-bestsell"),bestBuy,isk);
+  const npe=$("ab-net"); npe.className="stat-val "+(net==null?"":net>=0?"good":"bad"); if(net==null){npe.textContent="—";npe._v=0;} else countTo(npe,net,isk);
+  const me=$("ab-margin"); me.className="stat-val "+(margin==null?"":margin>=0?"good":"bad"); if(margin==null){me.textContent="—";me._v=0;} else countTo(me,margin,v=>v.toFixed(1)+"%");
+  document.querySelectorAll("#tab-arb .summary-grid .stat").forEach(flash);
+  $("ab-status").textContent=`Buy at the lowest sell order, haul, sell into the highest buy order across the 5 hubs. Net / unit = best buy × (1 − ${(tax*100).toFixed(1)}% sales tax) − best sell. Excludes broker fees and freight cost. Live via Fuzzwork.`;
+  $("ab-result").classList.remove("spin");
+}
+$("ab-search").addEventListener("input",e=>abSuggest(e.target.value));
+$("ab-search").addEventListener("focus",e=>{if(e.target.value)abSuggest(e.target.value);});
+$("ab-search").addEventListener("keydown",e=>{const items=[...$("ab-suggestions").querySelectorAll("li")];if(!items.length)return;if(e.key==="ArrowDown"){e.preventDefault();abActive=Math.min(abActive+1,items.length-1);}else if(e.key==="ArrowUp"){e.preventDefault();abActive=Math.max(abActive-1,0);}else if(e.key==="Enter"){e.preventDefault();const name=(abActive>=0?items[abActive].textContent:$("ab-search").value).trim();const mt=arbItems.find(o=>o.name===name)||arbItems.find(o=>o.name.toLowerCase().includes($("ab-search").value.trim().toLowerCase()));if(mt)abSelect(mt);return;}else return;items.forEach((li,i)=>li.classList.toggle("active",i===abActive));});
+$("ab-tax").addEventListener("change",()=>abCur&&renderArb());
+$("ab-refresh").addEventListener("click",renderArb);
+document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEach(bid=>{const b=$(bid);const inp=$(bid==="rp-suggestions"?"rp-search":"ab-search");if(b&&!b.contains(e.target)&&e.target!==inp)b.hidden=true;});});
+
 (async function init(){
   try{
     await loadRecipes();
     await loadMeta();
     await loadCat();
     await loadOreGas();
+    await loadReprocess();
     populateTechFilter();
     populateCatFilter();
     populateOreGroups();
+    buildOreLookup();
+    buildArbItems();
     els.search.placeholder=`Start typing… ${ITEMS.length} items loaded`;
     fillSCI();
   }catch(err){els.banner.hidden=false;els.banner.textContent="Failed to load recipe data: "+err.message;}
