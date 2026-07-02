@@ -87,7 +87,7 @@ table.materials td.miss{color:var(--bad)}
 .site-footer a{color:var(--accent);text-decoration:none}
 .site-footer a:hover{text-decoration:underline}
 .spin{opacity:.55}
-.tabs{display:flex;gap:8px;margin:0 0 18px;flex-wrap:wrap}
+.tabs{display:flex;justify-content:center;gap:8px;margin:0 0 18px;flex-wrap:wrap}
 .tab{background:transparent;border:1px solid var(--border);color:var(--muted);padding:9px 20px;cursor:pointer;font-size:.82rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;transition:all .15s;clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
 .tab:hover{color:var(--text);border-color:var(--accent)}
 .tab.active{background:var(--accent-dim);color:#eaf8fc;border-color:var(--accent);box-shadow:0 0 16px rgba(84,194,218,.32)}
@@ -149,10 +149,10 @@ table.materials tr.grp-head td{background:rgba(84,194,218,.07);color:var(--accen
 
 <main class="wrap">
   <nav class="tabs">
-    <button class="tab active" data-tab="calc">Calculator</button>
+    <button class="tab active" data-tab="calc">Manufacturing</button>
     <button class="tab" data-tab="top">Top 10 Profitable</button>
     <button class="tab" data-tab="ore">Ore &amp; Gas</button>
-    <button class="tab" data-tab="research">Blueprint Research</button>
+    <button class="tab" data-tab="research">Research</button>
     <button class="tab" data-tab="repro">Reprocessing</button>
     <button class="tab" data-tab="arb">Hub Arbitrage</button>
     <button class="tab" data-tab="react">Reactions</button>
