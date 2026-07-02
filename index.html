@@ -152,6 +152,7 @@ table.materials tr.grp-head td{background:rgba(84,194,218,.07);color:var(--accen
     <button class="tab active" data-tab="calc">Calculator</button>
     <button class="tab" data-tab="top">Top 10 Profitable</button>
     <button class="tab" data-tab="ore">Ore &amp; Gas</button>
+    <button class="tab" data-tab="research">Blueprint Research</button>
   </nav>
 
   <div id="tab-calc">
@@ -317,6 +318,55 @@ table.materials tr.grp-head td{background:rgba(84,194,218,.07);color:var(--accen
       </table>
     </div>
     <p class="muted small">Live regional buy/sell via <a href="https://market.fuzzwork.co.uk/" target="_blank" rel="noopener">Fuzzwork</a> market aggregates (max buy / min sell). <strong>ISK / m³</strong> = lowest sell ÷ unit volume — the key figure for deciding what to mine or haul. Sort by it to find the densest value.</p>
+  </div>
+  <div id="tab-research" hidden>
+  <section class="controls panel">
+    <div class="field grow">
+      <label for="r-search">Blueprint / item to research</label>
+      <input id="r-search" type="text" autocomplete="off" placeholder="Start typing… e.g. Rifter, Hammerhead II, 200mm AutoCannon II" />
+      <ul id="r-suggestions" class="suggestions" hidden></ul>
+    </div>
+    <div class="field">
+      <label for="r-hub">Facility system</label>
+      <select id="r-hub">
+        <option value="jita" selected>Jita (The Forge)</option>
+        <option value="amarr">Amarr (Domain)</option>
+        <option value="dodixie">Dodixie (Sinq Laison)</option>
+        <option value="rens">Rens (Heimatar)</option>
+        <option value="hek">Hek (Metropolis)</option>
+      </select>
+    </div>
+    <div class="field narrow"><label for="r-me">Target ME</label><input id="r-me" type="number" min="0" max="10" step="1" value="10" /></div>
+    <div class="field narrow"><label for="r-te">Target TE</label><input id="r-te" type="number" min="0" max="20" step="2" value="20" /></div>
+    <div class="field narrow"><label for="r-runs">Copy runs</label><input id="r-runs" type="number" min="1" step="1" value="1" /></div>
+    <div class="field narrow"><label for="r-facility" title="Structure/station job tax">Facility tax %</label><input id="r-facility" type="number" min="0" step="0.01" value="0.25" /></div>
+    <div class="field narrow"><label for="r-scc" title="Flat CCP SCC surcharge on EIV">SCC surcharge %</label><input id="r-scc" type="number" min="0" step="0.01" value="1.5" /></div>
+  </section>
+
+  <section id="r-result" class="result" hidden>
+    <div class="panel product-head">
+      <div><h2 id="r-product-name">—</h2><p id="r-product-meta" class="muted"></p></div>
+      <button id="r-refresh" class="btn">↻ Refresh</button>
+    </div>
+    <div class="summary-grid">
+      <div class="stat panel"><span class="stat-label">EIV (job base value)</span><span id="r-eiv" class="stat-val">—</span></div>
+      <div class="stat panel"><span class="stat-label">ME research total</span><span id="r-metotal" class="stat-val">—</span></div>
+      <div class="stat panel"><span class="stat-label">TE research total</span><span id="r-tetotal" class="stat-val">—</span></div>
+      <div class="stat panel"><span class="stat-label">Total ME+TE+copy</span><span id="r-grand" class="stat-val">—</span></div>
+    </div>
+    <div class="panel">
+      <table class="materials">
+        <thead><tr><th>Research activity</th><th class="num">System index</th><th class="num">Per job</th><th class="num">Qty</th><th class="num">Subtotal</th></tr></thead>
+        <tbody id="r-body"></tbody>
+      </table>
+    </div>
+    <p class="muted small" id="r-note"></p>
+  </section>
+
+  <section id="r-empty" class="empty">
+    <p>Search for a blueprint above to see research &amp; copy job cost breakdowns.</p>
+    <p class="muted small">Research / copy / invention install fee = EIV × (activity system cost index + facility tax + SCC surcharge). EIV = Σ CCP adjusted price × base input-material quantity. Indices are pulled live per facility system from ESI.</p>
+  </section>
   </div>
 </main>
 
@@ -777,6 +827,7 @@ function switchTab(name){
   $("tab-calc").hidden = name!=="calc";
   $("tab-top").hidden = name!=="top";
   $("tab-ore").hidden = name!=="ore";
+  $("tab-research").hidden = name!=="research";
   if(name==="top" && ITEMS.length) renderTop(false);
   if(name==="ore" && !oreRows.length) renderOre();
 }
@@ -787,6 +838,75 @@ $("ore-refresh").addEventListener("click",renderOre);
 $("ore-hub").addEventListener("change",renderOre);
 ["ore-type","ore-sort","ore-group"].forEach(id=>$(id).addEventListener("change",drawOre));
 $("ore-search").addEventListener("input",drawOre);
+
+// ---- Blueprint Research cost breakdown ----
+let rCurrent=null, rActive=-1, SYS_ALL=null;
+async function getSysAll(){
+  if(SYS_ALL) return SYS_ALL;
+  const r=await fetch(ESI+"/industry/systems/?datasource=tranquility");
+  if(!r.ok) throw new Error("ESI "+r.status);
+  const arr=await r.json(); const m={};
+  for(const s of arr){ const o={}; (s.cost_indices||[]).forEach(c=>o[c.activity]=c.cost_index); m[s.solar_system_id]=o; }
+  SYS_ALL=m; return m;
+}
+function rSuggest(q){
+  const box=$("r-suggestions"); const query=q.trim().toLowerCase(); box.innerHTML=""; rActive=-1;
+  if(!query){box.hidden=true;return;}
+  const m=ITEMS.filter(i=>i.name.toLowerCase().includes(query)).slice(0,40);
+  if(!m.length){box.hidden=true;return;}
+  for(const it of m){const li=document.createElement("li");li.innerHTML=`<span>${it.name}</span><span class="cat">${it.cat||""}</span>`;li.addEventListener("mousedown",e=>{e.preventDefault();rSelect(it);});box.appendChild(li);}
+  box.hidden=false;
+}
+function rSelect(it){rCurrent=it;$("r-search").value=it.name;$("r-suggestions").hidden=true;renderResearch();}
+async function renderResearch(){
+  if(!rCurrent) return;
+  const hubKey=$("r-hub").value, sys=HUBS[hubKey].system;
+  const facility=Math.max(0,Number($("r-facility").value)||0)/100;
+  const scc=Math.max(0,Number($("r-scc").value)||0)/100;
+  const meT=Math.max(0,Math.min(10,Math.floor(Number($("r-me").value)||0)));
+  const teT=Math.max(0,Math.min(20,Math.floor(Number($("r-te").value)||0)));
+  const runs=Math.max(1,Math.floor(Number($("r-runs").value)||1));
+  $("r-empty").hidden=true; $("r-result").hidden=false; $("r-result").classList.add("spin");
+  $("r-product-name").textContent=rCurrent.name;
+  let stats=null; try{stats=await getMarketStats();}catch(e){}
+  const ADJ=stats?stats.adj:{};
+  let eiv=0, missing=false;
+  for(const m of rCurrent.materials){ if(ADJ[m.id]!=null) eiv+=ADJ[m.id]*m.qty; else missing=true; }
+  let idx={}; try{ const all=await getSysAll(); idx=all[sys]||{}; }catch(e){}
+  const meI=idx.researching_material_efficiency||0, teI=idx.researching_time_efficiency||0, copyI=idx.copying||0, invI=idx.invention||0;
+  const fee=ix=>eiv*(ix+facility+scc);
+  const meFee=fee(meI),teFee=fee(teI),copyFee=fee(copyI),invFee=fee(invI);
+  const meTotal=meFee*meT, teTotal=teFee*teT, copyTotal=copyFee*runs;
+  const grand=meTotal+teTotal+copyTotal;
+  $("r-product-meta").textContent=`EIV ${isk(eiv)} · ${rCurrent.materials.length} input materials · ${HUBS[hubKey].name}${missing?" · some materials unpriced":""}`;
+  countTo($("r-eiv"),eiv,isk);
+  countTo($("r-metotal"),meTotal,isk);
+  countTo($("r-tetotal"),teTotal,isk);
+  countTo($("r-grand"),grand,isk);
+  document.querySelectorAll("#tab-research .summary-grid .stat").forEach(flash);
+  const rows=[
+    ["Material Efficiency (ME) research",meI,meFee,meT+" level(s)",meTotal],
+    ["Time Efficiency (TE) research",teI,teFee,teT+" level(s)",teTotal],
+    ["Copying (BPC)",copyI,copyFee,runs+" run(s)",copyTotal],
+    ["Invention (excl. datacores)",invI,invFee,"1 attempt",invFee]
+  ];
+  $("r-body").innerHTML=rows.map((r,i)=>`<tr style="animation-delay:${i*35}ms"><td>${r[0]}</td><td class="num">${(r[1]*100).toFixed(2)}%</td><td class="num">${isk(r[2])}</td><td class="num">${r[3]}</td><td class="num">${isk(r[4])}</td></tr>`).join("");
+  $("r-note").textContent=`Job install fee = EIV × (activity system cost index + facility tax ${(facility*100).toFixed(2)}% + SCC surcharge ${(scc*100).toFixed(2)}%). EIV = Σ CCP adjusted price × base input-material quantity. Research is billed per level — each ME/TE level is a separate job at the same fee (time rises per level; not shown here). Copying is per run. Invention shows the job install fee only; datacores, decryptors and success chance are excluded. System cost indices pulled live from ESI.`;
+  $("r-result").classList.remove("spin");
+}
+$("r-search").addEventListener("input",e=>rSuggest(e.target.value));
+$("r-search").addEventListener("focus",e=>{if(e.target.value)rSuggest(e.target.value);});
+$("r-search").addEventListener("keydown",e=>{
+  const items=[...$("r-suggestions").querySelectorAll("li")];if(!items.length)return;
+  if(e.key==="ArrowDown"){e.preventDefault();rActive=Math.min(rActive+1,items.length-1);}
+  else if(e.key==="ArrowUp"){e.preventDefault();rActive=Math.max(rActive-1,0);}
+  else if(e.key==="Enter"){e.preventDefault();const name=(rActive>=0?items[rActive].textContent:$("r-search").value).trim();const mt=ITEMS.find(i=>i.name===name)||ITEMS.find(i=>i.name.toLowerCase().includes($("r-search").value.trim().toLowerCase()));if(mt)rSelect(mt);return;}
+  else return;
+  items.forEach((li,i)=>li.classList.toggle("active",i===rActive));
+});
+document.addEventListener("click",e=>{const b=$("r-suggestions");if(b&&!b.contains(e.target)&&e.target!==$("r-search"))b.hidden=true;});
+["r-hub","r-me","r-te","r-runs","r-facility","r-scc"].forEach(id=>$(id).addEventListener("change",()=>rCurrent&&renderResearch()));
+$("r-refresh").addEventListener("click",()=>renderResearch());
 
 (async function init(){
   try{
