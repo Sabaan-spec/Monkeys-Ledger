@@ -127,6 +127,19 @@ table.materials tr.grp-head td{background:rgba(84,194,218,.07);color:var(--accen
 .site-header h1,.site-header h1 .sub,.section-label,.field label,.btn,.tab,.top-head h2,.product-head h2,table.materials thead th,.ob-title,.stat-label,.hist-stats .hs .l,.live,.brand .tag{font-family:var(--display)}
 @media (max-width:760px){.summary-grid{grid-template-columns:repeat(2,1fr)}.field.narrow{width:calc(50% - 8px)}.ob-grid{grid-template-columns:1fr}.ob-col+.ob-col{border-left:none;border-top:1px solid var(--border)}}
 @media (max-width:520px){.summary-grid{grid-template-columns:1fr}.field.grow,.field.narrow,.field{width:100%;flex-basis:100%}}
+
+@media (max-width:560px){
+  #tab-ore .top-filters label{display:flex;align-items:center;gap:6px;width:100%}
+  #tab-ore .top-filters label select{flex:1;min-width:0}
+  #tab-ore .top-filters>input{width:100%}
+  #tab-ore .top-filters>.btn{width:100%}
+  #tab-ore .ore-wrap{max-height:70vh;-webkit-overflow-scrolling:touch}
+  #tab-ore table.materials th:nth-child(2),#tab-ore table.materials td:nth-child(2){display:none}
+  #tab-top .panel{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  #tab-top table.materials th,#tab-top table.materials td{white-space:nowrap}
+  #tab-ore table.materials,#tab-top table.materials{font-size:.78rem}
+  #tab-ore table.materials th,#tab-ore table.materials td,#tab-top table.materials th,#tab-top table.materials td{padding:6px 8px}
+}
 </style>
 </head>
 <body>
