@@ -179,7 +179,16 @@ table.materials tr.grp-head td{background:rgba(84,194,218,.07);color:var(--accen
 @media (prefers-reduced-motion:reduce){
   #scanline,.warp-in,#boot .boot-logo{animation:none}
 }
-.panel::before,.panel::after{display:none}#boot .boot-hint{margin-top:2px;font-size:.72rem;letter-spacing:2px;text-transform:uppercase;color:var(--accent);cursor:pointer;animation:hintpulse 1.4s ease-in-out infinite}@keyframes hintpulse{0%,100%{opacity:.4}50%{opacity:.95}}*{scrollbar-width:thin;scrollbar-color:#2f7d92 rgba(10,20,28,.55)}::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-track{background:rgba(10,20,28,.55)}::-webkit-scrollbar-thumb{background:linear-gradient(180deg,var(--accent-dim),#1c4a58);border-radius:5px;border:2px solid rgba(10,20,28,.55)}::-webkit-scrollbar-thumb:hover{background:var(--accent)}::-webkit-scrollbar-corner{background:rgba(10,20,28,.55)}</style>
+.panel::before,.panel::after{display:none}#boot .boot-hint{margin-top:2px;font-size:.72rem;letter-spacing:2px;text-transform:uppercase;color:var(--accent);cursor:pointer;animation:hintpulse 1.4s ease-in-out infinite}@keyframes hintpulse{0%,100%{opacity:.4}50%{opacity:.95}}*{scrollbar-width:thin;scrollbar-color:#2f7d92 rgba(10,20,28,.55)}::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-track{background:rgba(10,20,28,.55)}::-webkit-scrollbar-thumb{background:linear-gradient(180deg,var(--accent-dim),#1c4a58);border-radius:5px;border:2px solid rgba(10,20,28,.55)}::-webkit-scrollbar-thumb:hover{background:var(--accent)}::-webkit-scrollbar-corner{background:rgba(10,20,28,.55)}
+/* ===== Watchlist / favorites ===== */
+.fav-star{background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.05rem;line-height:1;padding:0 4px;transition:.15s}
+.fav-star:hover{color:var(--accent)}
+.fav-star.on{color:#f5c451}
+#top-body td .fav-star{margin-right:4px}
+#tab-calc .product-head .hd-btns,#tab-watch .product-head .hd-btns{display:flex;gap:8px;align-items:center}
+#wl-body td:nth-child(2){cursor:pointer;color:var(--accent)}
+#wl-body td:nth-child(2):hover{text-decoration:underline}
+</style>
 </head>
 <body>
 <canvas id="space-bg"></canvas>
@@ -219,6 +228,7 @@ table.materials tr.grp-head td{background:rgba(84,194,218,.07);color:var(--accen
     <button class="tab" data-tab="arb">Hub Arbitrage</button>
     <button class="tab" data-tab="react">Reactions</button>
     <button class="tab" data-tab="invent">Invention</button>
+    <button class="tab" data-tab="watch">Watchlist</button>
   </nav>
 
   <div id="tab-calc">
@@ -517,6 +527,19 @@ table.materials tr.grp-head td{background:rgba(84,194,218,.07);color:var(--accen
       <div class="panel"><table class="materials"><thead><tr><th>Invention input</th><th class="num">Qty</th><th class="num">Unit</th><th class="num">Subtotal</th></tr></thead><tbody id="iv-body"></tbody></table></div>
       <p class="muted" id="iv-note"></p>
     </section>
+  </div>
+
+
+  <div id="tab-watch" hidden>
+    <section class="panel product-head">
+      <div><h2>Watchlist</h2><p class="muted" id="wl-meta">Star items from the Manufacturing calc or Top 10 Profitable to track them here.</p></div>
+      <div class="hd-btns"><button id="wl-refresh" class="btn">&#8635; Refresh</button><button id="wl-csv" class="btn">&#8681; CSV</button></div>
+    </section>
+    <section class="panel" id="wl-empty-wrap">
+      <p class="muted" id="wl-empty" style="padding:10px 4px;margin:0">No favorites yet. Open an item in the Manufacturing tab and click the &#9734; button in its header, or star a row in Top 10 Profitable.</p>
+    </section>
+    <div class="panel" id="wl-table-wrap" hidden><table class="materials"><thead><tr><th></th><th>Item</th><th class="num">Build cost</th><th class="num">Sell value</th><th class="num">Net profit</th><th class="num">Margin</th></tr></thead><tbody id="wl-body"></tbody></table></div>
+    <p class="muted small" style="margin-top:10px">Live figures use your current Manufacturing settings (hub, ME, taxes &amp; fees). Click an item name to open it in the calculator.</p>
   </div>
 
 </main>
@@ -1443,6 +1466,144 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 
   /* restore audio pref (needs a gesture to actually start) */
   try{if(localStorage.getItem('eveAudio')==='1'){const arm=()=>{setOn(true);removeEventListener('pointerdown',arm);};addEventListener('pointerdown',arm,{once:true});}}catch(e){}
+})();
+</script>
+
+
+<script>
+/* Watchlist + remember settings + CSV export — self-contained */
+(function(){
+  function $(id){return document.getElementById(id);}
+  function whenReady(cb){if(typeof ITEMS!=='undefined'&&ITEMS.length){cb();return;}let n=0;var iv=setInterval(function(){if((typeof ITEMS!=='undefined'&&ITEMS.length)||n++>80){clearInterval(iv);cb();}},100);}
+
+  whenReady(function(){
+    var nameToId={};ITEMS.forEach(function(it){if(!(it.name in nameToId))nameToId[it.name]=it.id;});
+
+    /* ---- favorites store ---- */
+    function getFavs(){try{return JSON.parse(localStorage.getItem('eveFavs')||'[]');}catch(e){return [];}}
+    function setFavs(a){try{localStorage.setItem('eveFavs',JSON.stringify(a));}catch(e){}}
+    function isFav(id){return getFavs().some(function(f){return f.id===id;});}
+    function toggleFav(id,name){var a=getFavs();if(a.some(function(f){return f.id===id;}))a=a.filter(function(f){return f.id!==id;});else a.push({id:id,name:name});setFavs(a);updateStars();}
+
+    function currentCalcItem(){var e=$('product-name');if(!e)return null;var n=e.textContent.trim();if(!n||n==='—')return null;var id=nameToId[n];return id?{id:id,name:n}:null;}
+
+    /* ---- calc header buttons ---- */
+    var ph=document.querySelector('#tab-calc .product-head');
+    if(ph){
+      var refresh=$('refresh');
+      var wrap=document.createElement('div');wrap.className='hd-btns';
+      var star=document.createElement('button');star.className='fav-star';star.id='fav-toggle';star.title='Add to watchlist';star.innerHTML='☆';
+      var csv=document.createElement('button');csv.className='btn';csv.id='calc-csv';csv.innerHTML='⚁ CSV';
+      refresh.parentNode.insertBefore(wrap,refresh);wrap.appendChild(star);wrap.appendChild(csv);wrap.appendChild(refresh);
+      star.addEventListener('click',function(){var it=currentCalcItem();if(it)toggleFav(it.id,it.name);});
+      csv.addEventListener('click',function(){exportBuildCSV();});
+    }
+
+    /* ---- Top Profitable stars ---- */
+    function injectTopStars(){
+      var body=$('top-body');if(!body)return;
+      body.querySelectorAll('tr').forEach(function(tr){
+        var cell=tr.children[1];if(!cell||cell.querySelector('.fav-star'))return;
+        var name=cell.textContent.trim();var id=nameToId[name];if(!id)return;
+        var b=document.createElement('button');b.className='fav-star';b.setAttribute('data-id',id);b.innerHTML=isFav(id)?'★':'☆';if(isFav(id))b.classList.add('on');
+        b.addEventListener('click',function(e){e.stopPropagation();toggleFav(id,name);});
+        cell.insertBefore(b,cell.firstChild);
+      });
+    }
+    var topBody=$('top-body');if(topBody){new MutationObserver(injectTopStars).observe(topBody,{childList:true});injectTopStars();}
+
+    function updateStars(){
+      var it=currentCalcItem();var ft=$('fav-toggle');
+      if(ft){var on=it&&isFav(it.id);ft.innerHTML=on?'★':'☆';ft.classList.toggle('on',!!on);ft.title=on?'Remove from watchlist':'Add to watchlist';}
+      var body=$('top-body');if(body)body.querySelectorAll('.fav-star').forEach(function(s){var id=Number(s.getAttribute('data-id'));var on=isFav(id);s.classList.toggle('on',on);s.innerHTML=on?'★':'☆';});
+    }
+    var pn=$('product-name');if(pn)new MutationObserver(updateStars).observe(pn,{childList:true,characterData:true,subtree:true});
+
+    /* ---- settings ---- */
+    var SET=['hub','me','runs','buystrat','sellstrat','f-sci','f-facility','f-scc','f-sales','f-broker'];
+    function saveSettings(){var o={};SET.forEach(function(id){var e=$(id);if(e)o[id]=e.value;});try{localStorage.setItem('eveSettings',JSON.stringify(o));}catch(e){}}
+    function restoreSettings(){var o;try{o=JSON.parse(localStorage.getItem('eveSettings')||'null');}catch(e){}if(!o)return;SET.forEach(function(id){var e=$(id);if(e&&o[id]!=null&&o[id]!=='')e.value=o[id];});}
+    SET.forEach(function(id){var e=$(id);if(e)e.addEventListener('change',saveSettings);});
+
+    /* ---- last item reopen ---- */
+    var sug=$('suggestions');
+    if(sug)sug.addEventListener('mousedown',function(e){var li=e.target.closest('li');if(li){var sp=li.querySelector('span');var nm=sp?sp.textContent.trim():li.textContent.trim();try{localStorage.setItem('eveLastItem',nm);}catch(x){}}},true);
+    function reopenLast(){
+      var nm;try{nm=localStorage.getItem('eveLastItem');}catch(e){}
+      if(!nm||!$('search'))return;
+      var s=$('search');s.value=nm;s.dispatchEvent(new Event('input',{bubbles:true}));
+      setTimeout(function(){var su=$('suggestions');if(!su||!su.children.length)return;var li=[].slice.call(su.children).find(function(x){var sp=x.querySelector('span');return sp&&sp.textContent.trim()===nm;})||su.children[0];['mousedown','mouseup','click'].forEach(function(t){li.dispatchEvent(new MouseEvent(t,{bubbles:true,cancelable:true,view:window}));});},400);
+    }
+
+    /* ---- watchlist render ---- */
+    function readCalcSettings(){var n=function(id){return Number(($(id)||{}).value)||0;};return {hub:($('hub')||{}).value||'jita',me:n('me'),runs:Math.max(1,n('runs')),buystrat:($('buystrat')||{}).value||'sell',sellstrat:($('sellstrat')||{}).value||'sell',sci:n('f-sci'),fac:n('f-facility'),scc:n('f-scc'),sales:n('f-sales'),broker:n('f-broker')};}
+    var wlRows=[];
+    async function renderWatch(){
+      var favs=getFavs();
+      var ew=$('wl-empty-wrap'),tw=$('wl-table-wrap');
+      if(!favs.length){ew.hidden=false;tw.hidden=true;$('wl-meta').textContent='Star items to track them here.';wlRows=[];return;}
+      ew.hidden=true;tw.hidden=false;$('wl-meta').textContent='Loading live market…';
+      var S=readCalcSettings();
+      var ms=await getMarketStats();
+      var items=favs.map(function(f){return ITEMS.find(function(x){return x.id===f.id;});}).filter(Boolean);
+      var ids={};items.forEach(function(it){ids[it.id]=1;it.materials.forEach(function(m){ids[m.id]=1;});});
+      var agg=await fuzzAgg(HUBS[S.hub].region,Object.keys(ids).map(Number));
+      function px(id,mode){var o=agg[id]||{};if(mode==='sell'){var v=o.sell&&Number(o.sell.min);return v>0?v:0;}var w=o.buy&&Number(o.buy.max);return w>0?w:0;}
+      var meF=1-S.me/100;
+      wlRows=items.map(function(it){
+        var materials=0,eiv=0;
+        it.materials.forEach(function(m){var qty=Math.max(1,Math.ceil(m.qty*meF))*S.runs;materials+=qty*(px(m.id,S.buystrat)||ms.avg[m.id]||0);eiv+=(ms.adj[m.id]||0)*m.qty*S.runs;});
+        var jobFee=eiv*(S.sci+S.fac+S.scc)/100;
+        var prodUnit=px(it.id,S.sellstrat)||ms.avg[it.id]||0;
+        var revenue=(it.productQty||1)*S.runs*prodUnit;
+        var totalCost=materials+jobFee+revenue*S.sales/100+revenue*S.broker/100;
+        var profit=revenue-totalCost,margin=revenue>0?profit/revenue*100:0;
+        return {id:it.id,name:it.name,totalCost:totalCost,revenue:revenue,profit:profit,margin:margin};
+      });
+      wlRows.sort(function(a,b){return b.profit-a.profit;});
+      $('wl-body').innerHTML=wlRows.map(function(r){var col=r.profit>=0?'var(--good)':'var(--bad)';return '<tr><td><button class="fav-star on" data-id="'+r.id+'" title="Remove">★</button></td><td data-name="'+r.name.replace(/"/g,'&quot;')+'">'+r.name+'</td><td class="num">'+isk(Math.round(r.totalCost))+'</td><td class="num">'+isk(Math.round(r.revenue))+'</td><td class="num" style="color:'+col+'">'+isk(Math.round(r.profit))+'</td><td class="num" style="color:'+col+'">'+r.margin.toFixed(1)+'%</td></tr>';}).join('');
+      $('wl-meta').textContent=items.length+' item(s) · '+HUBS[S.hub].name+' · ME '+S.me+'% · live';
+      $('wl-body').querySelectorAll('.fav-star').forEach(function(b){b.addEventListener('click',function(){toggleFav(Number(b.getAttribute('data-id')),'');renderWatch();});});
+      $('wl-body').querySelectorAll('td[data-name]').forEach(function(td){td.addEventListener('click',function(){openInCalc(td.getAttribute('data-name'));});});
+    }
+    function openInCalc(name){
+      var calcBtn=[].slice.call(document.querySelectorAll('.tab')).find(function(b){return b.dataset.tab==='calc';});
+      if(calcBtn) calcBtn.click();
+      var s=$('search');if(!s)return;s.value=name;s.dispatchEvent(new Event('input',{bubbles:true}));
+      setTimeout(function(){var su=$('suggestions');if(!su||!su.children.length)return;var li=[].slice.call(su.children).find(function(x){var sp=x.querySelector('span');return sp&&sp.textContent.trim()===name;})||su.children[0];['mousedown','mouseup','click'].forEach(function(t){li.dispatchEvent(new MouseEvent(t,{bubbles:true,cancelable:true,view:window}));});},350);
+    }
+
+    /* ---- CSV export ---- */
+    function downloadCSV(fname,rows){
+      var csv=rows.map(function(r){return r.map(function(c){c=(c==null?'':String(c));return /[",\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c;}).join(',');}).join('\r\n');
+      var blob=new Blob([csv],{type:'text/csv'});var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download=fname;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(url);a.remove();},100);
+    }
+    function exportBuildCSV(){
+      var e=$('product-name');var name=e?e.textContent.trim():'';if(!name||name==='—')return;
+      var rows=[['Material','Qty per job','Unit price','Subtotal']];
+      document.querySelectorAll('#mat-body tr').forEach(function(tr){rows.push([].slice.call(tr.children).map(function(td){return td.textContent.trim();}));});
+      rows.push([]);
+      rows.push(['Total cost',($('s-matcost')||{}).textContent]);
+      rows.push(['Product value',($('s-revenue')||{}).textContent]);
+      rows.push(['Net profit',($('s-profit')||{}).textContent]);
+      rows.push(['Margin',($('s-margin')||{}).textContent]);
+      downloadCSV('eve-build-'+name.replace(/[^a-z0-9]+/gi,'_')+'.csv',rows);
+    }
+    if($('wl-csv'))$('wl-csv').addEventListener('click',function(){
+      var rows=[['Item','Build cost','Sell value','Net profit','Margin %']];
+      wlRows.forEach(function(r){rows.push([r.name,Math.round(r.totalCost),Math.round(r.revenue),Math.round(r.profit),r.margin.toFixed(1)]);});
+      downloadCSV('eve-watchlist.csv',rows);
+    });
+    if($('wl-refresh'))$('wl-refresh').addEventListener('click',renderWatch);
+
+    /* ---- tab wiring ---- */
+    document.querySelectorAll('.tab').forEach(function(b){b.addEventListener('click',function(){var n=b.dataset.tab;var w=$('tab-watch');if(w)w.hidden=n!=='watch';if(n==='watch')renderWatch();});});
+
+    /* ---- init ---- */
+    restoreSettings();
+    updateStars();
+    reopenLast();
+  });
 })();
 </script>
 
