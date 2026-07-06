@@ -1607,5 +1607,87 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 })();
 </script>
 
+
+<script>
+/* Hub Arbitrage — live prices + inferred market-activity feed (self-contained) */
+(function(){
+  function $(id){return document.getElementById(id);}
+  function ready(cb){if(typeof arbItems!=='undefined'&&typeof fuzzAgg==='function'&&typeof HUBS!=='undefined'){cb();return;}var n=0,iv=setInterval(function(){if((typeof arbItems!=='undefined'&&typeof fuzzAgg==='function'&&typeof HUBS!=='undefined')||n++>100){clearInterval(iv);cb();}},100);}
+  ready(function(){
+    var HUBK=['jita','amarr','dodixie','rens','hek'];
+    var POLL=45000;
+    var result=$('ab-result'); if(!result)return;
+
+    var st=document.createElement('style');
+    st.textContent=''
+      +'#ab-live-toggle.on{border-color:var(--good);color:var(--good);animation:ab-pulse 1.5s ease-in-out infinite}'
+      +'@keyframes ab-pulse{0%,100%{box-shadow:0 0 8px rgba(86,208,168,.15)}50%{box-shadow:0 0 14px rgba(86,208,168,.55)}}'
+      +'#ab-feed li{animation:ab-slide .35s ease}'
+      +'@keyframes ab-slide{0%{opacity:0;transform:translateY(-6px)}100%{opacity:1;transform:none}}'
+      +'.ab-flash{background:rgba(84,194,218,.28)!important;transition:background .8s ease}';
+    document.head.appendChild(st);
+
+    var bar=document.createElement('div'); bar.className='panel'; bar.id='ab-live-bar';
+    bar.innerHTML='<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">'
+      +'<button id="ab-live-toggle" class="btn on">&#9679; LIVE</button>'
+      +'<span class="muted small" id="ab-live-status">starting live feed&hellip;</span>'
+      +'<span class="muted small" id="ab-live-updated" style="margin-left:auto"></span></div>';
+
+    var feed=document.createElement('div'); feed.className='panel'; feed.id='ab-activity';
+    feed.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b>Market activity</b><span class="muted small">inferred fills across all trade hubs</span></div>'
+      +'<ul id="ab-feed" style="list-style:none;margin:10px 0 0;padding:0;max-height:280px;overflow:auto;font-family:var(--mono);font-size:.82rem"></ul>'
+      +'<p class="muted small" style="margin:10px 0 0">EVE exposes no public live trade tape, so these are <b>inferred</b> from order-book volume changes as CCP ESI data refreshes (~5 min cadence). &Delta;vol = units that left the book at the shown price.</p>';
+
+    result.insertBefore(bar, result.children[1]||null);
+    result.appendChild(feed);
+
+    var live=true, timer=null, lastId=null, lastName='', lastUpd=0, snap={};
+
+    function curItem(){var e=$('ab-product-name');if(!e)return null;var n=e.textContent.trim();if(!n||n==='—')return null;var it=arbItems.find(function(x){return x.name===n;});return it||null;}
+    function money(n){try{return isk(Math.round(n));}catch(e){return Math.round(n).toLocaleString()+' ISK';}}
+    function vol(n){try{return intf(n);}catch(e){return String(n);}}
+    function clk(){var d=new Date();return d.toTimeString().slice(0,8);}
+    function setStatus(t){var s=$('ab-live-status');if(s)s.textContent=t;}
+    function setUpd(){lastUpd=Date.now();var u=$('ab-live-updated');if(u)u.textContent='updated '+clk();}
+    function addFeed(html){var ul=$('ab-feed');if(!ul)return;var li=document.createElement('li');li.style.padding='4px 0';li.style.borderBottom='1px solid rgba(84,194,218,.08)';li.innerHTML=html;ul.insertBefore(li,ul.firstChild);while(ul.children.length>30)ul.removeChild(ul.lastChild);}
+
+    async function poll(){
+      var it=curItem();
+      if(!it){setStatus('select an item to go live');return;}
+      if(it.id!==lastId){lastId=it.id;snap={};var f=$('ab-feed');if(f)f.innerHTML='';}
+      var rb=$('ab-refresh'); if(rb) rb.click();
+      HUBK.forEach(function(hk){
+        fuzzAgg(HUBS[hk].region,[it.id]).then(function(agg){
+          var o=agg[it.id]||{};
+          var sv=o.sell?Number(o.sell.volume):0, bv=o.buy?Number(o.buy.volume):0;
+          var smin=o.sell?Number(o.sell.min):0, bmax=o.buy?Number(o.buy.max):0;
+          var prev=snap[hk];
+          if(prev){
+            var ds=prev.sv-sv, db=prev.bv-bv;
+            if(ds>0 && smin>0) addFeed('<span class="muted">'+clk()+'</span> &middot; <b>'+HUBS[hk].name+'</b> &middot; <span style="color:var(--bad)">&#9660; ~'+vol(ds)+' sold</span> @ <span style="color:var(--accent)">'+money(smin)+'</span>');
+            if(db>0 && bmax>0) addFeed('<span class="muted">'+clk()+'</span> &middot; <b>'+HUBS[hk].name+'</b> &middot; <span style="color:var(--good)">&#9650; ~'+vol(db)+' bought</span> @ '+money(bmax));
+          }
+          snap[hk]={sv:sv,bv:bv};
+        }).catch(function(){});
+      });
+      setUpd();
+      setStatus('live · polling every '+(POLL/1000)+'s across '+HUBK.length+' hubs');
+    }
+
+    function start(){ if(timer)return; var t=$('ab-live-toggle'); if(t)t.classList.add('on'); poll(); timer=setInterval(function(){ var tab=$('tab-arb'); if(tab&&tab.hidden)return; poll(); }, POLL); }
+    function stop(){ if(timer){clearInterval(timer);timer=null;} var t=$('ab-live-toggle'); if(t)t.classList.remove('on'); setStatus('paused'); }
+
+    $('ab-live-toggle').addEventListener('click',function(){ live=!live; if(live)start(); else stop(); });
+
+    var pn=$('ab-product-name');
+    if(pn) new MutationObserver(function(){ var e=$('ab-product-name'); if(!e)return; var n=e.textContent.trim(); if(n===lastName)return; lastName=n; if(live){ if(!timer) start(); else poll(); } }).observe(pn,{childList:true,characterData:true,subtree:true});
+
+    ['ab-bestsell','ab-bestbuy','ab-net','ab-margin'].forEach(function(id){var el=$(id);if(!el)return;var prevTxt=el.textContent;new MutationObserver(function(){var t=el.textContent;if(t===prevTxt)return;prevTxt=t;el.classList.remove('ab-flash');void el.offsetWidth;el.classList.add('ab-flash');setTimeout(function(){el.classList.remove('ab-flash');},850);}).observe(el,{childList:true,characterData:true,subtree:true});});
+
+    if(live) start();
+  });
+})();
+</script>
+
 </body>
 </html>
