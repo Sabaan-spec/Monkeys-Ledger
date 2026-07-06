@@ -221,7 +221,7 @@ nav.tabs{gap:6px;flex-wrap:nowrap;overflow-x:auto;justify-content:safe center}na
 <main class="wrap">
   <nav class="tabs">
     <button class="tab active" data-tab="calc">Manufacturing</button>
-    <button class="tab" data-tab="top">Top 10 Profitable</button>
+    <button class="tab" data-tab="top">Category Prices</button>
     <button class="tab" data-tab="ore">Ore &amp; Gas</button>
     <button class="tab" data-tab="research">Research</button>
     <button class="tab" data-tab="repro">Reprocessing</button>
@@ -1685,6 +1685,102 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     ['ab-bestsell','ab-bestbuy','ab-net','ab-margin'].forEach(function(id){var el=$(id);if(!el)return;var prevTxt=el.textContent;new MutationObserver(function(){var t=el.textContent;if(t===prevTxt)return;prevTxt=t;el.classList.remove('ab-flash');void el.offsetWidth;el.classList.add('ab-flash');setTimeout(function(){el.classList.remove('ab-flash');},850);}).observe(el,{childList:true,characterData:true,subtree:true});});
 
     if(live) start();
+  });
+})();
+</script>
+
+
+<script>
+/* Category price breakdown — replaces Top 10 Profitable tab (self-contained) */
+(function(){
+  function $(id){return document.getElementById(id);}
+  function ready(cb){if(typeof ITEMS!=='undefined'&&ITEMS.length&&typeof fuzzAgg==='function'&&typeof HUBS!=='undefined'){cb();return;}var n=0,iv=setInterval(function(){if((typeof ITEMS!=='undefined'&&ITEMS.length&&typeof fuzzAgg==='function'&&typeof HUBS!=='undefined')||n++>100){clearInterval(iv);cb();}},100);}
+  ready(function(){
+    var tab=$('tab-top'); if(!tab)return;
+    var HUBK=['jita','amarr','dodixie','rens','hek'];
+    var GROUPS=null;
+
+    var st=document.createElement('style');
+    st.textContent='#cat-body td.hit{color:var(--good);font-weight:600}#cat-body td.hi{color:var(--warn)}#cat-body td:first-child{white-space:normal}#cat-controls .field.grow{min-width:260px}';
+    document.head.appendChild(st);
+
+    [].slice.call(tab.children).forEach(function(c){c.style.display='none';});
+
+    var ui=document.createElement('div'); ui.id='cat-ui';
+    ui.innerHTML=
+      '<section class="controls panel" id="cat-controls">'
+      +'<div class="field grow"><label for="cat-select">Category / market group</label><select id="cat-select"></select></div>'
+      +'<div class="field narrow"><label for="cat-basis">Price basis</label><select id="cat-basis"><option value="sell">Sell (lowest ask)</option><option value="buy">Buy (highest bid)</option></select></div>'
+      +'<div class="field narrow"><label for="cat-refresh">&nbsp;</label><button id="cat-refresh" class="btn">&#8635; Refresh</button></div>'
+      +'</section>'
+      +'<div class="panel"><div id="cat-status" class="muted small" style="padding:6px 4px">Loading market groups&hellip;</div>'
+      +'<div id="cat-table-wrap" hidden style="overflow-x:auto"><table class="materials"><thead><tr><th>Item</th>'
+      +'<th class="num">Jita</th><th class="num">Amarr</th><th class="num">Dodixie</th><th class="num">Rens</th><th class="num">Hek</th><th class="num">Spread</th></tr></thead><tbody id="cat-body"></tbody></table></div></div>'
+      +'<p class="muted small" style="margin-top:8px">Pick a group to see every buildable item\'s live price at each of the five major hubs. Cheapest hub in <span style="color:var(--good)">green</span>, priciest in <span style="color:var(--warn)">amber</span>. Spread = (max&minus;min)/min. Live via Fuzzwork.</p>';
+    tab.insertBefore(ui, tab.firstChild);
+
+    function short(n){try{return iskShort(n);}catch(e){return Math.round(n).toLocaleString();}}
+    function setStatus(t){var s=$('cat-status');if(s)s.textContent=t;}
+
+    function buildSelect(){
+      var sel=$('cat-select');
+      var byKind={};
+      ITEMS.forEach(function(it){var g=GROUPS[it.id];if(!g)return;(byKind[it.kind]=byKind[it.kind]||{})[g]=1;});
+      var kindOrder=['Ships','Ship components','Modules','Weapons','Ammo & Charges','Drones','Fighters','Subsystems','Implants & Boosters','Deployables','Structures','Commodities'];
+      var kinds=Object.keys(byKind).sort(function(a,b){var ia=kindOrder.indexOf(a),ib=kindOrder.indexOf(b);ia=ia<0?99:ia;ib=ib<0?99:ib;return ia-ib||a.localeCompare(b);});
+      var html='';
+      kinds.forEach(function(k){
+        var groups=Object.keys(byKind[k]).sort();
+        html+='<optgroup label="'+k+'">'+groups.map(function(g){return '<option value="'+g.replace(/"/g,'&quot;')+'">'+g+'</option>';}).join('')+'</optgroup>';
+      });
+      sel.innerHTML=html;
+      var opt=[].slice.call(sel.querySelectorAll('option')).find(function(o){return o.value==='Battleship';});
+      if(opt) sel.value='Battleship';
+    }
+
+    async function render(){
+      if(!GROUPS)return;
+      var group=$('cat-select').value; var basis=$('cat-basis').value;
+      var items=ITEMS.filter(function(x){return GROUPS[x.id]===group;}).sort(function(a,b){return a.name.localeCompare(b.name);});
+      var wrap=$('cat-table-wrap');
+      if(!items.length){wrap.hidden=true;setStatus('no buildable items in this group');return;}
+      setStatus('Loading '+items.length+' item(s) across 5 hubs&hellip;');
+      var ids=items.map(function(x){return x.id;});
+      var per={};
+      await Promise.all(HUBK.map(async function(hk){ try{ per[hk]=await fuzzAgg(HUBS[hk].region, ids); }catch(e){ per[hk]={}; } }));
+      function px(hk,id){var o=(per[hk]||{})[id]||{};if(basis==='sell'){var v=o.sell&&Number(o.sell.min);return v>0?v:0;}var w=o.buy&&Number(o.buy.max);return w>0?w:0;}
+      var rows=items.map(function(it){
+        var vals=HUBK.map(function(hk){return px(hk,it.id);});
+        var valid=vals.filter(function(v){return v>0;});
+        var mn=valid.length?Math.min.apply(null,valid):0, mx=valid.length?Math.max.apply(null,valid):0;
+        var spread=mn>0?((mx-mn)/mn*100):0;
+        return {name:it.name,vals:vals,mn:mn,mx:mx,spread:spread};
+      });
+      rows=rows.filter(function(r){return r.mn>0;});
+      rows.sort(function(a,b){return b.spread-a.spread;});
+      $('cat-body').innerHTML=rows.map(function(r){
+        var tds=r.vals.map(function(v){
+          if(!v)return '<td class="num muted">&mdash;</td>';
+          var cls=(v===r.mn&&r.mn!==r.mx)?' hit':((v===r.mx&&r.mn!==r.mx)?' hi':'');
+          return '<td class="num'+cls+'">'+short(v)+'</td>';
+        }).join('');
+        var sp=r.spread>0?r.spread.toFixed(1)+'%':'&mdash;';
+        return '<tr><td>'+r.name+'</td>'+tds+'<td class="num">'+sp+'</td></tr>';
+      }).join('');
+      wrap.hidden=false;
+      setStatus(rows.length+' priced of '+items.length+' in '+group+' &middot; '+basis+' price &middot; sorted by cross-hub spread &middot; live');
+    }
+
+    $('cat-select').addEventListener('change',render);
+    $('cat-basis').addEventListener('change',render);
+    $('cat-refresh').addEventListener('click',render);
+
+    (async function(){
+      try{
+        GROUPS=await fetch('./data/groups.json?cb='+Date.now()).then(function(r){return r.json();});
+        buildSelect(); render();
+      }catch(e){ setStatus('failed to load groups: '+e.message); }
+    })();
   });
 })();
 </script>
