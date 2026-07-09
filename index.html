@@ -1715,6 +1715,1927 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       +'</section>'
       +'<div class="panel"><div id="cat-status" class="muted small" style="padding:6px 4px">Loading market groups&hellip;</div>'
       +'<div id="cat-table-wrap" hidden style="overflow-x:auto"><table class="materials"><thead><tr><th>Item</th>'
+      +'<th class="num">Jita</th><th class="num">Amarr</th><th class="num">Dodixie</th><th class="num">Rens</th><th class="num">Hek</th><th class="num">On&nbsp;book</th><th class="num">Spread</th></tr></thead><tbody id="cat-body"></tbody></table></div></div>'
+      +'<p class="muted small" style="margin-top:8px">Pick a group to see every buildable item\'s live price at each of the five major hubs. Cheapest hub in <span style="color:var(--good)">green</span>, priciest in <span style="color:var(--warn)">amber</span>. Spread = (max&minus;min)/min. On&nbsp;book = units currently on orders; thin markets (&#9888;) are dimmed &mdash; a fat spread you cannot actually move is not real profit. Live via Fuzzwork.</p>';
+    tab.insertBefore(ui, tab.firstChild);
+
+    function short(n){try{return iskShort(n);}catch(e){return Math.round(n).toLocaleString();}}
+    function setStatus(t){var s=$('cat-status');if(s)s.textContent=t;}
+
+    function buildSelect(){
+      var sel=$('cat-select');
+      var byKind={};
+      Object.keys(GROUPS).forEach(function(pid){var g=GROUPS[pid];var c=CATMAP[g]||'Other';(byKind[c]=byKind[c]||{})[g]=1;});
+      var kindOrder=['Ships','Ship components','Modules','Ammo & Charges','Weapons','Drones','Fighters','Subsystems','Implants & Boosters','Deployables','Commodities','Materials','Structures','Structure Modules','Starbase / POS','Infrastructure Upgrades','Sovereignty Structures','Orbitals','Accessories','Special Edition Assets'];
+      var kinds=Object.keys(byKind).sort(function(a,b){var ia=kindOrder.indexOf(a),ib=kindOrder.indexOf(b);ia=ia<0?99:ia;ib=ib<0?99:ib;return ia-ib||a.localeCompare(b);});
+      var html='';
+      kinds.forEach(function(k){
+        var groups=Object.keys(byKind[k]).sort();
+        html+='<optgroup label="'+k+'">'+groups.map(function(g){return '<option value="'+g.replace(/"/g,'&quot;')+'">'+g+'</option>';}).join('')+'</optgroup>';
+      });
+      sel.innerHTML=html;
+      var opt=[].slice.call(sel.querySelectorAll('option')).find(function(o){return o.value==='Battleship';});
+      if(opt) sel.value='Battleship';
+    }
+
+    async function render(){
+      if(!GROUPS)return;
+      var group=$('cat-select').value; var basis=$('cat-basis').value;
+      var items=ITEMS.filter(function(x){return GROUPS[x.id]===group;}).sort(function(a,b){return a.name.localeCompare(b.name);});
+      var wrap=$('cat-table-wrap');
+      if(!items.length){wrap.hidden=true;setStatus('no buildable items in this group');return;}
+      setStatus('Loading '+items.length+' item(s) across 5 hubs&hellip;');
+      var ids=items.map(function(x){return x.id;});
+      var per={};
+      await Promise.all(HUBK.map(async function(hk){ try{ per[hk]=await fuzzAgg(HUBS[hk].region, ids); }catch(e){ per[hk]={}; } }));
+      function px(hk,id){var o=(per[hk]||{})[id]||{};if(basis==='sell'){var v=o.sell&&Number(o.sell.min);return v>0?v:0;}var w=o.buy&&Number(o.buy.max);return w>0?w:0;}
+      var rows=items.map(function(it){
+        var vals=HUBK.map(function(hk){return px(hk,it.id);});
+        var valid=vals.filter(function(v){return v>0;});
+        var mn=valid.length?Math.min.apply(null,valid):0, mx=valid.length?Math.max.apply(null,valid):0;
+        var spread=mn>0?((mx-mn)/mn*100):0;
+        var vol=HUBK.reduce(function(a,hk){var o=(per[hk]||{})[it.id]||{};var s=basis==='sell'?(o.sell&&Number(o.sell.volume)):(o.buy&&Number(o.buy.volume));return a+(s>0?s:0);},0);return {name:it.name,vals:vals,mn:mn,mx:mx,spread:spread,vol:vol};
+      });
+      rows=rows.filter(function(r){return r.mn>0;});
+      rows.sort(function(a,b){return b.spread-a.spread;});
+      $('cat-body').innerHTML=rows.map(function(r){
+        var tds=r.vals.map(function(v){
+          if(!v)return '<td class="num muted">&mdash;</td>';
+          var cls=(v===r.mn&&r.mn!==r.mx)?' hit':((v===r.mx&&r.mn!==r.mx)?' hi':'');
+          return '<td class="num'+cls+'">'+short(v)+'</td>';
+        }).join('');
+        var sp=r.spread>0?r.spread.toFixed(1)+'%':'&mdash;';
+        var lowv=r.vol<20;return '<tr'+(lowv?' style="opacity:.5"':'')+'><td>'+r.name+(lowv?' <span style="color:var(--warn)" title="thin market">&#9888;</span>':'')+'</td>'+tds+'<td class="num'+(lowv?' hi':'')+'">'+(r.vol?intf(r.vol):'&mdash;')+'</td><td class="num">'+sp+'</td></tr>';
+      }).join('');
+      wrap.hidden=false;
+      setStatus(rows.length+' priced of '+items.length+' in '+group+' &middot; '+basis+' price &middot; sorted by cross-hub spread &middot; live');
+    }
+
+    $('cat-select').addEventListener('change',render);
+    $('cat-basis').addEventListener('change',render);
+    $('cat-refresh').addEventListener('click',render);
+
+    (async function(){
+      try{
+        GROUPS=await fetch('./data/groups.json?cb='+Date.now()).then(function(r){return r.json();});
+        buildSelect(); render();
+      }catch(e){ setStatus('failed to load groups: '+e.message); }
+    })();
+  });
+})();
+</script>
+
+
+<script>
+/* Live commodity ticker — persistent across all tabs */
+(function(){
+  function ready(cb){if(typeof fuzzAgg==='function'&&typeof getMarketStats==='function'&&typeof HUBS!=='undefined'){cb();return;}var n=0,iv=setInterval(function(){if((typeof fuzzAgg==='function'&&typeof getMarketStats==='function'&&typeof HUBS!=='undefined')||n++>150){clearInterval(iv);cb();}},100);}
+  ready(function(){
+    var NAMES=['Tritanium','Pyerite','Mexallon','Isogen','Nocxium','Zydrine','Megacyte','Morphite','Nitrogen Fuel Block','Hydrogen Fuel Block','Helium Fuel Block','Oxygen Fuel Block','Heavy Water','Liquid Ozone','Strontium Clathrates','Robotics','Coolant','Enriched Uranium','Oxygen Isotopes','Helium Isotopes','Hydrogen Isotopes','Nitrogen Isotopes','Cobalt','Titanium','Tungsten','Cadmium','Platinum','Chromium','Vanadium','Caesium','Hafnium','Mercury','Technetium','Dysprosium','Neodymium','Promethium','Thulium','Hydrocarbons','Silicates','Evaporite Deposits','Atmospheric Gases','PLEX'];
+    var st=document.createElement('style');
+    st.textContent=
+      '#ticker-bar{position:relative;overflow:hidden;background:linear-gradient(180deg,rgba(9,17,24,.96),rgba(5,10,14,.96));border-bottom:1px solid var(--border);white-space:nowrap;z-index:30}'
+      +'#ticker-bar::before{content:"MARKET";position:absolute;left:0;top:0;bottom:0;display:flex;align-items:center;padding:0 12px;font-family:var(--mono);font-size:.62rem;letter-spacing:2px;color:var(--accent);background:linear-gradient(90deg,rgba(7,13,18,.99) 72%,transparent);z-index:2;border-right:1px solid var(--border)}'
+      +'#ticker-track{display:inline-block;padding:7px 0 7px 88px;animation:tickerScroll 70s linear infinite;font-family:var(--mono);font-size:.78rem;will-change:transform}'
+      +'#ticker-bar:hover #ticker-track{animation-play-state:paused}'
+      +'.tk{display:inline-block;padding:0 16px}.tk b{color:var(--text);font-weight:600}.tk .p{color:var(--muted);margin:0 6px}.tk .up{color:var(--good)}.tk .dn{color:var(--bad)}'
+      +'@keyframes tickerScroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}'
+      +'@media (prefers-reduced-motion:reduce){#ticker-track{animation:none}}';
+    document.head.appendChild(st);
+    var bar=document.createElement('div');bar.id='ticker-bar';bar.innerHTML='<div id="ticker-track"></div>';
+    var hdr=document.querySelector('header.site-header');
+    if(hdr&&hdr.parentNode) hdr.parentNode.insertBefore(bar, hdr.nextSibling); else document.body.insertBefore(bar, document.body.firstChild);
+    var IDS=null, ms=null;
+    function short(n){try{return iskShort(n);}catch(e){return Math.round(n).toLocaleString();}}
+    function render(rows){
+      if(!rows.length)return;
+      var html=rows.map(function(r){var cls=r.chg>=0?'up':'dn';var ar=r.chg>=0?'▲':'▼';return '<span class="tk"><b>'+r.name+'</b><span class="p">'+short(r.cur)+'</span><span class="'+cls+'">'+ar+' '+Math.abs(r.chg).toFixed(1)+'%</span></span>';}).join('');
+      var tr=document.getElementById('ticker-track'); if(tr) tr.innerHTML=html+html;
+    }
+    async function poll(){
+      if(!IDS||!IDS.length)return;
+      try{
+        var agg=await fuzzAgg(HUBS.jita.region, IDS.map(function(x){return x.id;}));
+        var rows=[];
+        IDS.forEach(function(it){var o=agg[it.id]||{};var cur=o.sell&&Number(o.sell.min);var base=ms&&ms.avg?ms.avg[it.id]:0;if(cur>0&&base>0){rows.push({name:it.name,cur:cur,chg:(cur-base)/base*100});}});
+        rows.sort(function(a,b){return Math.abs(b.chg)-Math.abs(a.chg);});
+        render(rows.slice(0,28));
+      }catch(e){}
+    }
+    (async function(){
+      try{
+        var r=await fetch('https://esi.evetech.net/latest/universe/ids/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(NAMES)}).then(function(x){return x.json();});
+        IDS=(r.inventory_types||[]).map(function(x){return {id:x.id,name:x.name};});
+        ms=await getMarketStats();
+        poll(); setInterval(poll, 45000);
+      }catch(e){}
+    })();
+  });
+})();
+</script>
+
+<script>
+/* What should I haul? — trade-route scanner tab */
+(function(){
+  function $(id){return document.getElementById(id);}
+  function ready(cb){if(typeof arbItems!=='undefined'&&arbItems.length&&typeof fuzzAgg==='function'&&typeof HUBS!=='undefined'){cb();return;}var n=0,iv=setInterval(function(){if((typeof arbItems!=='undefined'&&arbItems.length&&typeof fuzzAgg==='function'&&typeof HUBS!=='undefined')||n++>150){clearInterval(iv);cb();}},100);}
+  ready(function(){
+    var HUBK=['jita','amarr','dodixie','rens','hek'];
+    var main=document.querySelector('main.wrap'); if(!main)return;
+    var arbBtn=[].slice.call(document.querySelectorAll('.tab')).find(function(b){return b.dataset.tab==='arb';});
+    var btn=document.createElement('button');btn.className='tab';btn.setAttribute('data-tab','haul');btn.textContent='Haul';
+    if(arbBtn&&arbBtn.parentNode) arbBtn.parentNode.insertBefore(btn, arbBtn.nextSibling); else if(document.querySelector('nav.tabs')) document.querySelector('nav.tabs').appendChild(btn);
+    var div=document.createElement('div');div.id='tab-haul';div.hidden=true;
+    var hubOpts=HUBK.map(function(h){return '<option value="'+h+'">'+HUBS[h].name+'</option>';}).join('');
+    div.innerHTML=
+      '<section class="controls panel">'
+      +'<div class="field narrow"><label for="hl-from">From hub</label><select id="hl-from">'+hubOpts+'</select></div>'
+      +'<div class="field narrow"><label for="hl-to">To hub</label><select id="hl-to">'+hubOpts+'</select></div>'
+      +'<div class="field narrow"><label for="hl-tax">Sales tax %</label><input id="hl-tax" type="number" min="0" step="0.01" value="4.5"></div>'
+      +'<div class="field narrow"><label for="hl-scan">&nbsp;</label><button id="hl-scan" class="btn">&#128269; Scan routes</button></div>'
+      +'</section>'
+      +'<div class="panel"><div id="hl-status" class="muted small" style="padding:6px 4px">Pick two hubs and scan for the most profitable items to haul between them.</div>'
+      +'<div id="hl-wrap" hidden style="overflow-x:auto"><table class="materials"><thead><tr><th>Item</th><th class="num">Buy @from</th><th class="num">Sell @to</th><th class="num">Profit/unit</th><th class="num">Qty</th><th class="num">ISK/m&sup3;</th><th class="num">Total profit</th></tr></thead><tbody id="hl-body"></tbody></table></div></div>'
+      +'<p class="muted small" style="margin-top:8px">Buy at the lowest sell order in the source hub, haul, and sell into the highest buy order at the destination. Qty is capped by both sides\' order volume. ISK/m&sup3; uses packaged volume. Excludes broker fees &amp; freight cost. Live via Fuzzwork &amp; CCP ESI.</p>';
+    main.appendChild(div);
+    $('hl-to').value='amarr';
+
+    document.querySelectorAll('.tab').forEach(function(b){
+      b.addEventListener('click',function(){
+        var n=b.dataset.tab; var d=$('tab-haul'); if(d) d.hidden=n!=='haul';
+        if(n==='haul'){
+          [].slice.call(document.querySelectorAll('main.wrap > [id^="tab-"]')).forEach(function(el){ if(el.id!=='tab-haul') el.hidden=true; });
+          document.querySelectorAll('.tab').forEach(function(x){ x.classList.toggle('active', x===b); });
+        }
+      });
+    });
+
+    var VOL={};
+    function setStatus(t){var s=$('hl-status');if(s)s.textContent=t;}
+    function short(n){try{return iskShort(n);}catch(e){return Math.round(n).toLocaleString();}}
+    async function getVols(ids){
+      var need=ids.filter(function(id){return VOL[id]===undefined;});
+      var i=0; async function w(){while(i<need.length){var id=need[i++];try{var t=await fetch('https://esi.evetech.net/latest/universe/types/'+id,{cache:'no-store'}).then(function(r){return r.json();});VOL[id]=(t.packaged_volume||t.volume||0);}catch(e){VOL[id]=0;}}}
+      await Promise.all(Array.from({length:20},w));
+    }
+    var busy=false;
+    async function scan(){
+      if(busy)return;
+      var from=$('hl-from').value, to=$('hl-to').value, tax=(Number($('hl-tax').value)||0)/100;
+      if(from===to){setStatus('pick two different hubs');return;}
+      busy=true; $('hl-scan').disabled=true;
+      setStatus('Scanning '+arbItems.length+' items across '+HUBS[from].name+' → '+HUBS[to].name+'… (a few seconds)');
+      $('hl-wrap').hidden=true;
+      var ids=arbItems.map(function(x){return x.id;});
+      var idName={}; arbItems.forEach(function(x){idName[x.id]=x.name;});
+      var a1,a2;
+      try{ a1=await fuzzAgg(HUBS[from].region, ids); a2=await fuzzAgg(HUBS[to].region, ids); }catch(e){ setStatus('scan failed: '+e.message); busy=false;$('hl-scan').disabled=false; return; }
+      var cand=[];
+      ids.forEach(function(id){
+        var o1=a1[id]||{}, o2=a2[id]||{};
+        var buy=o1.sell&&Number(o1.sell.min); var sell=o2.buy&&Number(o2.buy.max);
+        if(!(buy>0&&sell>0))return;
+        var pu=sell*(1-tax)-buy; if(pu<=0)return;
+        var qty=Math.min(o1.sell.volume?Number(o1.sell.volume):0, o2.buy.volume?Number(o2.buy.volume):0);
+        if(qty<=0)return;
+        cand.push({id:id,name:idName[id]||('#'+id),buy:buy,sell:sell,pu:pu,qty:qty,total:pu*qty});
+      });
+      cand.sort(function(a,b){return b.total-a.total;});
+      cand=cand.slice(0,50);
+      setStatus('Pricing packaged volumes for top '+cand.length+' routes…');
+      await getVols(cand.map(function(c){return c.id;}));
+      cand.forEach(function(c){c.m3=VOL[c.id]||0;c.perM3=c.m3>0?c.pu/c.m3:0;});
+      $('hl-body').innerHTML=cand.map(function(c){
+        return '<tr><td>'+c.name+'</td><td class="num">'+short(c.buy)+'</td><td class="num">'+short(c.sell)+'</td><td class="num" style="color:var(--good)">'+short(c.pu)+'</td><td class="num">'+intf(c.qty)+'</td><td class="num">'+(c.perM3?short(c.perM3):'&mdash;')+'</td><td class="num" style="color:var(--good)">'+short(c.total)+'</td></tr>';
+      }).join('');
+      $('hl-wrap').hidden=false;
+      setStatus(cand.length+' profitable routes '+HUBS[from].name+' → '+HUBS[to].name+' · sorted by total capturable profit · live');
+      busy=false; $('hl-scan').disabled=false;
+    }
+    if($('hl-scan')) $('hl-scan').addEventListener('click',scan);
+  });
+})();
+</script>
+
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>For The State — Caldari Manufacturing</title>
+<meta name="description" content="Live EVE Online manufacturing cost & profit calculator. Pick an item, see material requirements priced from the in-game market via CCP's ESI API." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#070d12;--bg-2:#0c151e;--panel:#0f1a24;--panel-2:#152431;--border:#263a47;--text:#cddae3;--muted:#7a8c99;--accent:#54c2da;--accent-2:#3aa8c4;--accent-dim:#235f70;--good:#56d0a8;--bad:#e8746b;--warn:#e3b341;--shadow:0 6px 24px rgba(0,0,0,.55);--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;--display:"Chakra Petch","Segoe UI",system-ui,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;color:var(--text);line-height:1.5;min-height:100vh;background-attachment:fixed;
+background:
+  radial-gradient(1px 1px at 15% 20%,rgba(205,218,227,.45),transparent),
+  radial-gradient(1px 1px at 75% 32%,rgba(205,218,227,.35),transparent),
+  radial-gradient(1px 1px at 45% 72%,rgba(205,218,227,.30),transparent),
+  radial-gradient(1px 1px at 88% 64%,rgba(205,218,227,.30),transparent),
+  radial-gradient(1px 1px at 30% 52%,rgba(205,218,227,.25),transparent),
+  radial-gradient(1px 1px at 62% 88%,rgba(205,218,227,.22),transparent),
+  radial-gradient(1100px 560px at 82% -12%,rgba(84,194,218,.13),transparent 60%),
+  radial-gradient(900px 520px at -8% 6%,rgba(84,194,218,.06),transparent 55%),
+  repeating-linear-gradient(0deg,rgba(120,150,170,.022) 0 1px,transparent 1px 34px),
+  repeating-linear-gradient(90deg,rgba(120,150,170,.022) 0 1px,transparent 1px 34px),
+  var(--bg)}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:9999;background:repeating-linear-gradient(0deg,rgba(0,0,0,.13) 0 1px,transparent 1px 3px);opacity:.35}
+.wrap{width:100%;max-width:1360px;margin:0 auto;padding:0 clamp(14px,3vw,30px)}
+.site-header{border-bottom:1px solid var(--border);background:linear-gradient(180deg,rgba(21,36,49,.85),rgba(7,13,18,0));padding:24px 0 20px;position:relative;overflow:hidden}
+.site-header::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),transparent 70%)}
+.site-header::after{content:"";position:absolute;bottom:-1px;left:-150px;height:2px;width:150px;background:linear-gradient(90deg,transparent,var(--accent),transparent);box-shadow:0 0 12px var(--accent);animation:scan 5s linear infinite}
+@keyframes scan{0%{left:-150px}100%{left:100%}}
+.brand{display:flex;align-items:center;gap:18px}
+.logo{width:46px;height:46px;flex:0 0 auto;filter:drop-shadow(0 0 7px rgba(84,194,218,.5));animation:logopulse 4s ease-in-out infinite}
+@keyframes logopulse{0%,100%{filter:drop-shadow(0 0 6px rgba(84,194,218,.4))}50%{filter:drop-shadow(0 0 12px rgba(84,194,218,.75))}}
+.site-header h1{margin:0;font-size:1.7rem;letter-spacing:2px;font-weight:700;text-transform:uppercase;text-shadow:0 0 18px rgba(84,194,218,.25)}
+.site-header h1 .sub{display:block;font-size:.8rem;font-weight:600;color:var(--accent);letter-spacing:3px;text-transform:uppercase;margin-top:5px;text-shadow:0 0 10px rgba(84,194,218,.4)}
+.tag{color:var(--muted);margin:8px 0 0;font-size:.9rem;letter-spacing:.3px}
+.live{color:var(--good);font-weight:700;letter-spacing:1px;text-transform:uppercase;font-size:.76rem;margin-right:8px}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--good);box-shadow:0 0 9px var(--good);margin-right:6px;vertical-align:middle;animation:pulse 1.8s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+main.wrap{padding-top:24px;padding-bottom:40px}
+.panel{background:linear-gradient(180deg,var(--panel),var(--bg-2));border:1px solid var(--border);border-radius:3px;box-shadow:var(--shadow);position:relative}
+.panel::before,.panel::after{content:"";position:absolute;width:12px;height:12px;pointer-events:none;z-index:3}
+.panel::before{top:-1px;left:-1px;border-top:2px solid var(--accent-dim);border-left:2px solid var(--accent-dim)}
+.panel::after{right:-1px;bottom:-1px;border-bottom:2px solid var(--accent-dim);border-right:2px solid var(--accent-dim)}
+.controls{display:flex;flex-wrap:wrap;gap:16px;padding:18px;align-items:flex-end;position:relative;z-index:5}
+.controls.costs{margin-top:14px;z-index:4}
+.section-label{flex-basis:100%;font-size:.72rem;text-transform:uppercase;letter-spacing:2px;color:var(--accent);margin:-2px 0 2px}
+.field{display:flex;flex-direction:column;gap:6px;position:relative}
+.field.grow{flex:1 1 320px;min-width:260px}
+.field.narrow{width:120px}
+.field label{font-size:.72rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
+.field input,.field select{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:2px;font-size:.95rem;outline:none;transition:border-color .15s,box-shadow .15s}
+.field input:focus,.field select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(84,194,218,.16),0 0 14px rgba(84,194,218,.18)}
+.suggestions{list-style:none;margin:4px 0 0;padding:6px;position:absolute;top:100%;left:0;right:0;background:var(--panel-2);border:1px solid var(--border);border-radius:3px;box-shadow:var(--shadow);max-height:320px;overflow-y:auto;z-index:50}
+.suggestions li{padding:9px 12px;border-radius:2px;cursor:pointer;display:flex;justify-content:space-between;gap:10px}
+.suggestions li:hover,.suggestions li.active{background:rgba(84,194,218,.15)}
+.suggestions li .cat{color:var(--muted);font-size:.8rem}
+.banner{margin:16px 0 0;padding:12px 16px;border-radius:3px;border:1px solid var(--warn);background:rgba(227,179,65,.08);color:#f0d68f;font-size:.9rem}
+.result{margin-top:20px;display:flex;flex-direction:column;gap:16px}
+.product-head{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:16px 18px}
+.product-head h2{margin:0;font-size:1.3rem;letter-spacing:.8px;text-transform:uppercase;text-shadow:0 0 14px rgba(84,194,218,.25)}
+.muted{color:var(--muted)}.small{font-size:.85rem}
+.btn{background:var(--accent-dim);color:#eaf8fc;border:1px solid var(--accent-dim);padding:9px 15px;border-radius:0;cursor:pointer;font-size:.82rem;font-weight:700;letter-spacing:.8px;text-transform:uppercase;white-space:nowrap;transition:background .15s,box-shadow .15s,transform .05s;clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
+.btn:hover{background:var(--accent);color:#04161c;border-color:var(--accent);box-shadow:0 0 16px rgba(84,194,218,.45)}.btn:active{transform:translateY(1px)}
+.summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.stat{padding:16px;display:flex;flex-direction:column;gap:6px;border-left:2px solid var(--accent-dim);overflow:hidden;position:relative}
+.stat::after{content:"";position:absolute;top:0;left:-1px;width:2px;height:100%;background:var(--accent);opacity:0;box-shadow:0 0 10px var(--accent)}
+.stat.statflash-on::after{animation:statflash .8s ease}
+@keyframes statflash{0%{opacity:.9}100%{opacity:0}}
+.stat-label{font-size:.72rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
+.stat-val{font-size:1.35rem;font-weight:700;font-family:var(--mono);font-variant-numeric:tabular-nums;text-shadow:0 0 12px rgba(84,194,218,.15)}
+.stat-val.good{color:var(--good)}.stat-val.bad{color:var(--bad)}
+table.materials{width:100%;border-collapse:collapse}
+table.materials th,table.materials td{padding:11px 16px;text-align:left;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums}
+table.materials thead th{font-size:.72rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
+table.materials tbody tr{animation:rowin .3s ease both}
+@keyframes rowin{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}
+table.materials tbody tr:last-child td{border-bottom:none}
+table.materials .num{text-align:right}
+table.materials td.num{font-family:var(--mono)}
+table.materials td.miss{color:var(--bad)}
+.empty{margin-top:28px;text-align:center;color:var(--muted);padding:30px 10px}
+.empty p{margin:6px 0}
+.site-footer{padding:24px 20px 40px;color:var(--muted);font-size:.8rem;border-top:1px solid var(--border);margin-top:30px}
+.site-footer a{color:var(--accent);text-decoration:none}
+.site-footer a:hover{text-decoration:underline}
+.spin{opacity:.55}
+.tabs{display:flex;justify-content:center;gap:8px;margin:0 0 18px;flex-wrap:wrap}
+.tab{background:transparent;border:1px solid var(--border);color:var(--muted);padding:9px 20px;cursor:pointer;font-size:.82rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;transition:all .15s;clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
+.tab:hover{color:var(--text);border-color:var(--accent)}
+.tab.active{background:var(--accent-dim);color:#eaf8fc;border-color:var(--accent);box-shadow:0 0 16px rgba(84,194,218,.32)}
+.top-head{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:16px 18px;flex-wrap:wrap}
+.top-head h2{margin:0;font-size:1.2rem;letter-spacing:.8px;text-transform:uppercase}
+.top-filters{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.top-filters label{display:flex;align-items:center;gap:6px;font-size:.85rem;color:var(--text);cursor:pointer;user-select:none}
+.top-filters input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:pointer}
+.top-filters select,.top-filters input[type=text]{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:2px;font-size:.85rem;cursor:pointer;margin-left:6px}
+.top-filters input[type=text]{cursor:text}
+.top-filters select:focus,.top-filters input[type=text]:focus{outline:none;border-color:var(--accent)}
+table.materials tr.click{cursor:pointer}
+table.materials tr.click:hover td{background:rgba(84,194,218,.09)}
+table.materials td.rank{color:var(--muted);width:38px;font-family:var(--mono)}
+.hist-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 16px 0;flex-wrap:wrap}
+.hist-head select{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:2px;font-size:.85rem;cursor:pointer}
+.hist-head select:focus{outline:none;border-color:var(--accent)}
+.hist-stats{display:flex;gap:22px;flex-wrap:wrap;padding:12px 16px 0;font-variant-numeric:tabular-nums}
+.hist-stats .hs{display:flex;flex-direction:column;gap:2px}
+.hist-stats .hs .l{font-size:.68rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
+.hist-stats .hs .v{font-weight:700;font-family:var(--mono)}
+#hist-chart{padding:8px 10px 4px}
+#hist-chart svg{width:100%;height:auto;display:block}
+#forecast-note{padding:2px 16px 14px}
+.lg{display:inline-flex;align-items:center;gap:5px;margin-right:14px;white-space:nowrap}
+.lg i{width:11px;height:11px;border-radius:2px;display:inline-block}
+.lg i.dash{height:0;border-top:2px dashed var(--warn);width:14px;border-radius:0}
+.ob-head{padding:14px 16px 4px}
+.ob-grid{display:grid;grid-template-columns:1fr 1fr}
+.ob-col{padding:6px 4px 10px}
+.ob-col+.ob-col{border-left:1px solid var(--border)}
+.ob-title{font-size:.72rem;text-transform:uppercase;letter-spacing:1px;padding:6px 16px;font-weight:700}
+.ob-title.sell{color:var(--bad)}
+.ob-title.buy{color:var(--good)}
+table.materials tr.grp-head td{background:rgba(84,194,218,.07);color:var(--accent);font-family:var(--display);text-transform:uppercase;letter-spacing:1px;font-size:.72rem;font-weight:700}
+.ore-wrap{max-height:640px;overflow-y:auto}
+.site-header h1,.site-header h1 .sub,.section-label,.field label,.btn,.tab,.top-head h2,.product-head h2,table.materials thead th,.ob-title,.stat-label,.hist-stats .hs .l,.live,.brand .tag{font-family:var(--display)}
+@media (max-width:760px){.summary-grid{grid-template-columns:repeat(2,1fr)}.field.narrow{width:calc(50% - 8px)}.ob-grid{grid-template-columns:1fr}.ob-col+.ob-col{border-left:none;border-top:1px solid var(--border)}}
+@media (max-width:520px){.summary-grid{grid-template-columns:1fr}.field.grow,.field.narrow,.field{width:100%;flex-basis:100%}}
+
+@media (max-width:560px){
+  #tab-ore .top-filters label{display:flex;align-items:center;gap:6px;width:100%}
+  #tab-ore .top-filters label select{flex:1;min-width:0}
+  #tab-ore .top-filters>input{width:100%}
+  #tab-ore .top-filters>.btn{width:100%}
+  #tab-ore .ore-wrap{max-height:70vh;-webkit-overflow-scrolling:touch}
+  #tab-ore table.materials th:nth-child(2),#tab-ore table.materials td:nth-child(2){display:none}
+  #tab-top .panel{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  #tab-top table.materials th,#tab-top table.materials td{white-space:nowrap}
+  #tab-ore table.materials,#tab-top table.materials{font-size:.78rem}
+  #tab-ore table.materials th,#tab-ore table.materials td,#tab-top table.materials th,#tab-top table.materials td{padding:6px 8px}
+}
+
+/* ===== Space FX & deeper Caldari HUD ===== */
+#space-bg{position:fixed;inset:0;z-index:-2;pointer-events:none;display:block}
+#vignette{position:fixed;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(ellipse at 50% 40%,transparent 42%,rgba(3,7,13,.55) 100%)}
+#scanline{position:fixed;left:0;right:0;top:0;height:150px;z-index:40;pointer-events:none;opacity:.05;background:linear-gradient(to bottom,transparent,rgba(84,194,218,.9),transparent);mix-blend-mode:screen;animation:scan-sweep 8s linear infinite}
+@keyframes scan-sweep{0%{transform:translateY(-170px)}100%{transform:translateY(100vh)}}
+
+/* deeper panel HUD framing */
+.panel::before,.panel::after{width:16px;height:16px;box-shadow:0 0 10px rgba(84,194,218,.45)}
+.panel{box-shadow:var(--shadow),inset 0 0 24px rgba(84,194,218,.045)}
+.stat.panel{box-shadow:var(--shadow),inset 0 0 18px rgba(84,194,218,.06)}
+
+/* audio toggle */
+#audio-toggle{position:fixed;top:12px;right:14px;z-index:60;width:38px;height:38px;border:1px solid var(--border);background:linear-gradient(180deg,rgba(21,36,48,.92),rgba(7,13,18,.92));color:var(--accent);border-radius:4px;cursor:pointer;font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;box-shadow:0 0 10px rgba(84,194,218,.25);transition:.2s}
+#audio-toggle:hover{border-color:var(--accent);box-shadow:0 0 15px rgba(84,194,218,.55)}
+#audio-toggle.off{color:var(--muted);box-shadow:none}
+
+/* boot intro */
+#boot{position:fixed;inset:0;z-index:100;background:radial-gradient(ellipse at 50% 50%,#06121b 0%,#03080d 100%);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;font-family:var(--mono);color:var(--accent);transition:opacity .6s ease}
+#boot.hide{opacity:0;pointer-events:none}
+#boot .boot-logo{width:72px;height:72px;animation:logopulse 2.4s ease-in-out infinite}
+#boot .boot-lines{font-size:.78rem;line-height:1.8;letter-spacing:1px;min-height:104px;text-align:left;color:var(--muted);width:min(88vw,300px)}
+#boot .boot-lines b{color:var(--good)}
+#boot .boot-bar{width:220px;height:3px;background:rgba(84,194,218,.15);border-radius:2px;overflow:hidden}
+#boot .boot-bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent-dim),var(--accent));animation:boot-fill 1.7s ease forwards}
+@keyframes boot-fill{to{width:100%}}
+
+/* tab warp-in */
+.warp-in{animation:warp-in .45s cubic-bezier(.2,.8,.2,1)}
+@keyframes warp-in{0%{opacity:0;transform:translateY(14px) scale(.985);filter:blur(6px)}100%{opacity:1;transform:none;filter:none}}
+
+@media (max-width:560px){
+  #scanline{opacity:.03}
+  #vignette{background:radial-gradient(ellipse at 50% 40%,transparent 55%,rgba(3,7,13,.4) 100%)}
+  #audio-toggle{width:34px;height:34px;font-size:15px;top:10px;right:10px}
+}
+@media (prefers-reduced-motion:reduce){
+  #scanline,.warp-in,#boot .boot-logo{animation:none}
+}
+.panel::before,.panel::after{display:none}#boot .boot-hint{margin-top:2px;font-size:.72rem;letter-spacing:2px;text-transform:uppercase;color:var(--accent);cursor:pointer;animation:hintpulse 1.4s ease-in-out infinite}@keyframes hintpulse{0%,100%{opacity:.4}50%{opacity:.95}}*{scrollbar-width:thin;scrollbar-color:#2f7d92 rgba(10,20,28,.55)}::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-track{background:rgba(10,20,28,.55)}::-webkit-scrollbar-thumb{background:linear-gradient(180deg,var(--accent-dim),#1c4a58);border-radius:5px;border:2px solid rgba(10,20,28,.55)}::-webkit-scrollbar-thumb:hover{background:var(--accent)}::-webkit-scrollbar-corner{background:rgba(10,20,28,.55)}
+/* ===== Watchlist / favorites ===== */
+.fav-star{background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.05rem;line-height:1;padding:0 4px;transition:.15s}
+.fav-star:hover{color:var(--accent)}
+.fav-star.on{color:#f5c451}
+#top-body td .fav-star{margin-right:4px}
+#tab-calc .product-head .hd-btns,#tab-watch .product-head .hd-btns{display:flex;gap:8px;align-items:center}
+#wl-body td:nth-child(2){cursor:pointer;color:var(--accent)}
+#wl-body td:nth-child(2):hover{text-decoration:underline}
+nav.tabs{gap:6px;flex-wrap:nowrap;overflow-x:auto;justify-content:safe center}nav.tabs .tab{padding:9px 12px;font-size:.8rem;white-space:nowrap;flex:0 0 auto}#audio-toggle{display:none}</style>
+</head>
+<body>
+<canvas id="space-bg"></canvas>
+<div id="vignette"></div>
+<div id="scanline"></div>
+<button id="audio-toggle" aria-label="Toggle ambient audio" title="Ambient audio">&#128264;</button>
+<div id="boot">
+  <svg class="boot-logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><polygon points="50,6 88,28 88,72 50,94 12,72 12,28" fill="none" stroke="#54c2da" stroke-width="3"/><polygon points="50,22 74,36 74,64 50,78 26,64 26,36" fill="rgba(84,194,218,.08)" stroke="#3aa8c4" stroke-width="1.6"/><line x1="50" y1="22" x2="50" y2="78" stroke="#54c2da" stroke-width="1.4"/><line x1="26" y1="36" x2="74" y2="64" stroke="#235f70" stroke-width="1.4"/><line x1="74" y1="36" x2="26" y2="64" stroke="#235f70" stroke-width="1.4"/></svg>
+  <div class="boot-lines"></div>
+  <div class="boot-bar"><i></i></div>
+  <div class="boot-hint">&#9672; click to enter</div>
+</div>
+<header class="site-header">
+  <div class="wrap brand">
+    <svg class="logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <polygon points="50,4 91,27 91,73 50,96 9,73 9,27" fill="none" stroke="#54c2da" stroke-width="3.5"/>
+      <polygon points="50,20 77,35 77,65 50,80 23,65 23,35" fill="rgba(84,194,218,.10)" stroke="#3aa8c4" stroke-width="2"/>
+      <line x1="50" y1="20" x2="50" y2="80" stroke="#54c2da" stroke-width="1.6"/>
+      <line x1="23" y1="35" x2="77" y2="65" stroke="#235f70" stroke-width="1.6"/>
+      <line x1="77" y1="35" x2="23" y2="65" stroke="#235f70" stroke-width="1.6"/>
+      <circle cx="50" cy="50" r="6" fill="#54c2da"/>
+    </svg>
+    <div class="brand-text">
+      <h1>For&nbsp;The&nbsp;State <span class="sub">Caldari State · Manufacturing Ledger</span></h1>
+      <p class="tag"><span class="live"><span class="dot"></span>ESI link established</span> Live market telemetry · CCP Tranquility cluster</p>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <nav class="tabs">
+    <button class="tab active" data-tab="calc">Manufacturing</button>
+    <button class="tab" data-tab="top">Category Prices</button>
+    <button class="tab" data-tab="ore">Ore &amp; Gas</button>
+    <button class="tab" data-tab="research">Research</button>
+    <button class="tab" data-tab="repro">Reprocessing</button>
+    <button class="tab" data-tab="arb">Hub Arbitrage</button>
+    <button class="tab" data-tab="react">Reactions</button>
+    <button class="tab" data-tab="invent">Invention</button>
+    <button class="tab" data-tab="watch">Watchlist</button>
+  </nav>
+
+  <div id="tab-calc">
+  <section class="controls panel">
+    <div class="field grow">
+      <label for="search">Item to manufacture</label>
+      <input id="search" type="text" autocomplete="off" placeholder="Start typing… e.g. Rifter, Merlin, Punisher" />
+      <ul id="suggestions" class="suggestions" hidden></ul>
+    </div>
+    <div class="field">
+      <label for="hub">Market hub</label>
+      <select id="hub">
+        <option value="jita" selected>Jita (The Forge)</option>
+        <option value="amarr">Amarr (Domain)</option>
+        <option value="dodixie">Dodixie (Sinq Laison)</option>
+        <option value="rens">Rens (Heimatar)</option>
+        <option value="hek">Hek (Metropolis)</option>
+      </select>
+    </div>
+    <div class="field narrow"><label for="me">Material Eff. (ME%)</label><input id="me" type="number" min="0" max="10" step="1" value="10" /></div>
+    <div class="field narrow"><label for="runs">Runs</label><input id="runs" type="number" min="1" step="1" value="1" /></div>
+    <div class="field narrow"><label for="buystrat">Buy materials at</label>
+      <select id="buystrat"><option value="sell" selected>Sell price (instant)</option><option value="buy">Buy price (orders)</option></select></div>
+    <div class="field narrow"><label for="sellstrat">Sell product at</label>
+      <select id="sellstrat"><option value="sell" selected>Sell price (list)</option><option value="buy">Buy price (instant)</option></select></div>
+  </section>
+
+  <section class="controls costs panel">
+    <div class="section-label">Industry costs &amp; taxes — folded into net profit on both tabs</div>
+    <div class="field narrow"><label for="f-sci" title="Pulled live from ESI per hub system">System cost index %</label><input id="f-sci" type="number" min="0" step="0.01" value="0" /></div>
+    <div class="field narrow"><label for="f-facility" title="Structure/station job tax">Facility tax %</label><input id="f-facility" type="number" min="0" step="0.01" value="0.25" /></div>
+    <div class="field narrow"><label for="f-scc" title="Flat CCP SCC surcharge on EIV">SCC surcharge %</label><input id="f-scc" type="number" min="0" step="0.01" value="1.5" /></div>
+    <div class="field narrow"><label for="f-sales" title="Depends on Accounting skill">Sales tax %</label><input id="f-sales" type="number" min="0" step="0.01" value="4.5" /></div>
+    <div class="field narrow"><label for="f-broker" title="Sell-order fee; Broker Relations skill + standings">Broker fee %</label><input id="f-broker" type="number" min="0" step="0.01" value="2.5" /></div>
+    <div class="field"><label>&nbsp;</label><button id="sci-refresh" class="btn" type="button">↻ Live system index</button></div>
+  </section>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <section id="result" class="result" hidden>
+    <div class="panel product-head">
+      <div><h2 id="product-name">—</h2><p id="product-meta" class="muted"></p></div>
+      <button id="refresh" class="btn">↻ Refresh prices</button>
+    </div>
+    <div class="summary-grid">
+      <div class="stat panel"><span class="stat-label">Total cost</span><span id="s-matcost" class="stat-val">—</span></div>
+      <div class="stat panel"><span class="stat-label">Product value</span><span id="s-revenue" class="stat-val">—</span></div>
+      <div class="stat panel"><span class="stat-label">Net profit</span><span id="s-profit" class="stat-val">—</span></div>
+      <div class="stat panel"><span class="stat-label">Net margin</span><span id="s-margin" class="stat-val">—</span></div>
+    </div>
+
+    <div class="panel" id="orderbook-panel">
+      <div class="ob-head"><strong>Order book</strong> <span class="muted small" id="ob-sub">— top orders at the hub</span></div>
+      <div class="ob-grid">
+        <div class="ob-col">
+          <div class="ob-title sell">5 lowest sell orders</div>
+          <table class="materials"><thead><tr><th class="rank">#</th><th class="num">Sell price</th><th class="num">Qty</th></tr></thead><tbody id="ob-sells"></tbody></table>
+        </div>
+        <div class="ob-col">
+          <div class="ob-title buy">5 highest buy orders</div>
+          <table class="materials"><thead><tr><th class="rank">#</th><th class="num">Buy price</th><th class="num">Qty</th></tr></thead><tbody id="ob-buys"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" id="history-panel">
+      <div class="hist-head">
+        <div><strong>Price history &amp; forecast</strong> <span class="muted small">— region daily average (CCP ESI)</span></div>
+        <label class="muted small">Period
+          <select id="hist-period">
+            <option value="7">7 days</option>
+            <option value="30">30 days</option>
+            <option value="90" selected>90 days</option>
+            <option value="180">180 days</option>
+            <option value="365">1 year</option>
+          </select>
+        </label>
+      </div>
+      <div id="hist-stats" class="hist-stats"></div>
+      <div id="hist-chart"></div>
+      <p class="muted small" id="forecast-note"></p>
+    </div>
+
+    <div class="panel">
+      <table class="materials">
+        <thead><tr><th>Material</th><th class="num">Qty / job</th><th class="num">Unit price</th><th class="num">Subtotal</th></tr></thead>
+        <tbody id="mat-body"></tbody>
+      </table>
+    </div>
+    <p class="muted small" id="fee-breakdown"></p>
+    <p class="muted small" id="price-note"></p>
+  </section>
+
+  <section id="empty" class="empty">
+    <p>Search for an item above to see its build cost and profitability.</p>
+    <p class="muted small">Net profit = product value − materials − job install fee − sales tax − broker fee. Job fee = EIV × (system cost index + facility tax + SCC surcharge), where EIV uses CCP adjusted prices at base material quantities.</p>
+  </section>
+  </div>
+
+  <div id="tab-top" hidden>
+    <div class="panel top-head">
+      <div>
+        <h2>Top 10 most profitable to manufacture</h2>
+        <p class="muted small" id="top-status">Open this tab to rank items.</p>
+      </div>
+      <div class="top-filters">
+        <label>Category
+          <select id="f-cat">
+            <option value="">All</option>
+          </select>
+        </label>
+        <label>Meta group
+          <select id="f-tech">
+            <option value="">All</option>
+          </select>
+        </label>
+        <label><input type="checkbox" id="f-nocollect" checked /> Hide collectibles</label>
+        <button id="top-refresh" class="btn">↻ Refresh</button>
+      </div>
+    </div>
+    <div class="panel">
+      <table class="materials">
+        <thead><tr><th class="rank">#</th><th>Item</th><th class="num">Build cost</th><th class="num">Sell value</th><th class="num">Net profit / run</th><th class="num">Margin</th></tr></thead>
+        <tbody id="top-body"></tbody>
+      </table>
+    </div>
+    <p class="muted small">Two-stage ranking: every buildable item is pre-scored on CCP <em>average</em> prices, then top candidates are checked against the <em>live</em> market at the hub selected on the Calculator tab — items not actually for sale are dropped. Ranked by <em>net</em> profit using real sell-order prices minus materials, the live job install fee, sales tax and broker fee (all from the Calculator tab's cost settings). Filter by category (ships, weapons, ammo, components…) and meta group, and optionally hide collectibles. Click a row to open it with full hub pricing.</p>
+  </div>
+
+  <div id="tab-ore" hidden>
+    <div class="panel top-head">
+      <div>
+        <h2>Ore &amp; Gas — live market prices</h2>
+        <p class="muted small" id="ore-status">Open this tab to load prices.</p>
+      </div>
+      <div class="top-filters">
+        <label>Hub
+          <select id="ore-hub">
+            <option value="jita" selected>Jita (The Forge)</option>
+            <option value="amarr">Amarr (Domain)</option>
+            <option value="dodixie">Dodixie (Sinq Laison)</option>
+            <option value="rens">Rens (Heimatar)</option>
+            <option value="hek">Hek (Metropolis)</option>
+          </select>
+        </label>
+        <label>Group
+          <select id="ore-group"><option value="">All groups</option></select>
+        </label>
+        <label>Show
+          <select id="ore-type"><option value="all">All</option><option value="ore">Ore</option><option value="gas">Gas</option></select>
+        </label>
+        <label>Sort
+          <select id="ore-sort"><option value="group" selected>Group / family</option><option value="iskm3">ISK / m³</option><option value="sell">Sell price</option><option value="buy">Buy price</option><option value="name">Name</option></select>
+        </label>
+        <input id="ore-search" type="text" placeholder="Filter name…" />
+        <button id="ore-refresh" class="btn">↻ Refresh</button>
+      </div>
+    </div>
+    <div class="panel ore-wrap">
+      <table class="materials">
+        <thead><tr><th>Type</th><th>Group</th><th class="num">Sell (min)</th><th class="num">Buy (max)</th><th class="num">ISK / m³</th></tr></thead>
+        <tbody id="ore-body"></tbody>
+      </table>
+    </div>
+    <p class="muted small">Live regional buy/sell via <a href="https://market.fuzzwork.co.uk/" target="_blank" rel="noopener">Fuzzwork</a> market aggregates (max buy / min sell). <strong>ISK / m³</strong> = lowest sell ÷ unit volume — the key figure for deciding what to mine or haul. Sort by it to find the densest value.</p>
+  </div>
+  <div id="tab-research" hidden>
+  <section class="controls panel">
+    <div class="field grow">
+      <label for="r-search">Blueprint / item to research</label>
+      <input id="r-search" type="text" autocomplete="off" placeholder="Start typing… e.g. Rifter, Hammerhead II, 200mm AutoCannon II" />
+      <ul id="r-suggestions" class="suggestions" hidden></ul>
+    </div>
+    <div class="field">
+      <label for="r-hub">Facility system</label>
+      <select id="r-hub">
+        <option value="jita" selected>Jita (The Forge)</option>
+        <option value="amarr">Amarr (Domain)</option>
+        <option value="dodixie">Dodixie (Sinq Laison)</option>
+        <option value="rens">Rens (Heimatar)</option>
+        <option value="hek">Hek (Metropolis)</option>
+      </select>
+    </div>
+    <div class="field narrow"><label for="r-me">Target ME</label><input id="r-me" type="number" min="0" max="10" step="1" value="10" /></div>
+    <div class="field narrow"><label for="r-te">Target TE</label><input id="r-te" type="number" min="0" max="20" step="2" value="20" /></div>
+    <div class="field narrow"><label for="r-runs">Copy runs</label><input id="r-runs" type="number" min="1" step="1" value="1" /></div>
+    <div class="field narrow"><label for="r-facility" title="Structure/station job tax">Facility tax %</label><input id="r-facility" type="number" min="0" step="0.01" value="0.25" /></div>
+    <div class="field narrow"><label for="r-scc" title="Flat CCP SCC surcharge on EIV">SCC surcharge %</label><input id="r-scc" type="number" min="0" step="0.01" value="1.5" /></div>
+  </section>
+
+  <section id="r-result" class="result" hidden>
+    <div class="panel product-head">
+      <div><h2 id="r-product-name">—</h2><p id="r-product-meta" class="muted"></p></div>
+      <button id="r-refresh" class="btn">↻ Refresh</button>
+    </div>
+    <div class="summary-grid">
+      <div class="stat panel"><span class="stat-label">EIV (job base value)</span><span id="r-eiv" class="stat-val">—</span></div>
+      <div class="stat panel"><span class="stat-label">ME research total</span><span id="r-metotal" class="stat-val">—</span></div>
+      <div class="stat panel"><span class="stat-label">TE research total</span><span id="r-tetotal" class="stat-val">—</span></div>
+      <div class="stat panel"><span class="stat-label">Total ME+TE+copy</span><span id="r-grand" class="stat-val">—</span></div>
+    </div>
+    <div class="panel">
+      <table class="materials">
+        <thead><tr><th>Research activity</th><th class="num">System index</th><th class="num">Per job</th><th class="num">Qty</th><th class="num">Subtotal</th></tr></thead>
+        <tbody id="r-body"></tbody>
+      </table>
+    </div>
+    <p class="muted small" id="r-note"></p>
+  </section>
+
+  <section id="r-empty" class="empty">
+    <p>Search for a blueprint above to see research &amp; copy job cost breakdowns.</p>
+    <p class="muted small">Research / copy / invention install fee = EIV × (activity system cost index + facility tax + SCC surcharge). EIV = Σ CCP adjusted price × base input-material quantity. Indices are pulled live per facility system from ESI.</p>
+  </section>
+  </div>
+  <div id="tab-repro" hidden>
+  <section class="controls panel">
+    <div class="field grow"><label for="rp-search">Ore / ice to reprocess</label><input id="rp-search" type="text" autocomplete="off" placeholder="Start typing… e.g. Veldspar, Arkonor, Compressed Spodumain" /><ul id="rp-suggestions" class="suggestions" hidden></ul></div>
+    <div class="field"><label for="rp-hub">Market hub</label><select id="rp-hub"><option value="jita" selected>Jita (The Forge)</option><option value="amarr">Amarr (Domain)</option><option value="dodixie">Dodixie (Sinq Laison)</option><option value="rens">Rens (Heimatar)</option><option value="hek">Hek (Metropolis)</option></select></div>
+    <div class="field narrow"><label for="rp-qty">Units</label><input id="rp-qty" type="number" min="1" step="1" value="100" /></div>
+    <div class="field narrow"><label for="rp-yield" title="Base 50%, up to ~90% with skills/structure/rigs">Yield %</label><input id="rp-yield" type="number" min="0" max="100" step="0.1" value="70" /></div>
+    <div class="field narrow"><label for="rp-basis">Value at</label><select id="rp-basis"><option value="sell" selected>Sell (list)</option><option value="buy">Buy (instant)</option></select></div>
+  </section>
+  <section id="rp-result" class="result" hidden>
+    <div class="panel product-head"><div><h2 id="rp-product-name">—</h2><p id="rp-product-meta" class="muted"></p></div><button id="rp-refresh" class="btn">↻ Refresh</button></div>
+    <div class="summary-grid">
+      <div class="stat panel"><span class="stat-label">Refined value</span><span id="rp-refined" class="stat-val">—</span></div>
+      <div class="stat panel"><span class="stat-label">Ore market value</span><span id="rp-orev" class="stat-val">—</span></div>
+      <div class="stat panel"><span class="stat-label">Refine vs sell raw</span><span id="rp-diff" class="stat-val">—</span></div>
+      <div class="stat panel"><span class="stat-label">Refined ISK / m³</span><span id="rp-iskm3" class="stat-val">—</span></div>
+    </div>
+    <div class="panel"><table class="materials"><thead><tr><th>Mineral / material</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Value</th></tr></thead><tbody id="rp-body"></tbody></table></div>
+    <p class="muted small" id="rp-note"></p>
+  </section>
+  <section id="rp-empty" class="empty"><p>Search for an ore to see its refined mineral value vs selling it raw.</p><p class="muted small">Output = SDE perfect-refine yield × your yield %. Compare "Refined value" to "Ore market value" to decide whether to refine or sell raw.</p></section>
+  </div>
+
+  <div id="tab-arb" hidden>
+  <section class="controls panel">
+    <div class="field grow"><label for="ab-search">Item to compare across hubs</label><input id="ab-search" type="text" autocomplete="off" placeholder="Start typing… any item, ore or module" /><ul id="ab-suggestions" class="suggestions" hidden></ul></div>
+    <div class="field narrow"><label for="ab-tax" title="Sales tax when selling to buy orders">Sales tax %</label><input id="ab-tax" type="number" min="0" step="0.01" value="4.5" /></div>
+  </section>
+  <section id="ab-result" class="result" hidden>
+    <div class="panel product-head"><div><h2 id="ab-product-name">—</h2><p id="ab-product-meta" class="muted"></p></div><button id="ab-refresh" class="btn">↻ Refresh</button></div>
+    <div class="summary-grid">
+      <div class="stat panel"><span class="stat-label">Best buy price</span><span id="ab-bestbuy" class="stat-val">—</span></div>
+      <div class="stat panel"><span class="stat-label">Best sell price</span><span id="ab-bestsell" class="stat-val">—</span></div>
+      <div class="stat panel"><span class="stat-label">Net profit / unit</span><span id="ab-net" class="stat-val">—</span></div>
+      <div class="stat panel"><span class="stat-label">Margin</span><span id="ab-margin" class="stat-val">—</span></div>
+    </div>
+    <div class="panel"><table class="materials"><thead><tr><th>Trade hub</th><th class="num">Sell (min)</th><th class="num">Buy (max)</th><th class="num">Daily vol (7d avg)</th></tr></thead><tbody id="ab-body"></tbody></table></div>
+    <p class="muted small" id="ab-status"></p>
+  </section>
+  <section id="ab-empty" class="empty"><p>Search for an item to compare prices across all five trade hubs.</p><p class="muted small">Finds the cheapest hub to buy and the priciest hub to sell, with the profit per unit for hauling between them.</p></section>
+  </div>
+
+  <div id="tab-react" hidden>
+    <section class="controls panel">
+      <div class="field grow"><label for="rc-search">Reaction product</label><input id="rc-search" type="text" autocomplete="off" placeholder="Start typing… composite, polymer, fuel block…" /><ul id="rc-suggestions" class="suggestions" hidden></ul></div>
+      <div class="field narrow"><label for="rc-hub">Market hub</label><select id="rc-hub"><option value="jita">Jita</option><option value="amarr">Amarr</option><option value="dodixie">Dodixie</option><option value="rens">Rens</option><option value="hek">Hek</option></select></div>
+      <div class="field narrow"><label for="rc-runs">Runs</label><input id="rc-runs" type="number" min="1" step="1" value="1" /></div>
+      <div class="field narrow"><label for="rc-tax" title="Facility tax on job install">Facility tax %</label><input id="rc-tax" type="number" min="0" step="0.01" value="0.25" /></div>
+      <div class="field narrow"><label for="rc-sales" title="Sales tax when selling the output">Sales tax %</label><input id="rc-sales" type="number" min="0" step="0.01" value="4.5" /></div>
+    </section>
+    <section id="rc-result" class="result" hidden>
+      <div class="panel product-head"><div><h2 id="rc-name">—</h2><p id="rc-meta" class="muted"></p></div><button id="rc-refresh" class="btn">↻ Refresh</button></div>
+      <div class="summary-grid">
+        <div class="stat panel"><span class="stat-label">Input cost</span><span id="rc-in" class="stat-val">—</span></div>
+        <div class="stat panel"><span class="stat-label">Output value</span><span id="rc-out" class="stat-val">—</span></div>
+        <div class="stat panel"><span class="stat-label">Job fee</span><span id="rc-fee" class="stat-val">—</span></div>
+        <div class="stat panel"><span class="stat-label">Net profit</span><span id="rc-net" class="stat-val">—</span></div>
+        <div class="stat panel"><span class="stat-label">Margin</span><span id="rc-margin" class="stat-val">—</span></div>
+      </div>
+      <div class="panel"><table class="materials"><thead><tr><th>Input material</th><th class="num">Qty</th><th class="num">Unit sell</th><th class="num">Subtotal</th></tr></thead><tbody id="rc-body"></tbody></table></div>
+      <p class="muted" id="rc-note"></p>
+    </section>
+  </div>
+
+  <div id="tab-invent" hidden>
+    <section class="controls panel">
+      <div class="field grow"><label for="iv-search">T2 item to invent</label><input id="iv-search" type="text" autocomplete="off" placeholder="Start typing… any T2 module, ship, drone, ammo…" /><ul id="iv-suggestions" class="suggestions" hidden></ul></div>
+      <div class="field narrow"><label for="iv-hub">Market hub</label><select id="iv-hub"><option value="jita">Jita</option><option value="amarr">Amarr</option><option value="dodixie">Dodixie</option><option value="rens">Rens</option><option value="hek">Hek</option></select></div>
+      <div class="field narrow"><label for="iv-dec">Decryptor</label><select id="iv-dec"></select></div>
+      <div class="field narrow"><label for="iv-skill" title="Encryption + both datacore science skills at this level">Skills</label><select id="iv-skill"><option value="3">All III</option><option value="4" selected>All IV</option><option value="5">All V</option></select></div>
+      <div class="field narrow"><label for="iv-sales" title="Sales tax when selling the T2 item">Sales tax %</label><input id="iv-sales" type="number" min="0" step="0.01" value="4.5" /></div>
+    </section>
+    <section id="iv-result" class="result" hidden>
+      <div class="panel product-head"><div><h2 id="iv-name">—</h2><p id="iv-meta" class="muted"></p></div><button id="iv-refresh" class="btn">↻ Refresh</button></div>
+      <div class="summary-grid">
+        <div class="stat panel"><span class="stat-label">Success chance</span><span id="iv-prob" class="stat-val">—</span></div>
+        <div class="stat panel"><span class="stat-label">Runs per BPC</span><span id="iv-runs" class="stat-val">—</span></div>
+        <div class="stat panel"><span class="stat-label">Invention cost / run</span><span id="iv-cost" class="stat-val">—</span></div>
+        <div class="stat panel"><span class="stat-label">Net ISK / T2 run</span><span id="iv-net" class="stat-val">—</span></div>
+        <div class="stat panel"><span class="stat-label">Margin</span><span id="iv-margin" class="stat-val">—</span></div>
+      </div>
+      <div class="panel"><table class="materials"><thead><tr><th>Invention input</th><th class="num">Qty</th><th class="num">Unit</th><th class="num">Subtotal</th></tr></thead><tbody id="iv-body"></tbody></table></div>
+      <p class="muted" id="iv-note"></p>
+    </section>
+  </div>
+
+
+  <div id="tab-watch" hidden>
+    <section class="panel product-head">
+      <div><h2>Watchlist</h2><p class="muted" id="wl-meta">Star items from the Manufacturing calc or Top 10 Profitable to track them here.</p></div>
+      <div class="hd-btns"><button id="wl-refresh" class="btn">&#8635; Refresh</button><button id="wl-csv" class="btn">&#8681; CSV</button></div>
+    </section>
+    <section class="panel" id="wl-empty-wrap">
+      <p class="muted" id="wl-empty" style="padding:10px 4px;margin:0">No favorites yet. Open an item in the Manufacturing tab and click the &#9734; button in its header, or star a row in Top 10 Profitable.</p>
+    </section>
+    <div class="panel" id="wl-table-wrap" hidden><table class="materials"><thead><tr><th></th><th>Item</th><th class="num">Build cost</th><th class="num">Sell value</th><th class="num">Net profit</th><th class="num">Margin</th></tr></thead><tbody id="wl-body"></tbody></table></div>
+    <p class="muted small" style="margin-top:10px">Live figures use your current Manufacturing settings (hub, ME, taxes &amp; fees). Click an item name to open it in the calculator.</p>
+  </div>
+
+</main>
+
+<footer class="site-footer wrap">
+  <p>Prices &amp; cost indices via <a href="https://esi.evetech.net/" target="_blank" rel="noopener">CCP ESI</a> &amp; <a href="https://market.fuzzwork.co.uk/" target="_blank" rel="noopener">Fuzzwork</a>. EVE Online and all related trademarks are property of CCP hf. This is an unofficial fan tool.</p>
+</footer>
+
+<script>
+"use strict";
+
+const EMBEDDED_RECIPES = {
+  "_note":"SAMPLE DATASET — could not load data/recipes.json, showing a tiny built-in sample. The full dataset normally loads automatically.",
+  "recipes":{
+    "587":{"name":"Rifter","cat":"Frigate (Minmatar)","productQty":1,"materials":[{"id":34,"name":"Tritanium","qty":24000},{"id":35,"name":"Pyerite","qty":4500},{"id":36,"name":"Mexallon","qty":1400},{"id":37,"name":"Isogen","qty":200},{"id":38,"name":"Nocxium","qty":75},{"id":39,"name":"Zydrine","qty":20},{"id":40,"name":"Megacyte","qty":6}]},
+    "603":{"name":"Merlin","cat":"Frigate (Caldari)","productQty":1,"materials":[{"id":34,"name":"Tritanium","qty":26000},{"id":35,"name":"Pyerite","qty":5200},{"id":36,"name":"Mexallon","qty":1600},{"id":37,"name":"Isogen","qty":240},{"id":38,"name":"Nocxium","qty":82},{"id":39,"name":"Zydrine","qty":22},{"id":40,"name":"Megacyte","qty":7}]}
+  }
+};
+
+const HUBS={
+  jita:{name:"Jita",region:10000002,station:60003760,system:30000142},
+  amarr:{name:"Amarr",region:10000043,station:60008494,system:30002187},
+  dodixie:{name:"Dodixie",region:10000032,station:60011866,system:30002659},
+  rens:{name:"Rens",region:10000030,station:60004588,system:30002510},
+  hek:{name:"Hek",region:10000042,station:60005686,system:30002053}
+};
+const ESI="https://esi.evetech.net/latest";
+const PRICE_TTL=5*60*1000;
+
+let RECIPES={},ITEMS=[],priceCache=new Map(),historyCache=new Map(),obCache=new Map(),current=null,activeSuggestion=-1,METAGROUPS={};
+let OREGAS={ore:[],gas:[]}, oreRows=[], oreHubKey="jita", oreRunId=0;
+const $=(id)=>document.getElementById(id);
+const els={};
+["search","suggestions","hub","me","runs","buystrat","sellstrat","banner","result","empty","product-name","product-meta","refresh","s-matcost","s-revenue","s-profit","s-margin","mat-body","price-note","fee-breakdown"].forEach(id=>els[id]=$(id));
+
+const isk=(n)=>(n==null||isNaN(n))?"—":n.toLocaleString("en-US",{maximumFractionDigits:2})+" ISK";
+const intf=(n)=>n.toLocaleString("en-US");
+function iskShort(n){const a=Math.abs(n);if(a>=1e9)return (n/1e9).toFixed(2)+"B";if(a>=1e6)return (n/1e6).toFixed(2)+"M";if(a>=1e3)return (n/1e3).toFixed(1)+"K";return n.toFixed(0);}
+function meAdjust(b,runs,me){const mod=1-(me/100);const raw=Math.round(b*runs*mod*100)/100;return Math.max(runs,Math.ceil(raw-1e-9));}
+function pct(id){return Math.max(0,Number($(id).value)||0)/100;}
+function readRates(){return {sci:pct("f-sci"),facility:pct("f-facility"),scc:pct("f-scc"),sales:pct("f-sales"),broker:pct("f-broker")};}
+function countTo(el,target,fmt){
+  if(target==null||isNaN(target)){el.textContent=fmt(target);el._v=0;return;}
+  const start=(typeof el._v==="number")?el._v:0; el._v=target;
+  const t0=performance.now(),dur=600;
+  function step(now){const k=Math.min(1,(now-t0)/dur);const e=1-Math.pow(1-k,3);el.textContent=fmt(start+(target-start)*e);if(k<1)requestAnimationFrame(step);}
+  requestAnimationFrame(step);
+}
+function flash(el){el.classList.remove("statflash-on");void el.offsetWidth;el.classList.add("statflash-on");}
+
+async function loadRecipes(){
+  let data=EMBEDDED_RECIPES;
+  try{const r=await fetch("data/recipes.json",{cache:"no-cache"});if(r.ok)data=await r.json();}catch(e){}
+  if(data._note){els.banner.hidden=false;els.banner.textContent=data._note;}else{els.banner.hidden=true;}
+  if(data.schema==="compact"){
+    const N=data.names||{}, R=data.recipes||{};
+    ITEMS=Object.keys(R).map(pid=>({id:Number(pid),name:N[pid]||("Type "+pid),productQty:R[pid].q||1,
+      materials:(R[pid].m||[]).map(a=>({id:a[0],name:N[a[0]]||("Type "+a[0]),qty:a[1]})),cat:""}))
+      .filter(i=>i.name).sort((a,b)=>a.name.localeCompare(b.name));
+    return;
+  }
+  const items=data.recipes||data;RECIPES=items;
+  ITEMS=Object.entries(items).filter(([k])=>!k.startsWith("_")).map(([id,r])=>({id:Number(id),name:r.name,productQty:r.productQty||1,materials:r.materials||[],cat:r.cat||""})).sort((a,b)=>a.name.localeCompare(b.name));
+}
+
+async function loadMeta(){
+  try{
+    const r=await fetch("data/meta.json",{cache:"no-cache"});
+    if(!r.ok) return;
+    const d=await r.json();
+    METAGROUPS=d.groups||{};
+    const meta=d.meta||{};
+    for(const it of ITEMS){ const g=meta[it.id]||1; it.meta=g; it.metaName=METAGROUPS[g]||METAGROUPS[String(g)]||""; if(it.metaName) it.cat=it.metaName; }
+  }catch(e){}
+}
+async function loadCat(){
+  try{const r=await fetch("data/cat.json",{cache:"no-cache"});if(!r.ok)return;const d=await r.json();const k=d.kinds||{};for(const it of ITEMS){it.kind=k[it.id]||"Other";}}catch(e){}
+}
+async function loadOreGas(){
+  try{const r=await fetch("data/oregas.json",{cache:"no-cache"});if(r.ok)OREGAS=await r.json();}catch(e){}
+}
+function populateOreGroups(){
+  const sel=$("ore-group"); if(!sel) return;
+  const counts={},kindOf={};
+  for(const o of OREGAS.ore){counts[o.grp]=(counts[o.grp]||0)+1;kindOf[o.grp]="ore";}
+  for(const o of OREGAS.gas){counts[o.grp]=(counts[o.grp]||0)+1;kindOf[o.grp]="gas";}
+  const rank={"Ubiquitous Moon Asteroids":701,"Common Moon Asteroids":702,"Uncommon Moon Asteroids":703,"Rare Moon Asteroids":704,"Exceptional Moon Asteroids":705};
+  function w(g){ if(kindOf[g]==="gas") return 900; if(rank[g]) return rank[g]; if(g==="Ice") return 600; if(g==="Mercoxit") return 610; return 100; }
+  const keys=Object.keys(counts).sort((a,b)=>{const d=w(a)-w(b); return d!==0?d:a.localeCompare(b);});
+  for(const g of keys){ const o=document.createElement("option"); o.value=g; o.textContent=`${g} (${counts[g]})`; sel.appendChild(o); }
+}
+function isCollectible(it){ const g=it.meta||1; return g===17||g===19||/\bedition\b/i.test(it.name); }
+function populateTechFilter(){
+  const sel=$("f-tech"); if(!sel) return;
+  const counts={};
+  for(const it of ITEMS){ const g=it.meta||1; counts[g]=(counts[g]||0)+1; }
+  const ids=Object.keys(counts).map(Number).sort((a,b)=>a-b);
+  for(const g of ids){
+    const name=METAGROUPS[g]||METAGROUPS[String(g)]||("Meta group "+g);
+    const o=document.createElement("option");
+    o.value=String(g);
+    o.textContent=`${name} (${counts[g].toLocaleString()})`;
+    sel.appendChild(o);
+  }
+}
+function populateCatFilter(){
+  const sel=$("f-cat"); if(!sel) return;
+  const counts={};
+  for(const it of ITEMS){ const k=it.kind||"Other"; counts[k]=(counts[k]||0)+1; }
+  const keys=Object.keys(counts).sort((a,b)=>counts[b]-counts[a]);
+  for(const k of keys){ const o=document.createElement("option"); o.value=k; o.textContent=`${k} (${counts[k].toLocaleString()})`; sel.appendChild(o); }
+}
+
+// ---- live market stats (average + adjusted) and system cost indices ----
+let MKT=null, mktTs=0, SYS_INDICES=null;
+async function getMarketStats(force){
+  if(!force && MKT && (Date.now()-mktTs)<10*60*1000) return MKT;
+  const r=await fetch(ESI+"/markets/prices/?datasource=tranquility");
+  if(!r.ok) throw new Error("ESI "+r.status);
+  const arr=await r.json();
+  const avg={}, adj={};
+  for(const p of arr){
+    if(p.average_price!=null) avg[p.type_id]=p.average_price; else if(p.adjusted_price!=null) avg[p.type_id]=p.adjusted_price;
+    if(p.adjusted_price!=null) adj[p.type_id]=p.adjusted_price; else if(p.average_price!=null) adj[p.type_id]=p.average_price;
+  }
+  MKT={avg,adj}; mktTs=Date.now(); return MKT;
+}
+async function getSystemIndices(){
+  if(SYS_INDICES) return SYS_INDICES;
+  const r=await fetch(ESI+"/industry/systems/?datasource=tranquility");
+  if(!r.ok) throw new Error("ESI "+r.status);
+  const arr=await r.json(); const m={};
+  for(const s of arr){ const mi=(s.cost_indices||[]).find(c=>c.activity==="manufacturing"); m[s.solar_system_id]= mi? mi.cost_index : 0; }
+  SYS_INDICES=m; return m;
+}
+async function fillSCI(){
+  try{ const m=await getSystemIndices(); const sys=HUBS[els.hub.value].system; const idx=m[sys]||0; $("f-sci").value=(idx*100).toFixed(2); }catch(e){}
+}
+
+async function getPrice(typeId,hubKey){
+  const hub=HUBS[hubKey];const key=`${hub.region}:${typeId}`;
+  const c=priceCache.get(key);if(c&&(Date.now()-c.ts)<PRICE_TTL)return c;
+  const url=`${ESI}/markets/${hub.region}/orders/?datasource=tranquility&order_type=all&type_id=${typeId}`;
+  let orders=[];
+  try{const res=await fetch(url,{headers:{"Accept":"application/json"}});if(res.ok)orders=await res.json();}catch(e){}
+  const atStation=orders.filter(o=>o.location_id===hub.station);
+  const scope=atStation.length?atStation:orders;
+  const sells=scope.filter(o=>!o.is_buy_order).map(o=>o.price);
+  const buys=scope.filter(o=>o.is_buy_order).map(o=>o.price);
+  const result={ts:Date.now(),sell:sells.length?Math.min(...sells):null,buy:buys.length?Math.max(...buys):null,regionWide:!atStation.length&&orders.length>0};
+  priceCache.set(key,result);return result;
+}
+
+async function getOrderBook(typeId,hubKey){
+  const hub=HUBS[hubKey];const key=`${hub.region}:${typeId}`;
+  const c=obCache.get(key);if(c&&(Date.now()-c.ts)<PRICE_TTL)return c.data;
+  let orders=[];
+  try{const r=await fetch(`${ESI}/markets/${hub.region}/orders/?datasource=tranquility&order_type=all&type_id=${typeId}`);if(r.ok)orders=await r.json();}catch(e){}
+  const atStation=orders.filter(o=>o.location_id===hub.station);
+  const scope=atStation.length?atStation:orders;
+  const sells=scope.filter(o=>!o.is_buy_order).sort((a,b)=>a.price-b.price).slice(0,5);
+  const buys=scope.filter(o=>o.is_buy_order).sort((a,b)=>b.price-a.price).slice(0,5);
+  const data={sells,buys,regionWide:!atStation.length&&orders.length>0,empty:orders.length===0};
+  obCache.set(key,{ts:Date.now(),data});return data;
+}
+function renderOrderBook(data,hubKey){
+  const sb=$("ob-sells"), bb=$("ob-buys"), sub=$("ob-sub");
+  sub.textContent=`— ${HUBS[hubKey].name}${data.regionWide?" region (no orders at the hub station)":""}`;
+  const row=(o,i)=>`<tr style="animation-delay:${i*40}ms"><td class="rank">${i+1}</td><td class="num">${isk(o.price)}</td><td class="num">${intf(o.volume_remain)}</td></tr>`;
+  sb.innerHTML=data.sells.length?data.sells.map(row).join(""):`<tr><td colspan="3" class="muted">No sell orders</td></tr>`;
+  bb.innerHTML=data.buys.length?data.buys.map(row).join(""):`<tr><td colspan="3" class="muted">No buy orders</td></tr>`;
+}
+
+// ---- Ore & Gas board (Fuzzwork aggregates) ----
+async function fuzzAgg(region,ids){
+  const out={};
+  for(let i=0;i<ids.length;i+=200){
+    const chunk=ids.slice(i,i+200).join(",");
+    try{const r=await fetch(`https://market.fuzzwork.co.uk/aggregates/?region=${region}&types=${chunk}`);if(r.ok)Object.assign(out,await r.json());}catch(e){}
+  }
+  return out;
+}
+async function renderOre(){
+  const myRun=++oreRunId;
+  oreHubKey=$("ore-hub").value;
+  const region=HUBS[oreHubKey].region;
+  $("ore-status").textContent="Loading live "+HUBS[oreHubKey].name+" prices…";
+  $("ore-body").innerHTML=`<tr><td colspan="5" class="muted">Fetching…</td></tr>`;
+  const list=[...OREGAS.ore.map(o=>Object.assign({kind:"ore"},o)),...OREGAS.gas.map(o=>Object.assign({kind:"gas"},o))];
+  const ids=list.map(o=>o.id);
+  let agg={}; try{agg=await fuzzAgg(region,ids);}catch(e){}
+  if(myRun!==oreRunId) return;
+  oreRows=list.map(o=>{
+    const a=agg[o.id]||{};
+    const sell=a.sell&&Number(a.sell.min)>0?Number(a.sell.min):null;
+    const buy=a.buy&&Number(a.buy.max)>0?Number(a.buy.max):null;
+    const iskm3=(sell&&o.vol>0)?sell/o.vol:null;
+    return Object.assign({sell,buy,iskm3},o);
+  });
+  drawOre();
+}
+function drawOre(){
+  const typeF=$("ore-type").value, sortF=$("ore-sort").value, groupF=$("ore-group").value, q=$("ore-search").value.trim().toLowerCase();
+  let r=oreRows.filter(x=>typeF==="all"||x.kind===typeF).filter(x=>!groupF||x.grp===groupF).filter(x=>!q||x.name.toLowerCase().includes(q));
+  const cmps={iskm3:(a,b)=>(b.iskm3||0)-(a.iskm3||0),sell:(a,b)=>(b.sell||0)-(a.sell||0),buy:(a,b)=>(b.buy||0)-(a.buy||0),name:(a,b)=>a.name.localeCompare(b.name)};
+  if(sortF==="group"){ r.sort((a,b)=> a.grp!==b.grp ? a.grp.localeCompare(b.grp) : (b.iskm3||0)-(a.iskm3||0)); }
+  else { r.sort(cmps[sortF]||((a,b)=>0)); }
+  const grpCount={}; r.forEach(x=>grpCount[x.grp]=(grpCount[x.grp]||0)+1);
+  const rowHtml=(x,i)=>`<tr style="animation-delay:${Math.min(i,25)*18}ms"><td>${x.name}</td><td class="muted small">${x.grp}</td><td class="num">${x.sell==null?'—':isk(x.sell)}</td><td class="num">${x.buy==null?'—':isk(x.buy)}</td><td class="num" style="color:var(--accent);font-family:var(--mono)">${x.iskm3==null?'—':isk(x.iskm3)}</td></tr>`;
+  let html="";
+  if(!r.length){ html=`<tr><td colspan="5" class="muted">No matches.</td></tr>`; }
+  else if(sortF==="group"){ let cur=null; r.forEach((x,i)=>{ if(x.grp!==cur){cur=x.grp;html+=`<tr class="grp-head"><td colspan="5">${cur} · ${grpCount[cur]}</td></tr>`;} html+=rowHtml(x,i); }); }
+  else { html=r.map(rowHtml).join(""); }
+  $("ore-body").innerHTML=html;
+  const priced=oreRows.filter(x=>x.sell!=null).length;
+  const sl={group:"group / family",iskm3:"ISK/m³",sell:"sell",buy:"buy",name:"name"}[sortF]||sortF;
+  $("ore-status").textContent=`${r.length} shown · ${priced}/${oreRows.length} priced · live ${HUBS[oreHubKey].name} buy/sell · sorted by ${sl}.`;
+}
+
+async function getHistory(typeId,hubKey){
+  const hub=HUBS[hubKey];const key=`${hub.region}:${typeId}`;
+  if(historyCache.has(key)) return historyCache.get(key);
+  let data=[];
+  try{ const r=await fetch(`${ESI}/markets/${hub.region}/history/?datasource=tranquility&type_id=${typeId}`); if(r.ok) data=await r.json(); }catch(e){}
+  historyCache.set(key,data); return data;
+}
+function holt(ys,alpha,beta){
+  const n=ys.length;
+  let level=ys[0], trend=(n>1?ys[1]-ys[0]:0);
+  const fitted=[ys[0]];
+  for(let i=1;i<n;i++){
+    fitted.push(level+trend);
+    const nl=alpha*ys[i]+(1-alpha)*(level+trend);
+    const nt=beta*(nl-level)+(1-beta)*trend;
+    level=nl; trend=nt;
+  }
+  return {level,trend,fitted};
+}
+function buildChart(pts,fc){
+  const W=820,H=288,padL=78,padR=16,padT=16,padB=28;
+  const his=pts.map(p=>p.highest),los=pts.map(p=>p.lowest),avg=pts.map(p=>p.average);
+  const n=pts.length;
+  const proj=(fc&&fc.proj)||[],lo=(fc&&fc.lower)||[],up=(fc&&fc.upper)||[],h=(fc&&fc.h)||0;
+  const total=((n-1)+h)||1;
+  let min=Math.min(...los, ...(lo.length?lo:[Infinity])), max=Math.max(...his, ...(up.length?up:[-Infinity]));
+  if(!isFinite(min))min=0; if(!isFinite(max))max=1; if(min<0)min=0; const rng=(max-min)||1;
+  const X=i=>padL+(i/total)*(W-padL-padR);
+  const Y=v=>padT+(1-(v-min)/rng)*(H-padT-padB);
+  const baseY=Y(min).toFixed(1);
+  const defs=`<defs><linearGradient id="af" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(84,194,218,.30)"/><stop offset="1" stop-color="rgba(84,194,218,0)"/></linearGradient><filter id="gl" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
+  const gy=[max,(max*3+min)/4,(max+min)/2,(max+min*3)/4,min]; let grid="";
+  gy.forEach(v=>{const yy=Y(v).toFixed(1);grid+=`<line x1="${padL}" y1="${yy}" x2="${W-padR}" y2="${yy}" stroke="#1d2d39" stroke-width="1"/><text x="${padL-8}" y="${(Y(v)+4).toFixed(1)}" text-anchor="end" font-size="11" fill="#7a8c99">${iskShort(v)}</text>`;});
+  const hiloBand="M "+his.map((v,i)=>`${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" L ")+" L "+los.map((v,i)=>`${X(i).toFixed(1)},${Y(v).toFixed(1)}`).reverse().join(" L ")+" Z";
+  const avgPts=avg.map((v,i)=>`${X(i).toFixed(1)},${Y(v).toFixed(1)}`);
+  const area="M "+X(0).toFixed(1)+","+baseY+" L "+avgPts.join(" L ")+" L "+X(n-1).toFixed(1)+","+baseY+" Z";
+  const line="M "+avgPts.join(" L ");
+  let cone="",projLine="",divider="",endDot="";
+  if(proj.length>1){
+    const nowX=X(n-1).toFixed(1);
+    divider=`<line x1="${nowX}" y1="${padT}" x2="${nowX}" y2="${H-padB}" stroke="#3a4a57" stroke-width="1" stroke-dasharray="3 3"/><text x="${(+nowX+5)}" y="${padT+11}" font-size="10" fill="#7a8c99">NOW</text>`;
+    cone="M "+up.map((v,k)=>`${X(n-1+k).toFixed(1)},${Y(v).toFixed(1)}`).join(" L ")+" L "+lo.map((v,k)=>`${X(n-1+k).toFixed(1)},${Y(v).toFixed(1)}`).reverse().join(" L ")+" Z";
+    cone=`<path d="${cone}" fill="rgba(227,179,65,.13)" stroke="none"/>`;
+    projLine=`<path d="${"M "+proj.map((v,k)=>`${X(n-1+k).toFixed(1)},${Y(v).toFixed(1)}`).join(" L ")}" fill="none" stroke="#e3b341" stroke-width="2" stroke-dasharray="5 4" filter="url(#gl)"/>`;
+    const ex=X(total).toFixed(1),ey=Y(proj[proj.length-1]).toFixed(1);
+    endDot=`<circle cx="${ex}" cy="${ey}" r="3.5" fill="#e3b341"><animate attributeName="r" values="3.5;6;3.5" dur="2s" repeatCount="indefinite"/></circle><text x="${ex}" y="${Math.max(padT+12,+ey-9)}" text-anchor="end" font-size="11" fill="#e3b341" font-weight="700">+${h}d</text>`;
+  }
+  const lastDot=`<circle cx="${X(n-1).toFixed(1)}" cy="${Y(avg[n-1]).toFixed(1)}" r="3" fill="#54c2da"/>`;
+  const xlab=`<text x="${padL}" y="${H-7}" font-size="11" fill="#7a8c99">${pts[0].date}</text><text x="${X(n-1).toFixed(1)}" y="${H-7}" text-anchor="middle" font-size="11" fill="#7a8c99">${pts[n-1].date}</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="price history and forecast">${defs}${grid}${divider}<path d="${hiloBand}" fill="rgba(84,194,218,.08)" stroke="none"/><path d="${area}" fill="url(#af)" stroke="none"/>${cone}<path d="${line}" fill="none" stroke="#54c2da" stroke-width="2" stroke-linejoin="round" filter="url(#gl)"/>${projLine}${lastDot}${endDot}${xlab}</svg>`;
+}
+async function renderHistory(){
+  if(!current) return;
+  const host=$("hist-chart"), statsEl=$("hist-stats"), note=$("forecast-note");
+  host.innerHTML='<p class="muted small">Loading price history…</p>'; statsEl.innerHTML=""; note.textContent="";
+  const hubKey=els.hub.value;
+  const days=Math.max(1,Number($("hist-period").value)||90);
+  let hist=[];
+  try{ hist=await getHistory(current.id,hubKey); }catch(e){}
+  if(!hist || !hist.length){ host.innerHTML='<p class="muted small">No market history for this item in '+HUBS[hubKey].name+"’s region.</p>"; return; }
+  const slice=hist.slice(-days);
+  const ys=slice.map(p=>p.average);
+  const n=ys.length;
+  const first=ys[0], last=ys[n-1];
+  const change=first>0?((last-first)/first)*100:0;
+  const high=Math.max(...slice.map(p=>p.highest)), low=Math.min(...slice.map(p=>p.lowest));
+  const vol=slice.reduce((a,p)=>a+(p.volume||0),0)/slice.length;
+  const {level,trend,fitted}=holt(ys,0.35,0.12);
+  let se=0,cnt=0,mape=0,mc=0;
+  for(let i=1;i<n;i++){const r=ys[i]-fitted[i];se+=r*r;cnt++;if(ys[i]>0){mape+=Math.abs(r)/ys[i];mc++;}}
+  const sigma=cnt>0?Math.sqrt(se/cnt):0;
+  const mapePct=mc>0?(mape/mc)*100:0;
+  const meanY=ys.reduce((x,y)=>x+y,0)/n;
+  const volPct=meanY>0?(sigma/meanY)*100:0;
+  const h=Math.min(60,Math.max(5,Math.round(n*0.25)));
+  const proj=[last],lower=[last],upper=[last];
+  for(let k=1;k<=h;k++){const pv=Math.max(0,level+trend*k);const bw=sigma*Math.sqrt(k);proj.push(pv);lower.push(Math.max(0,pv-bw));upper.push(pv+bw);}
+  const predicted=proj[proj.length-1];
+  const projChange=last>0?((predicted-last)/last)*100:0;
+  const conf=mapePct<6?"high":mapePct<18?"moderate":"low";
+  const dir=trend>0?"▲ rising":trend<0?"▼ falling":"▬ flat";
+  statsEl.innerHTML=`
+    <div class="hs"><span class="l">Latest avg</span><span class="v">${isk(last)}</span></div>
+    <div class="hs"><span class="l">Change (${n}d)</span><span class="v" style="color:${change>=0?'var(--good)':'var(--bad)'}">${change>=0?'+':''}${change.toFixed(1)}%</span></div>
+    <div class="hs"><span class="l">Forecast (+${h}d)</span><span class="v" style="color:var(--warn)">${isk(predicted)}</span></div>
+    <div class="hs"><span class="l">Projected</span><span class="v" style="color:${projChange>=0?'var(--good)':'var(--bad)'}">${projChange>=0?'+':''}${projChange.toFixed(1)}%</span></div>
+    <div class="hs"><span class="l">Trend</span><span class="v" style="color:var(--warn)">${dir}</span></div>
+    <div class="hs"><span class="l">Period high</span><span class="v">${isk(high)}</span></div>
+    <div class="hs"><span class="l">Period low</span><span class="v">${isk(low)}</span></div>
+    <div class="hs"><span class="l">Avg daily volume</span><span class="v">${intf(Math.round(vol))}</span></div>`;
+  host.innerHTML=buildChart(slice,{proj,lower,upper,h});
+  note.innerHTML=`<span class="lg"><i style="background:var(--accent)"></i>Actual avg</span><span class="lg"><i style="background:rgba(84,194,218,.20)"></i>Daily range</span><span class="lg"><i class="dash"></i>Forecast</span><span class="lg"><i style="background:rgba(227,179,65,.25)"></i>±1σ band</span><br>Model: Holt linear exponential smoothing (α0.35 β0.12) over ${n}d · fit error ±${mapePct.toFixed(1)}% (${conf} confidence) · volatility ${volPct.toFixed(1)}%. Indicative only — not financial advice.`;
+}
+
+function renderSuggestions(q){
+  const query=q.trim().toLowerCase();els.suggestions.innerHTML="";activeSuggestion=-1;
+  if(!query){els.suggestions.hidden=true;return;}
+  const matches=ITEMS.filter(i=>i.name.toLowerCase().includes(query)).slice(0,40);
+  if(!matches.length){els.suggestions.hidden=true;return;}
+  for(const m of matches){const li=document.createElement("li");li.innerHTML=`<span>${m.name}</span><span class="cat">${m.cat||""}</span>`;li.addEventListener("mousedown",(e)=>{e.preventDefault();selectItem(m);});els.suggestions.appendChild(li);}
+  els.suggestions.hidden=false;
+}
+function selectItem(item){current=item;els.search.value=item.name;els.suggestions.hidden=true;calculate();}
+
+async function calculate(){
+  if(!current)return;
+  const hubKey=els.hub.value;
+  const me=Math.max(0,Math.min(10,Number(els.me.value)||0));
+  const runs=Math.max(1,Math.floor(Number(els.runs.value)||1));
+  const buyStrat=els.buystrat.value,sellStrat=els.sellstrat.value;
+  const rates=readRates();
+  els.empty.hidden=true;els.result.hidden=false;els.result.classList.add("spin");
+  els["product-name"].textContent=current.name;
+  els["product-meta"].textContent=`${current.materials.length} materials · ${current.productQty*runs} unit(s) output · ME ${me}% · ${runs} run(s) · ${HUBS[hubKey].name}`;
+  let stats=null; try{ stats=await getMarketStats(); }catch(e){}
+  const ADJ=stats?stats.adj:{};
+  const ids=current.materials.map(m=>m.id);ids.push(current.id);
+  const priceMap={};
+  await Promise.all([...new Set(ids)].map(async id=>{priceMap[id]=await getPrice(id,hubKey);}));
+  els["mat-body"].innerHTML="";
+  let matCost=0,anyRegionWide=false,anyMissing=false,eiv=0,mi=0;
+  for(const m of current.materials){
+    const qty=meAdjust(m.qty,runs,me);const p=priceMap[m.id]||{};
+    const unit=buyStrat==="buy"?p.buy:p.sell;const sub=(unit!=null)?unit*qty:null;
+    if(sub!=null)matCost+=sub;else anyMissing=true;if(p.regionWide)anyRegionWide=true;
+    if(ADJ[m.id]!=null) eiv+=ADJ[m.id]*m.qty*runs;
+    const tr=document.createElement("tr");
+    tr.style.animationDelay=(mi++*35)+"ms";
+    tr.innerHTML=`<td>${m.name}</td><td class="num">${intf(qty)}</td><td class="num ${unit==null?'miss':''}">${unit==null?'no orders':isk(unit)}</td><td class="num ${sub==null?'miss':''}">${sub==null?'—':isk(sub)}</td>`;
+    els["mat-body"].appendChild(tr);
+  }
+  const pp=priceMap[current.id]||{};
+  const prodUnit=sellStrat==="buy"?pp.buy:pp.sell;
+  const outputUnits=current.productQty*runs;
+  const revenue=(prodUnit!=null)?prodUnit*outputUnits:null;
+  if(pp.regionWide)anyRegionWide=true;
+  const jobCost=eiv*(rates.sci+rates.facility+rates.scc);
+  const salesTaxAmt=(revenue!=null)?revenue*rates.sales:0;
+  const brokerAmt=(revenue!=null&&sellStrat==="sell")?revenue*rates.broker:0;
+  const totalCost=matCost+jobCost+salesTaxAmt+brokerAmt;
+  const netProfit=(revenue!=null)?revenue-totalCost:null;
+  const netMargin=(revenue!=null&&revenue>0)?(netProfit/revenue)*100:null;
+  countTo(els["s-matcost"],totalCost,isk);
+  if(revenue==null){els["s-revenue"].textContent="no orders";els["s-revenue"]._v=0;} else countTo(els["s-revenue"],revenue,isk);
+  const pe=els["s-profit"];pe.className="stat-val "+(netProfit==null?"":netProfit>=0?"good":"bad");
+  if(netProfit==null){pe.textContent="—";pe._v=0;} else countTo(pe,netProfit,isk);
+  const mEl=els["s-margin"];mEl.className="stat-val "+(netMargin==null?"":netMargin>=0?"good":"bad");
+  if(netMargin==null){mEl.textContent="—";mEl._v=0;} else countTo(mEl,netMargin,v=>v.toFixed(1)+"%");
+  document.querySelectorAll(".summary-grid .stat").forEach(flash);
+  els["fee-breakdown"].textContent=`Cost breakdown — materials ${isk(matCost)} · job install fee ${isk(jobCost)} (EIV ${isk(eiv)} × ${((rates.sci+rates.facility+rates.scc)*100).toFixed(2)}%) · sales tax ${isk(salesTaxAmt)} · broker fee ${isk(brokerAmt)}.`;
+  const notes=[];
+  notes.push(`Materials priced at hub ${buyStrat==="buy"?"buy orders":"sell orders"}; product at ${sellStrat==="buy"?"buy orders":"sell orders"}.`);
+  if(anyRegionWide)notes.push("Some prices fell back to region-wide orders (no orders at the hub station).");
+  if(anyMissing)notes.push("Some materials had no market orders — material cost is understated.");
+  notes.push("Prices cached up to 5 min. Sales tax & broker fee depend on your skills/standings (editable above).");
+  els["price-note"].textContent=notes.join(" ");
+  els.result.classList.remove("spin");
+  getOrderBook(current.id,hubKey).then(d=>renderOrderBook(d,hubKey));
+  renderHistory();
+}
+
+els.search.addEventListener("input",(e)=>renderSuggestions(e.target.value));
+els.search.addEventListener("focus",(e)=>{if(e.target.value)renderSuggestions(e.target.value);});
+els.search.addEventListener("keydown",(e)=>{
+  const items=[...els.suggestions.querySelectorAll("li")];if(!items.length)return;
+  if(e.key==="ArrowDown"){e.preventDefault();activeSuggestion=Math.min(activeSuggestion+1,items.length-1);}
+  else if(e.key==="ArrowUp"){e.preventDefault();activeSuggestion=Math.max(activeSuggestion-1,0);}
+  else if(e.key==="Enter"){e.preventDefault();const name=(activeSuggestion>=0?items[activeSuggestion].textContent:els.search.value).trim();const match=ITEMS.find(i=>i.name===name)||ITEMS.find(i=>i.name.toLowerCase().includes(els.search.value.trim().toLowerCase()));if(match)selectItem(match);return;}
+  else return;
+  items.forEach((li,i)=>li.classList.toggle("active",i===activeSuggestion));
+});
+document.addEventListener("click",(e)=>{if(!els.suggestions.contains(e.target)&&e.target!==els.search)els.suggestions.hidden=true;});
+["me","runs","buystrat","sellstrat","f-facility","f-scc","f-sales","f-broker","f-sci"].forEach(id=>$(id).addEventListener("change",()=>current&&calculate()));
+els.hub.addEventListener("change",async()=>{ await fillSCI(); if(current) calculate(); });
+els.refresh.addEventListener("click",()=>{priceCache.clear();obCache.clear();calculate();});
+$("sci-refresh").addEventListener("click",async()=>{ SYS_INDICES=null; await fillSCI(); if(current) calculate(); });
+$("hist-period").addEventListener("change",renderHistory);
+
+// ---- Top 10 leaderboard (net profit) ----
+let topRunId=0;
+async function renderTop(force){
+  const status=$("top-status"), body=$("top-body");
+  const myRun=++topRunId;
+  status.textContent="Loading CCP average prices…"; if(force) body.innerHTML="";
+  let stats;
+  try{ stats=await getMarketStats(force); }catch(e){ status.textContent="Failed to load prices: "+e.message; return; }
+  const avg=stats.avg, adj=stats.adj;
+  const me=Math.max(0,Math.min(10,Number(els.me.value)||0));
+  const hubKey=els.hub.value;
+  const rates=readRates();
+  const feeRate=rates.sci+rates.facility+rates.scc;
+  const techSel=$("f-tech").value, noCollect=$("f-nocollect").checked, catSel=$("f-cat").value;
+  const hideC = noCollect && techSel!=="17" && techSel!=="19";
+  const cand=[];
+  for(const it of ITEMS){
+    if(catSel && (it.kind||"Other")!==catSel) continue;
+    if(techSel && String(it.meta||1)!==techSel) continue;
+    if(hideC && isCollectible(it)) continue;
+    const pp=avg[it.id]; if(pp==null) continue;
+    let cost=0, eiv=0, ok=true;
+    for(const m of it.materials){ const mp=avg[m.id]; if(mp==null){ok=false;break;} cost+=mp*meAdjust(m.qty,1,me); if(adj[m.id]!=null) eiv+=adj[m.id]*m.qty; }
+    if(!ok || cost<=0) continue;
+    const jobCost=eiv*feeRate;
+    cand.push({it,cost,jobCost,avgNet:pp*it.productQty*(1-rates.sales-rates.broker)-cost-jobCost});
+  }
+  cand.sort((a,b)=>b.avgNet-a.avgNet);
+  const pool=cand.slice(0,120);
+  const techLabel = techSel ? (METAGROUPS[techSel]||METAGROUPS[String(techSel)]||("meta "+techSel)) : "all meta groups";
+  status.textContent=`Checking live ${HUBS[hubKey].name} market for top candidates…`;
+  const verified=[]; let idx=0;
+  async function worker(){
+    while(idx<pool.length){
+      const c=pool[idx++];
+      let p; try{ p=await getPrice(c.it.id,hubKey); }catch(e){ continue; }
+      if(myRun!==topRunId) return;
+      if(p.sell==null) continue;
+      const revenue=p.sell*c.it.productQty;
+      const net=revenue*(1-rates.sales-rates.broker)-c.cost-c.jobCost;
+      verified.push({it:c.it,cost:c.cost+c.jobCost,revenue,profit:net,margin:revenue>0?net/revenue*100:0});
+    }
+  }
+  await Promise.all(Array.from({length:8},worker));
+  if(myRun!==topRunId) return;
+  verified.sort((a,b)=>b.profit-a.profit);
+  const top=verified.slice(0,10);
+  status.textContent=`Net profit at ${HUBS[hubKey].name} · ${catSel||"all categories"} · ${techLabel} · live sell − materials − job fee − ${(rates.sales*100).toFixed(1)}% tax − ${(rates.broker*100).toFixed(1)}% broker · ME ${me}% (scanned ${cand.length.toLocaleString()}, checked ${pool.length}).`;
+  body.innerHTML="";
+  if(!top.length){ body.innerHTML=`<tr><td colspan="6" class="muted">No tradeable items found for this filter — try another category/meta group or Refresh.</td></tr>`; return; }
+  top.forEach((r,i)=>{
+    const tr=document.createElement("tr");
+    tr.className="click";
+    tr.style.animationDelay=(i*35)+"ms";
+    tr.innerHTML=`<td class="rank">${i+1}</td><td>${r.it.name}</td><td class="num">${isk(r.cost)}</td><td class="num">${isk(r.revenue)}</td><td class="num" style="${r.profit>=0?'color:var(--good)':'color:var(--bad)'}">${isk(r.profit)}</td><td class="num">${r.margin.toFixed(1)}%</td>`;
+    tr.addEventListener("click",()=>{ switchTab("calc"); selectItem(r.it); });
+    body.appendChild(tr);
+  });
+}
+function switchTab(name){
+  document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));
+  $("tab-calc").hidden = name!=="calc";
+  $("tab-top").hidden = name!=="top";
+  $("tab-ore").hidden = name!=="ore";
+  $("tab-research").hidden = name!=="research";
+  $("tab-repro").hidden = name!=="repro";
+  $("tab-arb").hidden = name!=="arb";
+  if(name==="top" && ITEMS.length) renderTop(false);
+  if(name==="ore" && !oreRows.length) renderOre();
+}
+document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>switchTab(b.dataset.tab)));
+$("top-refresh").addEventListener("click",()=>renderTop(true));
+["f-cat","f-tech","f-nocollect"].forEach(id=>$(id).addEventListener("change",()=>renderTop(false)));
+$("ore-refresh").addEventListener("click",renderOre);
+$("ore-hub").addEventListener("change",renderOre);
+["ore-type","ore-sort","ore-group"].forEach(id=>$(id).addEventListener("change",drawOre));
+$("ore-search").addEventListener("input",drawOre);
+
+// ---- Blueprint Research cost breakdown ----
+let rCurrent=null, rActive=-1, SYS_ALL=null;
+async function getSysAll(){
+  if(SYS_ALL) return SYS_ALL;
+  const r=await fetch(ESI+"/industry/systems/?datasource=tranquility");
+  if(!r.ok) throw new Error("ESI "+r.status);
+  const arr=await r.json(); const m={};
+  for(const s of arr){ const o={}; (s.cost_indices||[]).forEach(c=>o[c.activity]=c.cost_index); m[s.solar_system_id]=o; }
+  SYS_ALL=m; return m;
+}
+function rSuggest(q){
+  const box=$("r-suggestions"); const query=q.trim().toLowerCase(); box.innerHTML=""; rActive=-1;
+  if(!query){box.hidden=true;return;}
+  const m=ITEMS.filter(i=>i.name.toLowerCase().includes(query)).slice(0,40);
+  if(!m.length){box.hidden=true;return;}
+  for(const it of m){const li=document.createElement("li");li.innerHTML=`<span>${it.name}</span><span class="cat">${it.cat||""}</span>`;li.addEventListener("mousedown",e=>{e.preventDefault();rSelect(it);});box.appendChild(li);}
+  box.hidden=false;
+}
+function rSelect(it){rCurrent=it;$("r-search").value=it.name;$("r-suggestions").hidden=true;renderResearch();}
+async function renderResearch(){
+  if(!rCurrent) return;
+  const hubKey=$("r-hub").value, sys=HUBS[hubKey].system;
+  const facility=Math.max(0,Number($("r-facility").value)||0)/100;
+  const scc=Math.max(0,Number($("r-scc").value)||0)/100;
+  const meT=Math.max(0,Math.min(10,Math.floor(Number($("r-me").value)||0)));
+  const teT=Math.max(0,Math.min(20,Math.floor(Number($("r-te").value)||0)));
+  const runs=Math.max(1,Math.floor(Number($("r-runs").value)||1));
+  $("r-empty").hidden=true; $("r-result").hidden=false; $("r-result").classList.add("spin");
+  $("r-product-name").textContent=rCurrent.name;
+  let stats=null; try{stats=await getMarketStats();}catch(e){}
+  const ADJ=stats?stats.adj:{};
+  let eiv=0, missing=false;
+  for(const m of rCurrent.materials){ if(ADJ[m.id]!=null) eiv+=ADJ[m.id]*m.qty; else missing=true; }
+  let idx={}; try{ const all=await getSysAll(); idx=all[sys]||{}; }catch(e){}
+  const meI=idx.researching_material_efficiency||0, teI=idx.researching_time_efficiency||0, copyI=idx.copying||0, invI=idx.invention||0;
+  const fee=ix=>eiv*(ix+facility+scc);
+  const meFee=fee(meI),teFee=fee(teI),copyFee=fee(copyI),invFee=fee(invI);
+  const meTotal=meFee*meT, teTotal=teFee*teT, copyTotal=copyFee*runs;
+  const grand=meTotal+teTotal+copyTotal;
+  $("r-product-meta").textContent=`EIV ${isk(eiv)} · ${rCurrent.materials.length} input materials · ${HUBS[hubKey].name}${missing?" · some materials unpriced":""}`;
+  countTo($("r-eiv"),eiv,isk);
+  countTo($("r-metotal"),meTotal,isk);
+  countTo($("r-tetotal"),teTotal,isk);
+  countTo($("r-grand"),grand,isk);
+  document.querySelectorAll("#tab-research .summary-grid .stat").forEach(flash);
+  const rows=[
+    ["Material Efficiency (ME) research",meI,meFee,meT+" level(s)",meTotal],
+    ["Time Efficiency (TE) research",teI,teFee,teT+" level(s)",teTotal],
+    ["Copying (BPC)",copyI,copyFee,runs+" run(s)",copyTotal],
+    ["Invention (excl. datacores)",invI,invFee,"1 attempt",invFee]
+  ];
+  $("r-body").innerHTML=rows.map((r,i)=>`<tr style="animation-delay:${i*35}ms"><td>${r[0]}</td><td class="num">${(r[1]*100).toFixed(2)}%</td><td class="num">${isk(r[2])}</td><td class="num">${r[3]}</td><td class="num">${isk(r[4])}</td></tr>`).join("");
+  $("r-note").textContent=`Job install fee = EIV × (activity system cost index + facility tax ${(facility*100).toFixed(2)}% + SCC surcharge ${(scc*100).toFixed(2)}%). EIV = Σ CCP adjusted price × base input-material quantity. Research is billed per level — each ME/TE level is a separate job at the same fee (time rises per level; not shown here). Copying is per run. Invention shows the job install fee only; datacores, decryptors and success chance are excluded. System cost indices pulled live from ESI.`;
+  $("r-result").classList.remove("spin");
+}
+$("r-search").addEventListener("input",e=>rSuggest(e.target.value));
+$("r-search").addEventListener("focus",e=>{if(e.target.value)rSuggest(e.target.value);});
+$("r-search").addEventListener("keydown",e=>{
+  const items=[...$("r-suggestions").querySelectorAll("li")];if(!items.length)return;
+  if(e.key==="ArrowDown"){e.preventDefault();rActive=Math.min(rActive+1,items.length-1);}
+  else if(e.key==="ArrowUp"){e.preventDefault();rActive=Math.max(rActive-1,0);}
+  else if(e.key==="Enter"){e.preventDefault();const name=(rActive>=0?items[rActive].textContent:$("r-search").value).trim();const mt=ITEMS.find(i=>i.name===name)||ITEMS.find(i=>i.name.toLowerCase().includes($("r-search").value.trim().toLowerCase()));if(mt)rSelect(mt);return;}
+  else return;
+  items.forEach((li,i)=>li.classList.toggle("active",i===rActive));
+});
+document.addEventListener("click",e=>{const b=$("r-suggestions");if(b&&!b.contains(e.target)&&e.target!==$("r-search"))b.hidden=true;});
+["r-hub","r-me","r-te","r-runs","r-facility","r-scc"].forEach(id=>$(id).addEventListener("change",()=>rCurrent&&renderResearch()));
+$("r-refresh").addEventListener("click",()=>renderResearch());
+
+// ---- Reprocessing ----
+let REPRO={mats:{},rows:{}}, oreLookup={}, rpCur=null, rpActive=-1;
+async function loadReprocess(){ try{const r=await fetch("data/reprocess.json",{cache:"no-cache"});if(r.ok)REPRO=await r.json();}catch(e){} }
+function buildOreLookup(){ oreLookup={}; for(const o of (OREGAS.ore||[])) oreLookup[o.id]={name:o.name,vol:o.vol,grp:o.grp}; }
+function rpSuggest(q){
+  const box=$("rp-suggestions"); const query=q.trim().toLowerCase(); box.innerHTML=""; rpActive=-1;
+  if(!query){box.hidden=true;return;}
+  const list=(OREGAS.ore||[]).filter(o=>REPRO.rows[o.id]).filter(o=>o.name.toLowerCase().includes(query)).slice(0,40);
+  if(!list.length){box.hidden=true;return;}
+  for(const o of list){const li=document.createElement("li");li.innerHTML=`<span>${o.name}</span><span class="cat">${o.grp||""}</span>`;li.addEventListener("mousedown",e=>{e.preventDefault();rpSelect(o);});box.appendChild(li);}
+  box.hidden=false;
+}
+function rpSelect(o){rpCur=o;$("rp-search").value=o.name;$("rp-suggestions").hidden=true;renderRepro();}
+async function renderRepro(){
+  if(!rpCur) return;
+  const row=REPRO.rows[rpCur.id]; if(!row) return;
+  const hubKey=$("rp-hub").value, region=HUBS[hubKey].region;
+  const qty=Math.max(1,Math.floor(Number($("rp-qty").value)||1));
+  const yld=Math.max(0,Math.min(100,Number($("rp-yield").value)||0))/100;
+  const basis=$("rp-basis").value;
+  $("rp-empty").hidden=true; $("rp-result").hidden=false; $("rp-result").classList.add("spin");
+  $("rp-product-name").textContent=rpCur.name;
+  const ids=[rpCur.id,...row.o.map(x=>x[0])];
+  let agg={}; try{agg=await fuzzAgg(region,ids);}catch(e){}
+  const px=id=>{const a=agg[id]||{};return basis==="buy"?(a.buy&&Number(a.buy.max)>0?Number(a.buy.max):null):(a.sell&&Number(a.sell.min)>0?Number(a.sell.min):null);};
+  const portions=Math.floor(qty/row.p);
+  let refinedValue=0;
+  const rows=row.o.map(([mid,q])=>{const rq=Math.floor(q*portions*yld);const up=px(mid);const val=(up!=null)?up*rq:null;if(val!=null)refinedValue+=val;return {name:REPRO.mats[mid]||("Type "+mid),qty:rq,up,val};});
+  const orePx=px(rpCur.id);
+  const oreValue=(orePx!=null)?orePx*qty:null;
+  const diff=(oreValue!=null)?refinedValue-oreValue:null;
+  const vol=(oreLookup[rpCur.id]||{}).vol||rpCur.vol||0;
+  const iskm3=(vol>0)?refinedValue/(qty*vol):null;
+  $("rp-product-meta").textContent=`${qty.toLocaleString()} units · ${portions} batch(es) of ${row.p} · ${(yld*100).toFixed(1)}% yield · ${HUBS[hubKey].name}${portions<1?" · below one reprocess batch":""}`;
+  countTo($("rp-refined"),refinedValue,isk);
+  const ov=$("rp-orev"); if(oreValue==null){ov.textContent="no orders";ov._v=0;} else countTo(ov,oreValue,isk);
+  const de=$("rp-diff"); de.className="stat-val "+(diff==null?"":diff>=0?"good":"bad"); if(diff==null){de.textContent="—";de._v=0;} else countTo(de,diff,isk);
+  countTo($("rp-iskm3"),iskm3,isk);
+  document.querySelectorAll("#tab-repro .summary-grid .stat").forEach(flash);
+  $("rp-body").innerHTML=rows.map((r,i)=>`<tr style="animation-delay:${i*30}ms"><td>${r.name}</td><td class="num">${intf(r.qty)}</td><td class="num">${r.up==null?'—':isk(r.up)}</td><td class="num">${r.val==null?'—':isk(r.val)}</td></tr>`).join("");
+  $("rp-note").textContent=`Refined output at ${(yld*100).toFixed(1)}% yield, valued at ${basis==="buy"?"buy orders (instant)":"sell orders (list)"}. "Refine vs sell raw" = refined value − ore market value for the same units (positive = refining wins). SDE quantities are the perfect 100% yield; set your real yield (base 50%, up to ~90% with skills/structure/rigs). Prices live via Fuzzwork.`;
+  $("rp-result").classList.remove("spin");
+}
+$("rp-search").addEventListener("input",e=>rpSuggest(e.target.value));
+$("rp-search").addEventListener("focus",e=>{if(e.target.value)rpSuggest(e.target.value);});
+$("rp-search").addEventListener("keydown",e=>{const items=[...$("rp-suggestions").querySelectorAll("li")];if(!items.length)return;if(e.key==="ArrowDown"){e.preventDefault();rpActive=Math.min(rpActive+1,items.length-1);}else if(e.key==="ArrowUp"){e.preventDefault();rpActive=Math.max(rpActive-1,0);}else if(e.key==="Enter"){e.preventDefault();const name=(rpActive>=0?items[rpActive].textContent:$("rp-search").value).trim();const mt=(OREGAS.ore||[]).find(o=>o.name===name&&REPRO.rows[o.id])||(OREGAS.ore||[]).find(o=>REPRO.rows[o.id]&&o.name.toLowerCase().includes($("rp-search").value.trim().toLowerCase()));if(mt)rpSelect(mt);return;}else return;items.forEach((li,i)=>li.classList.toggle("active",i===rpActive));});
+["rp-hub","rp-qty","rp-yield","rp-basis"].forEach(id=>$(id).addEventListener("change",()=>rpCur&&renderRepro()));
+$("rp-refresh").addEventListener("click",renderRepro);
+
+// ---- Hub Arbitrage ----
+let arbItems=[], abCur=null, abActive=-1;
+const ARB_HUBS=["jita","amarr","dodixie","rens","hek"];
+function buildArbItems(){ const seen=new Set(); arbItems=[]; for(const it of ITEMS){ if(!seen.has(it.id)){seen.add(it.id);arbItems.push({id:it.id,name:it.name});} } for(const o of (OREGAS.ore||[]).concat(OREGAS.gas||[])){ if(!seen.has(o.id)){seen.add(o.id);arbItems.push({id:o.id,name:o.name});} } arbItems.sort((a,b)=>a.name.localeCompare(b.name)); }
+function abSuggest(q){
+  const box=$("ab-suggestions"); const query=q.trim().toLowerCase(); box.innerHTML=""; abActive=-1;
+  if(!query){box.hidden=true;return;}
+  const list=arbItems.filter(o=>o.name.toLowerCase().includes(query)).slice(0,40);
+  if(!list.length){box.hidden=true;return;}
+  for(const o of list){const li=document.createElement("li");li.innerHTML=`<span>${o.name}</span>`;li.addEventListener("mousedown",e=>{e.preventDefault();abSelect(o);});box.appendChild(li);}
+  box.hidden=false;
+}
+function abSelect(it){abCur=it;$("ab-search").value=it.name;$("ab-suggestions").hidden=true;renderArb();}
+async function renderArb(){
+  if(!abCur) return;
+  const tax=Math.max(0,Number($("ab-tax").value)||0)/100;
+  $("ab-empty").hidden=true; $("ab-result").hidden=false; $("ab-result").classList.add("spin");
+  $("ab-product-name").textContent=abCur.name;
+  $("ab-status").textContent="Scanning the five trade hubs…";
+  const per={};
+  await Promise.all(ARB_HUBS.map(async hk=>{
+    let o={}, vol=null;
+    try{const a=await fuzzAgg(HUBS[hk].region,[abCur.id]); o=a[abCur.id]||{};}catch(e){}
+    try{const h=await getHistory(abCur.id,hk); if(h&&h.length){const s=h.slice(-7); vol=s.reduce((x,p)=>x+(p.volume||0),0)/s.length;}}catch(e){}
+    per[hk]={sell:o.sell&&Number(o.sell.min)>0?Number(o.sell.min):null, buy:o.buy&&Number(o.buy.max)>0?Number(o.buy.max):null, vol};
+  }));
+  let bestSell=null,bestSellHub=null,bestBuy=null,bestBuyHub=null;
+  for(const hk of ARB_HUBS){const p=per[hk];if(p.sell!=null&&(bestSell==null||p.sell<bestSell)){bestSell=p.sell;bestSellHub=hk;}if(p.buy!=null&&(bestBuy==null||p.buy>bestBuy)){bestBuy=p.buy;bestBuyHub=hk;}}
+  const net=(bestBuy!=null&&bestSell!=null)?bestBuy*(1-tax)-bestSell:null;
+  const margin=(net!=null&&bestSell>0)?net/bestSell*100:null;
+  $("ab-body").innerHTML=ARB_HUBS.map((hk,i)=>{const p=per[hk];const bf=hk===bestSellHub,st=hk===bestBuyHub;return `<tr style="animation-delay:${i*30}ms"><td>${HUBS[hk].name}${bf?' <span style="color:var(--warn);font-size:.75rem">◄ BUY</span>':''}${st?' <span style="color:var(--good);font-size:.75rem">SELL ►</span>':''}</td><td class="num">${p.sell==null?'—':isk(p.sell)}</td><td class="num">${p.buy==null?'—':isk(p.buy)}</td><td class="num">${p.vol==null?'—':intf(Math.round(p.vol))}</td></tr>`;}).join("");
+  $("ab-product-meta").textContent=(bestSellHub&&bestBuyHub)?`Buy ${HUBS[bestSellHub].name} → haul → sell ${HUBS[bestBuyHub].name}`:"Insufficient market data";
+  countTo($("ab-bestbuy"),bestSell,isk);
+  countTo($("ab-bestsell"),bestBuy,isk);
+  const npe=$("ab-net"); npe.className="stat-val "+(net==null?"":net>=0?"good":"bad"); if(net==null){npe.textContent="—";npe._v=0;} else countTo(npe,net,isk);
+  const me=$("ab-margin"); me.className="stat-val "+(margin==null?"":margin>=0?"good":"bad"); if(margin==null){me.textContent="—";me._v=0;} else countTo(me,margin,v=>v.toFixed(1)+"%");
+  document.querySelectorAll("#tab-arb .summary-grid .stat").forEach(flash);
+  $("ab-status").textContent=`Buy at the lowest sell order, haul, sell into the highest buy order across the 5 hubs. Net / unit = best buy × (1 − ${(tax*100).toFixed(1)}% sales tax) − best sell. Excludes broker fees and freight cost. Daily vol = avg units traded per day over the last 7 days (per region, CCP ESI) — make sure it is enough to actually move your quantity. Live via Fuzzwork & ESI.`;
+  $("ab-result").classList.remove("spin");
+}
+$("ab-search").addEventListener("input",e=>abSuggest(e.target.value));
+$("ab-search").addEventListener("focus",e=>{if(e.target.value)abSuggest(e.target.value);});
+$("ab-search").addEventListener("keydown",e=>{const items=[...$("ab-suggestions").querySelectorAll("li")];if(!items.length)return;if(e.key==="ArrowDown"){e.preventDefault();abActive=Math.min(abActive+1,items.length-1);}else if(e.key==="ArrowUp"){e.preventDefault();abActive=Math.max(abActive-1,0);}else if(e.key==="Enter"){e.preventDefault();const name=(abActive>=0?items[abActive].textContent:$("ab-search").value).trim();const mt=arbItems.find(o=>o.name===name)||arbItems.find(o=>o.name.toLowerCase().includes($("ab-search").value.trim().toLowerCase()));if(mt)abSelect(mt);return;}else return;items.forEach((li,i)=>li.classList.toggle("active",i===abActive));});
+$("ab-tax").addEventListener("change",()=>abCur&&renderArb());
+$("ab-refresh").addEventListener("click",renderArb);
+document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEach(bid=>{const b=$(bid);const inp=$(bid==="rp-suggestions"?"rp-search":"ab-search");if(b&&!b.contains(e.target)&&e.target!==inp)b.hidden=true;});});
+
+(async function init(){
+  try{
+    await loadRecipes();
+    await loadMeta();
+    await loadCat();
+    await loadOreGas();
+    await loadReprocess();
+    populateTechFilter();
+    populateCatFilter();
+    populateOreGroups();
+    buildOreLookup();
+    buildArbItems();
+    els.search.placeholder=`Start typing… ${ITEMS.length} items loaded`;
+    fillSCI();
+  }catch(err){els.banner.hidden=false;els.banner.textContent="Failed to load recipe data: "+err.message;}
+})();
+</script>
+
+<script>
+/* Reactions + Invention tabs — self-contained, reuses global helpers */
+(function(){
+  const num=x=>{const n=Number(x);return isFinite(n)?n:0;};
+  const money=n=>isk(Math.round(n));
+  const sellMin=(agg,id)=>{const o=agg[id];const v=o&&o.sell&&Number(o.sell.min);return v>0?v:0;};
+  let REACT=null, INVEN=null, RXITEMS=[], IVITEMS=[];
+  const DEC=[
+    {name:"None",id:null,pm:1.0,me:0,run:0},
+    {name:"Accelerant",id:34201,pm:1.2,me:2,run:1},
+    {name:"Attainment",id:34202,pm:1.8,me:-1,run:4},
+    {name:"Augmentation",id:34203,pm:0.6,me:-2,run:9},
+    {name:"Optimized Attainment",id:34204,pm:1.9,me:1,run:2},
+    {name:"Optimized Augmentation",id:34205,pm:0.9,me:2,run:7},
+    {name:"Parity",id:34206,pm:1.5,me:1,run:3},
+    {name:"Process",id:34207,pm:1.1,me:3,run:0},
+    {name:"Symmetry",id:34208,pm:1.0,me:1,run:2}
+  ];
+  async function agg(hub,ids){const u=[...new Set(ids.filter(x=>x))];return await fuzzAgg(HUBS[hub].region,u);}
+
+  function wireSearch(inId,sugId,getItems,onPick){
+    const inp=$(inId), sug=$(sugId);
+    inp.addEventListener('input',()=>{
+      const q=inp.value.trim().toLowerCase();
+      if(q.length<2){sug.hidden=true;sug.innerHTML='';return;}
+      const items=getItems().filter(it=>it.name.toLowerCase().includes(q)).slice(0,40);
+      sug.innerHTML=items.map(it=>'<li data-id="'+it.id+'">'+it.name+'</li>').join('');
+      sug.hidden=items.length===0;
+    });
+    sug.addEventListener('click',e=>{const li=e.target.closest('li');if(!li)return;const it=getItems().find(x=>x.id===Number(li.dataset.id));if(!it)return;inp.value=it.name;sug.hidden=true;onPick(it);});
+    document.addEventListener('click',e=>{if(e.target!==inp&&!sug.contains(e.target))sug.hidden=true;});
+  }
+
+  /* ---- Reactions ---- */
+  let rcCur=null;
+  async function renderReact(){
+    if(!rcCur)return;
+    const hub=$('rc-hub').value;
+    const runs=Math.max(1,Math.floor(num($('rc-runs').value))||1);
+    const facTax=num($('rc-tax').value)/100, salesTax=num($('rc-sales').value)/100;
+    const r=REACT.recipes[rcCur.id]; if(!r)return;
+    $('rc-result').hidden=false; $('rc-name').textContent=rcCur.name; $('rc-meta').textContent='Loading live market…';
+    const ms=await getMarketStats(), sys=await getSysAll();
+    const a=await agg(hub, r.m.map(m=>m[0]).concat([rcCur.id]));
+    let inCost=0, eiv=0, rows='';
+    for(const [mid,q] of r.m){
+      const unit=sellMin(a,mid)||(ms.avg[mid]||0);
+      const qty=q*runs, sub=unit*qty;
+      inCost+=sub; eiv+=(ms.adj[mid]||0)*q*runs;
+      rows+='<tr><td>'+(REACT.names[mid]||('#'+mid))+'</td><td class="num">'+intf(qty)+'</td><td class="num">'+money(unit)+'</td><td class="num">'+money(sub)+'</td></tr>';
+    }
+    const sysd=sys[HUBS[hub].system]||{};
+    const idx=sysd.reaction||0;
+    const fee=eiv*(idx+facTax+0.015);
+    const outQty=r.q*runs, outUnit=sellMin(a,rcCur.id)||(ms.avg[rcCur.id]||0), outVal=outQty*outUnit;
+    const net=outVal*(1-salesTax)-inCost-fee;
+    const base=inCost+fee, margin=base>0?net/base*100:0;
+    const col=net>=0?'var(--good)':'var(--bad)';
+    $('rc-body').innerHTML=rows;
+    $('rc-in').textContent=money(inCost);
+    $('rc-out').textContent=money(outVal);
+    $('rc-fee').textContent=money(fee);
+    $('rc-net').textContent=money(net); $('rc-net').style.color=col;
+    $('rc-margin').textContent=margin.toFixed(1)+'%'; $('rc-margin').style.color=col;
+    const hrs=(r.t*runs)/3600;
+    $('rc-meta').textContent=runs+' run(s) · output '+intf(outQty)+' × '+rcCur.name+' · '+hrs.toFixed(1)+' h';
+    $('rc-note').textContent='Inputs bought at '+HUBS[hub].name+' lowest sell; output valued at lowest sell less '+$('rc-sales').value+'% sales tax. Job fee = EIV × (reaction cost index '+(idx*100).toFixed(2)+'% + facility '+$('rc-tax').value+'% + 1.5% SCC). Live via Fuzzwork & CCP ESI.';
+  }
+
+  /* ---- Invention ---- */
+  let ivCur=null;
+  async function renderInvent(){
+    if(!ivCur)return;
+    const hub=$('iv-hub').value;
+    const dec=DEC[Number($('iv-dec').value)||0];
+    const sk=Number($('iv-skill').value)||4, salesTax=num($('iv-sales').value)/100;
+    const inv=INVEN.inv[ivCur.id]; if(!inv)return;
+    $('iv-result').hidden=false; $('iv-name').textContent=ivCur.name; $('iv-meta').textContent='Loading live market…';
+    const ms=await getMarketStats(), sys=await getSysAll();
+    const item=ITEMS.find(x=>x.id===ivCur.id);
+    const ids=inv.dc.map(d=>d[0]).concat([ivCur.id]);
+    if(dec.id)ids.push(dec.id);
+    if(item)item.materials.forEach(m=>ids.push(m.id));
+    const a=await agg(hub, ids);
+    let dcCost=0, rows='';
+    for(const [id,q] of inv.dc){
+      const unit=sellMin(a,id)||(ms.avg[id]||0), sub=unit*q;
+      dcCost+=sub;
+      rows+='<tr><td>'+(INVEN.names[id]||('#'+id))+'</td><td class="num">'+intf(q)+'</td><td class="num">'+money(unit)+'</td><td class="num">'+money(sub)+'</td></tr>';
+    }
+    let decCost=0;
+    if(dec.id){decCost=sellMin(a,dec.id)||(ms.avg[dec.id]||0);rows+='<tr><td>'+dec.name+' Decryptor</td><td class="num">1</td><td class="num">'+money(decCost)+'</td><td class="num">'+money(decCost)+'</td></tr>';}
+    const skMult=1 + sk/40 + (2*sk)/30;
+    const effP=Math.min(1, inv.p*skMult*dec.pm);
+    const runsPer=Math.max(1, inv.runs+dec.run);
+    const attempt=dcCost+decCost;
+    const costPerBPC=effP>0?attempt/effP:0;
+    const invCostRun=runsPer>0?costPerBPC/runsPer:0;
+    let netRun=null, margin=null;
+    const me=2+dec.me, meF=Math.max(0,1-me/100);
+    if(item){
+      let buildCost=0, eiv=0;
+      for(const m of item.materials){const unit=sellMin(a,m.id)||(ms.avg[m.id]||0);buildCost+=unit*m.qty*meF;eiv+=(ms.adj[m.id]||0)*m.qty;}
+      const idx=(sys[HUBS[hub].system]||{}).manufacturing||0;
+      const t2fee=eiv*(idx+0.0025+0.015);
+      const outUnit=sellMin(a,ivCur.id)||(ms.avg[ivCur.id]||0);
+      const t2sell=(item.productQty||1)*outUnit;
+      netRun=t2sell*(1-salesTax)-buildCost-t2fee-invCostRun;
+      const base=buildCost+t2fee+invCostRun;
+      margin=base>0?netRun/base*100:0;
+    }
+    $('iv-body').innerHTML=rows;
+    $('iv-prob').textContent=(effP*100).toFixed(1)+'%';
+    $('iv-runs').textContent=intf(runsPer);
+    $('iv-cost').textContent=money(invCostRun);
+    if(netRun!=null){const col=netRun>=0?'var(--good)':'var(--bad)';$('iv-net').textContent=money(netRun);$('iv-net').style.color=col;$('iv-margin').textContent=margin.toFixed(1)+'%';$('iv-margin').style.color=col;}
+    else{$('iv-net').textContent='n/a';$('iv-margin').textContent='n/a';}
+    const rn=['','I','II','III','IV','V'][sk]||sk;
+    $('iv-meta').textContent='Base chance '+(inv.p*100).toFixed(0)+'% · '+inv.runs+' base runs · skills '+rn+' · T2 ME '+me;
+    $('iv-note').textContent='Success = base '+(inv.p*100).toFixed(0)+'% × skills('+skMult.toFixed(3)+') × decryptor('+dec.pm+'). Invention cost / run = (datacores + decryptor) ÷ success ÷ runs per BPC. Net ISK / T2 run = T2 sell − '+$('iv-sales').value+'% tax − build materials (ME '+me+') − manufacturing fee − invention cost/run. Live via Fuzzwork & CCP ESI.';
+  }
+
+  function fillDec(){$('iv-dec').innerHTML=DEC.map((d,i)=>'<option value="'+i+'">'+d.name+'</option>').join('');}
+
+  async function initRI(){
+    try{
+      const [rx,iv]=await Promise.all([
+        fetch('./data/reactions.json?cb='+Date.now()).then(r=>r.json()),
+        fetch('./data/invention.json?cb='+Date.now()).then(r=>r.json())
+      ]);
+      REACT=rx; INVEN=iv;
+      RXITEMS=Object.keys(REACT.recipes).map(pid=>({id:Number(pid),name:REACT.names[pid]||('#'+pid)})).sort((x,y)=>x.name.localeCompare(y.name));
+      IVITEMS=Object.keys(INVEN.inv).map(id=>({id:Number(id),name:INVEN.names[id]||('#'+id)})).sort((x,y)=>x.name.localeCompare(y.name));
+      fillDec();
+      wireSearch('rc-search','rc-suggestions',()=>RXITEMS,it=>{rcCur=it;renderReact();});
+      wireSearch('iv-search','iv-suggestions',()=>IVITEMS,it=>{ivCur=it;renderInvent();});
+      ['rc-hub','rc-runs','rc-tax','rc-sales'].forEach(id=>$(id).addEventListener('change',renderReact));
+      ['iv-hub','iv-dec','iv-skill','iv-sales'].forEach(id=>$(id).addEventListener('change',renderInvent));
+      $('rc-refresh').addEventListener('click',renderReact);
+      $('iv-refresh').addEventListener('click',renderInvent);
+    }catch(e){console.error('Reactions/Invention init failed',e);}
+  }
+
+  /* keep our two tabs in sync with the tab bar (runs alongside existing switchTab) */
+  document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{
+    const n=b.dataset.tab, r=$('tab-react'), i=$('tab-invent');
+    if(r)r.hidden=n!=='react';
+    if(i)i.hidden=n!=='invent';
+  }));
+  initRI();
+})();
+</script>
+
+
+<script>
+/* Space FX + ambient audio + boot + warp — self-contained */
+(function(){
+  const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+  const mobile=innerWidth<=560;
+
+  /* ---------- Starfield / nebula / planet ---------- */
+  const cv=document.getElementById('space-bg');
+  if(cv){
+    const ctx=cv.getContext('2d');
+    const dpr=Math.min(devicePixelRatio||1, mobile?1:1.5);
+    const STAR_N=mobile?45:140;
+    let W,H,bg,stars=[],shooting=null,t=0,raf;
+    function bake(){
+      bg=document.createElement('canvas');bg.width=W;bg.height=H;const b=bg.getContext('2d');
+      b.globalCompositeOperation='lighter';
+      const neb=[[.22,.28,.5,'84,194,218',.07],[.8,.2,.42,'60,120,180',.06],[.62,.8,.55,'40,90,150',.05]];
+      for(const n of neb){const cx=n[0]*W,cy=n[1]*H,rr=n[2]*Math.max(W,H);const g=b.createRadialGradient(cx,cy,0,cx,cy,rr);g.addColorStop(0,'rgba('+n[3]+','+n[4]+')');g.addColorStop(1,'rgba(0,0,0,0)');b.fillStyle=g;b.fillRect(0,0,W,H);}
+      b.globalCompositeOperation='source-over';
+      const px=-W*0.04,py=H*1.05,pr=Math.min(W,H)*.55;
+      const pg=b.createRadialGradient(px+pr*.3,py-pr*.35,pr*.08,px,py,pr);pg.addColorStop(0,'rgba(34,78,104,.4)');pg.addColorStop(.72,'rgba(10,26,38,.3)');pg.addColorStop(1,'rgba(6,14,20,0)');
+      b.beginPath();b.arc(px,py,pr,0,7);b.fillStyle=pg;b.fill();
+      b.beginPath();b.arc(px,py,pr,0,7);b.strokeStyle='rgba(84,194,218,.12)';b.lineWidth=2*dpr;b.stroke();
+    }
+    function resize(){
+      W=cv.width=Math.floor(innerWidth*dpr);H=cv.height=Math.floor(innerHeight*dpr);
+      cv.style.width=innerWidth+'px';cv.style.height=innerHeight+'px';
+      stars=[];for(let i=0;i<STAR_N;i++)stars.push({x:Math.random()*W,y:Math.random()*H,z:.4+Math.random()*1.6,r:(.4+Math.random()*1.3)*dpr,tw:Math.random()*6.28,tws:.6+Math.random()*1.6});
+      bake();
+    }
+    function drawStars(anim){
+      ctx.clearRect(0,0,W,H);ctx.drawImage(bg,0,0);ctx.globalCompositeOperation='lighter';
+      for(const s of stars){if(anim){s.x-=s.z*.10*dpr;if(s.x<0){s.x=W;s.y=Math.random()*H;}}const tw=anim?(.5+.5*Math.sin(t*.001*s.tws+s.tw)):.7;ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,7);ctx.fillStyle='rgba(200,230,245,'+(.2+tw*.6)+')';ctx.fill();}
+      ctx.globalCompositeOperation='source-over';
+    }
+    function frame(){
+      t+=16;drawStars(true);ctx.globalCompositeOperation='lighter';
+      if(!shooting&&Math.random()<.0025){shooting={x:Math.random()*W*.7,y:Math.random()*H*.35,vx:(6+Math.random()*5)*dpr,vy:(2.2+Math.random()*2)*dpr,life:1};}
+      if(shooting){const s=shooting;ctx.strokeStyle='rgba(180,225,245,'+s.life+')';ctx.lineWidth=1.6*dpr;ctx.beginPath();ctx.moveTo(s.x,s.y);ctx.lineTo(s.x-s.vx*6,s.y-s.vy*6);ctx.stroke();s.x+=s.vx;s.y+=s.vy;s.life-=.018;if(s.life<=0)shooting=null;}
+      ctx.globalCompositeOperation='source-over';raf=requestAnimationFrame(frame);
+    }
+    resize();
+    if(reduce)drawStars(false); else frame();
+    let rt;addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>{cancelAnimationFrame(raf);resize();if(reduce)drawStars(false);else frame();},200);});
+  }
+
+  /* ---------- Ambient audio + UI sounds ---------- */
+  let AC=null,master=null,sfx=null,enabled=false,chatterBus=null,chatterTimer=null;
+  const btn=document.getElementById('audio-toggle');
+  function build(){
+    AC=new (window.AudioContext||window.webkitAudioContext)();
+    master=AC.createGain();master.gain.value=0;master.connect(AC.destination);
+    const drone=AC.createGain();drone.gain.value=.2;drone.connect(master);
+    [55,110,82.5].forEach((f,i)=>{
+      const o=AC.createOscillator();o.type=i?'sine':'triangle';o.frequency.value=f;
+      const g=AC.createGain();g.gain.value=.12/(i+1);
+      const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=420;
+      o.connect(g);g.connect(lp);lp.connect(drone);o.start();
+      const lfo=AC.createOscillator();lfo.frequency.value=.03+i*.017;const lg=AC.createGain();lg.gain.value=1.5;lfo.connect(lg);lg.connect(o.detune);lfo.start();
+    });
+    const buf=AC.createBuffer(1,AC.sampleRate*2,AC.sampleRate);const d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*.5;
+    const noise=AC.createBufferSource();noise.buffer=buf;noise.loop=true;
+    const nf=AC.createBiquadFilter();nf.type='bandpass';nf.frequency.value=600;nf.Q.value=.7;
+    const ng=AC.createGain();ng.gain.value=.022;noise.connect(nf);nf.connect(ng);ng.connect(master);noise.start();
+    const nl=AC.createOscillator();nl.frequency.value=.05;const nlg=AC.createGain();nlg.gain.value=300;nl.connect(nlg);nlg.connect(nf.frequency);nl.start();
+    sfx=AC.createGain();sfx.gain.value=.9;sfx.connect(AC.destination);chatterBus=AC.createGain();chatterBus.gain.value=1;chatterBus.connect(master);var arate=AC.sampleRate,aln=Math.floor(arate*2.4),air=AC.createBuffer(2,aln,arate);for(var acx=0;acx<2;acx++){var adx=air.getChannelData(acx);for(var aix=0;aix<aln;aix++)adx[aix]=(Math.random()*2-1)*Math.pow(1-aix/aln,3);}var arev=AC.createConvolver();arev.buffer=air;var arg=AC.createGain();arg.gain.value=.4;arev.connect(arg);arg.connect(master);var asend=AC.createGain();asend.gain.value=.45;chatterBus.connect(asend);asend.connect(arev);
+  }
+  function blip(freq,dur,type,vol){return;
+    if(!enabled||!AC)return;
+    const o=AC.createOscillator();o.type=type||'sine';o.frequency.value=freq;
+    const g=AC.createGain();const now=AC.currentTime;
+    g.gain.setValueAtTime(0,now);g.gain.linearRampToValueAtTime(vol||.06,now+.008);g.gain.exponentialRampToValueAtTime(.0001,now+(dur||.12));
+    o.connect(g);g.connect(sfx);o.start(now);o.stop(now+(dur||.12)+.03);
+  }
+  function uplink(){if(!AC)return;var now=AC.currentTime,out=sfx||AC.destination;var rate=AC.sampleRate,ln=Math.floor(rate*3.2),ir=AC.createBuffer(2,ln,rate);for(var ch=0;ch<2;ch++){var dd=ir.getChannelData(ch);for(var i=0;i<ln;i++){dd[i]=(Math.random()*2-1)*Math.pow(1-i/ln,2.6);}}var rev=AC.createConvolver();rev.buffer=ir;var rg=AC.createGain();rg.gain.value=.55;rev.connect(rg);rg.connect(out);function snd(node,amt){var g=AC.createGain();g.gain.value=amt;node.connect(g);g.connect(rev);}var sub=AC.createOscillator();sub.type='sine';sub.frequency.setValueAtTime(38,now);sub.frequency.exponentialRampToValueAtTime(72,now+1.6);var sg=AC.createGain();sg.gain.setValueAtTime(0,now);sg.gain.linearRampToValueAtTime(.15,now+.6);sg.gain.exponentialRampToValueAtTime(.0001,now+2.6);sub.connect(sg);sg.connect(out);sub.start(now);sub.stop(now+2.7);var nb=AC.createBuffer(1,rate*2,rate);var nd=nb.getChannelData(0);for(var j=0;j<nd.length;j++)nd[j]=Math.random()*2-1;var noise=AC.createBufferSource();noise.buffer=nb;var nf=AC.createBiquadFilter();nf.type='bandpass';nf.Q.value=1.2;nf.frequency.setValueAtTime(300,now);nf.frequency.exponentialRampToValueAtTime(4200,now+1.1);nf.frequency.exponentialRampToValueAtTime(600,now+2.2);var ng=AC.createGain();ng.gain.setValueAtTime(0,now);ng.gain.linearRampToValueAtTime(.05,now+.5);ng.gain.exponentialRampToValueAtTime(.0001,now+2.2);noise.connect(nf);nf.connect(ng);ng.connect(out);snd(ng,.5);noise.start(now);noise.stop(now+2.3);var lp=AC.createBiquadFilter();lp.type='lowpass';lp.Q.value=6;lp.frequency.setValueAtTime(200,now);lp.frequency.exponentialRampToValueAtTime(2600,now+1.4);var pg=AC.createGain();pg.gain.setValueAtTime(0,now);pg.gain.linearRampToValueAtTime(.08,now+.8);pg.gain.exponentialRampToValueAtTime(.0001,now+2.6);lp.connect(pg);pg.connect(out);snd(pg,.7);[110,110.6,164.81].forEach(function(f){var o=AC.createOscillator();o.type='sawtooth';o.frequency.value=f;o.connect(lp);o.start(now);o.stop(now+2.6);});[[659.25,.9],[987.77,1.15]].forEach(function(p){var f=p[0],st=now+p[1];var o=AC.createOscillator();o.type='sine';o.frequency.value=f;var o2=AC.createOscillator();o2.type='sine';o2.frequency.value=f*2.01;var g=AC.createGain();g.gain.setValueAtTime(0,st);g.gain.linearRampToValueAtTime(.08,st+.02);g.gain.exponentialRampToValueAtTime(.0001,st+1.6);var g2=AC.createGain();g2.gain.value=.22;o2.connect(g2);g2.connect(g);o.connect(g);g.connect(out);snd(g,1.1);o.start(st);o.stop(st+1.7);o2.start(st);o2.stop(st+1.7);});}
+  function chNote(freq,dur,type,vol,when,pan){var t0=when||AC.currentTime;var o=AC.createOscillator();o.type=type||'square';o.frequency.value=freq;var g=AC.createGain();g.gain.setValueAtTime(0,t0);g.gain.linearRampToValueAtTime(vol,t0+.006);g.gain.exponentialRampToValueAtTime(.0001,t0+dur);var node=g;if(AC.createStereoPanner){var pn=AC.createStereoPanner();pn.pan.value=pan||0;g.connect(pn);node=pn;}o.connect(g);node.connect(chatterBus||master);o.start(t0);o.stop(t0+dur+.03);}var CHN=[784,880,1046,1318,1568,1760,2093,523,659];function chPick(a){return a[Math.floor(Math.random()*a.length)];}function chSweep(){var t0=AC.currentTime;var o=AC.createOscillator();o.type='sine';var f0=380+Math.random()*420;o.frequency.setValueAtTime(f0,t0);o.frequency.exponentialRampToValueAtTime(f0*(Math.random()<.5?2.4:.42),t0+.25);var g=AC.createGain();g.gain.setValueAtTime(0,t0);g.gain.linearRampToValueAtTime(.05,t0+.02);g.gain.exponentialRampToValueAtTime(.0001,t0+.3);o.connect(g);g.connect(chatterBus||master);o.start(t0);o.stop(t0+.33);}function chBurst(){var n=3+Math.floor(Math.random()*4),base=chPick(CHN),step=Math.random()<.5?1.12:0.9,t0=AC.currentTime,pan=Math.random()*1.4-.7,k;for(k=0;k<n;k++)chNote(base*Math.pow(step,k),.045,'square',.06,t0+k*.065,pan);}function chatter(){if(!enabled||!AC){chatterTimer=null;return;}var r=Math.random();if(r<.55)chNote(chPick(CHN),.045+Math.random()*.05,chPick(['square','sine','triangle']),.06+Math.random()*.05,AC.currentTime,Math.random()*1.6-.8);else if(r<.75)chBurst();else if(r<.9)chSweep();else chNote(2600+Math.random()*1200,.025,'square',.045,AC.currentTime,Math.random()*1.6-.8);chatterTimer=setTimeout(chatter,320+Math.random()*1150);}
+  function setOn(on){
+    enabled=on;
+    if(on){if(!AC)build();AC.resume&&AC.resume();master.gain.cancelScheduledValues(AC.currentTime);master.gain.linearRampToValueAtTime(.16,AC.currentTime+.9);btn.classList.remove('off');btn.innerHTML='&#128266;';blip(660,.12,'triangle',.05);if(!chatterTimer)chatter();}
+    else{if(master)master.gain.linearRampToValueAtTime(0,AC.currentTime+.4);btn.classList.add('off');btn.innerHTML='&#128264;';if(chatterTimer){clearTimeout(chatterTimer);chatterTimer=null;}}
+    try{localStorage.setItem('eveAudio',on?'1':'0');}catch(e){}
+  }
+  if(btn){btn.classList.add('off');btn.addEventListener('click',()=>setOn(!enabled));}
+  document.addEventListener('click',e=>{
+    if(!enabled)return;
+    if(e.target.closest('#audio-toggle'))return;
+    if(e.target.closest('.tab'))blip(560,.14,'triangle',.05);
+    else if(e.target.closest('.btn'))blip(720,.1,'square',.03);
+    else if(e.target.closest('#rc-suggestions li,#iv-suggestions li,#ab-suggestions li,.suggestions li'))blip(840,.08,'sine',.03);
+  },true);
+  document.querySelectorAll('.tab').forEach(x=>x.addEventListener('mouseenter',()=>blip(880,.05,'sine',.018)));
+  /* soft confirm when a result panel appears */
+  document.querySelectorAll('.result').forEach(sec=>{
+    new MutationObserver(muts=>{muts.forEach(m=>{const was=m.oldValue!==null;const now=sec.hasAttribute('hidden');if(was&&!now){blip(523,.1,'sine',.035);setTimeout(()=>blip(784,.12,'sine',.03),95);}});}).observe(sec,{attributes:true,attributeFilter:['hidden'],attributeOldValue:true});
+  });
+
+  /* ---------- Tab warp ---------- */
+  document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{
+    setTimeout(()=>{const vis=[...document.querySelectorAll('main.wrap > [id^="tab-"]')].find(el=>!el.hidden);if(vis){vis.classList.remove('warp-in');void vis.offsetWidth;vis.classList.add('warp-in');}},10);
+  }));
+
+  /* ---------- Boot intro ---------- */
+  const boot=document.getElementById('boot');
+  if(boot){
+    const lines=boot.querySelector('.boot-lines');
+    const seq=['&gt; establishing capsuleer uplink&hellip;','&gt; syncing CCP ESI telemetry&hellip;','&gt; loading market ledgers&hellip;','&gt; <b>uplink established</b>'];
+    let i=0;(function step(){if(i<seq.length){lines.innerHTML+=seq[i]+'<br>';i++;setTimeout(step,380);}})();
+    const done=()=>{if(boot.classList.contains('hide'))return;boot.classList.add('hide');setTimeout(()=>boot.remove(),700);};
+    setTimeout(done,mobile?3200:4200);
+    boot.addEventListener('click',done);
+  }
+
+  /* restore audio pref (needs a gesture to actually start) */
+  try{if(false){const arm=()=>{setOn(true);removeEventListener('pointerdown',arm);};addEventListener('pointerdown',arm,{once:true});}}catch(e){}
+})();
+</script>
+
+
+<script>
+/* Watchlist + remember settings + CSV export — self-contained */
+(function(){
+  function $(id){return document.getElementById(id);}
+  function whenReady(cb){if(typeof ITEMS!=='undefined'&&ITEMS.length){cb();return;}let n=0;var iv=setInterval(function(){if((typeof ITEMS!=='undefined'&&ITEMS.length)||n++>80){clearInterval(iv);cb();}},100);}
+
+  whenReady(function(){
+    var nameToId={};ITEMS.forEach(function(it){if(!(it.name in nameToId))nameToId[it.name]=it.id;});
+
+    /* ---- favorites store ---- */
+    function getFavs(){try{return JSON.parse(localStorage.getItem('eveFavs')||'[]');}catch(e){return [];}}
+    function setFavs(a){try{localStorage.setItem('eveFavs',JSON.stringify(a));}catch(e){}}
+    function isFav(id){return getFavs().some(function(f){return f.id===id;});}
+    function toggleFav(id,name){var a=getFavs();if(a.some(function(f){return f.id===id;}))a=a.filter(function(f){return f.id!==id;});else a.push({id:id,name:name});setFavs(a);updateStars();}
+
+    function currentCalcItem(){var e=$('product-name');if(!e)return null;var n=e.textContent.trim();if(!n||n==='—')return null;var id=nameToId[n];return id?{id:id,name:n}:null;}
+
+    /* ---- calc header buttons ---- */
+    var ph=document.querySelector('#tab-calc .product-head');
+    if(ph){
+      var refresh=$('refresh');
+      var wrap=document.createElement('div');wrap.className='hd-btns';
+      var star=document.createElement('button');star.className='fav-star';star.id='fav-toggle';star.title='Add to watchlist';star.innerHTML='☆';
+      var csv=document.createElement('button');csv.className='btn';csv.id='calc-csv';csv.innerHTML='⚁ CSV';
+      refresh.parentNode.insertBefore(wrap,refresh);wrap.appendChild(star);wrap.appendChild(csv);wrap.appendChild(refresh);
+      star.addEventListener('click',function(){var it=currentCalcItem();if(it)toggleFav(it.id,it.name);});
+      csv.addEventListener('click',function(){exportBuildCSV();});
+    }
+
+    /* ---- Top Profitable stars ---- */
+    function injectTopStars(){
+      var body=$('top-body');if(!body)return;
+      body.querySelectorAll('tr').forEach(function(tr){
+        var cell=tr.children[1];if(!cell||cell.querySelector('.fav-star'))return;
+        var name=cell.textContent.trim();var id=nameToId[name];if(!id)return;
+        var b=document.createElement('button');b.className='fav-star';b.setAttribute('data-id',id);b.innerHTML=isFav(id)?'★':'☆';if(isFav(id))b.classList.add('on');
+        b.addEventListener('click',function(e){e.stopPropagation();toggleFav(id,name);});
+        cell.insertBefore(b,cell.firstChild);
+      });
+    }
+    var topBody=$('top-body');if(topBody){new MutationObserver(injectTopStars).observe(topBody,{childList:true});injectTopStars();}
+
+    function updateStars(){
+      var it=currentCalcItem();var ft=$('fav-toggle');
+      if(ft){var on=it&&isFav(it.id);ft.innerHTML=on?'★':'☆';ft.classList.toggle('on',!!on);ft.title=on?'Remove from watchlist':'Add to watchlist';}
+      var body=$('top-body');if(body)body.querySelectorAll('.fav-star').forEach(function(s){var id=Number(s.getAttribute('data-id'));var on=isFav(id);s.classList.toggle('on',on);s.innerHTML=on?'★':'☆';});
+    }
+    var pn=$('product-name');if(pn)new MutationObserver(updateStars).observe(pn,{childList:true,characterData:true,subtree:true});
+
+    /* ---- settings ---- */
+    var SET=['hub','me','runs','buystrat','sellstrat','f-sci','f-facility','f-scc','f-sales','f-broker'];
+    function saveSettings(){var o={};SET.forEach(function(id){var e=$(id);if(e)o[id]=e.value;});try{localStorage.setItem('eveSettings',JSON.stringify(o));}catch(e){}}
+    function restoreSettings(){var o;try{o=JSON.parse(localStorage.getItem('eveSettings')||'null');}catch(e){}if(!o)return;SET.forEach(function(id){var e=$(id);if(e&&o[id]!=null&&o[id]!=='')e.value=o[id];});}
+    SET.forEach(function(id){var e=$(id);if(e)e.addEventListener('change',saveSettings);});
+
+    /* ---- last item reopen ---- */
+    var sug=$('suggestions');
+    if(sug)sug.addEventListener('mousedown',function(e){var li=e.target.closest('li');if(li){var sp=li.querySelector('span');var nm=sp?sp.textContent.trim():li.textContent.trim();try{localStorage.setItem('eveLastItem',nm);}catch(x){}}},true);
+    function reopenLast(){
+      var nm;try{nm=localStorage.getItem('eveLastItem');}catch(e){}
+      if(!nm||!$('search'))return;
+      var s=$('search');s.value=nm;s.dispatchEvent(new Event('input',{bubbles:true}));
+      setTimeout(function(){var su=$('suggestions');if(!su||!su.children.length)return;var li=[].slice.call(su.children).find(function(x){var sp=x.querySelector('span');return sp&&sp.textContent.trim()===nm;})||su.children[0];['mousedown','mouseup','click'].forEach(function(t){li.dispatchEvent(new MouseEvent(t,{bubbles:true,cancelable:true,view:window}));});},400);
+    }
+
+    /* ---- watchlist render ---- */
+    function readCalcSettings(){var n=function(id){return Number(($(id)||{}).value)||0;};return {hub:($('hub')||{}).value||'jita',me:n('me'),runs:Math.max(1,n('runs')),buystrat:($('buystrat')||{}).value||'sell',sellstrat:($('sellstrat')||{}).value||'sell',sci:n('f-sci'),fac:n('f-facility'),scc:n('f-scc'),sales:n('f-sales'),broker:n('f-broker')};}
+    var wlRows=[];
+    async function renderWatch(){
+      var favs=getFavs();
+      var ew=$('wl-empty-wrap'),tw=$('wl-table-wrap');
+      if(!favs.length){ew.hidden=false;tw.hidden=true;$('wl-meta').textContent='Star items to track them here.';wlRows=[];return;}
+      ew.hidden=true;tw.hidden=false;$('wl-meta').textContent='Loading live market…';
+      var S=readCalcSettings();
+      var ms=await getMarketStats();
+      var items=favs.map(function(f){return ITEMS.find(function(x){return x.id===f.id;});}).filter(Boolean);
+      var ids={};items.forEach(function(it){ids[it.id]=1;it.materials.forEach(function(m){ids[m.id]=1;});});
+      var agg=await fuzzAgg(HUBS[S.hub].region,Object.keys(ids).map(Number));
+      function px(id,mode){var o=agg[id]||{};if(mode==='sell'){var v=o.sell&&Number(o.sell.min);return v>0?v:0;}var w=o.buy&&Number(o.buy.max);return w>0?w:0;}
+      var meF=1-S.me/100;
+      wlRows=items.map(function(it){
+        var materials=0,eiv=0;
+        it.materials.forEach(function(m){var qty=Math.max(1,Math.ceil(m.qty*meF))*S.runs;materials+=qty*(px(m.id,S.buystrat)||ms.avg[m.id]||0);eiv+=(ms.adj[m.id]||0)*m.qty*S.runs;});
+        var jobFee=eiv*(S.sci+S.fac+S.scc)/100;
+        var prodUnit=px(it.id,S.sellstrat)||ms.avg[it.id]||0;
+        var revenue=(it.productQty||1)*S.runs*prodUnit;
+        var totalCost=materials+jobFee+revenue*S.sales/100+revenue*S.broker/100;
+        var profit=revenue-totalCost,margin=revenue>0?profit/revenue*100:0;
+        return {id:it.id,name:it.name,totalCost:totalCost,revenue:revenue,profit:profit,margin:margin};
+      });
+      wlRows.sort(function(a,b){return b.profit-a.profit;});
+      $('wl-body').innerHTML=wlRows.map(function(r){var col=r.profit>=0?'var(--good)':'var(--bad)';return '<tr><td><button class="fav-star on" data-id="'+r.id+'" title="Remove">★</button></td><td data-name="'+r.name.replace(/"/g,'&quot;')+'">'+r.name+'</td><td class="num">'+isk(Math.round(r.totalCost))+'</td><td class="num">'+isk(Math.round(r.revenue))+'</td><td class="num" style="color:'+col+'">'+isk(Math.round(r.profit))+'</td><td class="num" style="color:'+col+'">'+r.margin.toFixed(1)+'%</td></tr>';}).join('');
+      $('wl-meta').textContent=items.length+' item(s) · '+HUBS[S.hub].name+' · ME '+S.me+'% · live';
+      $('wl-body').querySelectorAll('.fav-star').forEach(function(b){b.addEventListener('click',function(){toggleFav(Number(b.getAttribute('data-id')),'');renderWatch();});});
+      $('wl-body').querySelectorAll('td[data-name]').forEach(function(td){td.addEventListener('click',function(){openInCalc(td.getAttribute('data-name'));});});
+    }
+    function openInCalc(name){
+      var calcBtn=[].slice.call(document.querySelectorAll('.tab')).find(function(b){return b.dataset.tab==='calc';});
+      if(calcBtn) calcBtn.click();
+      var s=$('search');if(!s)return;s.value=name;s.dispatchEvent(new Event('input',{bubbles:true}));
+      setTimeout(function(){var su=$('suggestions');if(!su||!su.children.length)return;var li=[].slice.call(su.children).find(function(x){var sp=x.querySelector('span');return sp&&sp.textContent.trim()===name;})||su.children[0];['mousedown','mouseup','click'].forEach(function(t){li.dispatchEvent(new MouseEvent(t,{bubbles:true,cancelable:true,view:window}));});},350);
+    }
+
+    /* ---- CSV export ---- */
+    function downloadCSV(fname,rows){
+      var csv=rows.map(function(r){return r.map(function(c){c=(c==null?'':String(c));return /[",\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c;}).join(',');}).join('\r\n');
+      var blob=new Blob([csv],{type:'text/csv'});var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download=fname;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(url);a.remove();},100);
+    }
+    function exportBuildCSV(){
+      var e=$('product-name');var name=e?e.textContent.trim():'';if(!name||name==='—')return;
+      var rows=[['Material','Qty per job','Unit price','Subtotal']];
+      document.querySelectorAll('#mat-body tr').forEach(function(tr){rows.push([].slice.call(tr.children).map(function(td){return td.textContent.trim();}));});
+      rows.push([]);
+      rows.push(['Total cost',($('s-matcost')||{}).textContent]);
+      rows.push(['Product value',($('s-revenue')||{}).textContent]);
+      rows.push(['Net profit',($('s-profit')||{}).textContent]);
+      rows.push(['Margin',($('s-margin')||{}).textContent]);
+      downloadCSV('eve-build-'+name.replace(/[^a-z0-9]+/gi,'_')+'.csv',rows);
+    }
+    if($('wl-csv'))$('wl-csv').addEventListener('click',function(){
+      var rows=[['Item','Build cost','Sell value','Net profit','Margin %']];
+      wlRows.forEach(function(r){rows.push([r.name,Math.round(r.totalCost),Math.round(r.revenue),Math.round(r.profit),r.margin.toFixed(1)]);});
+      downloadCSV('eve-watchlist.csv',rows);
+    });
+    if($('wl-refresh'))$('wl-refresh').addEventListener('click',renderWatch);
+
+    /* ---- tab wiring ---- */
+    document.querySelectorAll('.tab').forEach(function(b){b.addEventListener('click',function(){var n=b.dataset.tab;var w=$('tab-watch');if(w)w.hidden=n!=='watch';if(n==='watch')renderWatch();});});
+
+    /* ---- init ---- */
+    restoreSettings();
+    updateStars();
+    reopenLast();
+  });
+})();
+</script>
+
+
+<script>
+/* Hub Arbitrage — live prices + inferred market-activity feed (self-contained) */
+(function(){
+  function $(id){return document.getElementById(id);}
+  function ready(cb){if(typeof arbItems!=='undefined'&&typeof fuzzAgg==='function'&&typeof HUBS!=='undefined'){cb();return;}var n=0,iv=setInterval(function(){if((typeof arbItems!=='undefined'&&typeof fuzzAgg==='function'&&typeof HUBS!=='undefined')||n++>100){clearInterval(iv);cb();}},100);}
+  ready(function(){
+    var HUBK=['jita','amarr','dodixie','rens','hek'];
+    var POLL=45000;
+    var result=$('ab-result'); if(!result)return;
+
+    var st=document.createElement('style');
+    st.textContent=''
+      +'#ab-live-toggle.on{border-color:var(--good);color:var(--good);animation:ab-pulse 1.5s ease-in-out infinite}'
+      +'@keyframes ab-pulse{0%,100%{box-shadow:0 0 8px rgba(86,208,168,.15)}50%{box-shadow:0 0 14px rgba(86,208,168,.55)}}'
+      +'#ab-feed li{animation:ab-slide .35s ease}'
+      +'@keyframes ab-slide{0%{opacity:0;transform:translateY(-6px)}100%{opacity:1;transform:none}}'
+      +'.ab-flash{background:rgba(84,194,218,.28)!important;transition:background .8s ease}';
+    document.head.appendChild(st);
+
+    var bar=document.createElement('div'); bar.className='panel'; bar.id='ab-live-bar';
+    bar.innerHTML='<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">'
+      +'<button id="ab-live-toggle" class="btn on">&#9679; LIVE</button>'
+      +'<span class="muted small" id="ab-live-status">starting live feed&hellip;</span>'
+      +'<span class="muted small" id="ab-live-updated" style="margin-left:auto"></span></div>';
+
+    var feed=document.createElement('div'); feed.className='panel'; feed.id='ab-activity';
+    feed.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b>Market activity</b><span class="muted small">inferred fills across all trade hubs</span></div>'
+      +'<ul id="ab-feed" style="list-style:none;margin:10px 0 0;padding:0;max-height:280px;overflow:auto;font-family:var(--mono);font-size:.82rem"></ul>'
+      +'<p class="muted small" style="margin:10px 0 0">EVE exposes no public live trade tape, so these are <b>inferred</b> from order-book volume changes as CCP ESI data refreshes (~5 min cadence). &Delta;vol = units that left the book at the shown price.</p>';
+
+    result.insertBefore(bar, result.children[1]||null);
+    result.appendChild(feed);
+
+    var live=true, timer=null, lastId=null, lastName='', lastUpd=0, snap={};
+
+    function curItem(){var e=$('ab-product-name');if(!e)return null;var n=e.textContent.trim();if(!n||n==='—')return null;var it=arbItems.find(function(x){return x.name===n;});return it||null;}
+    function money(n){try{return isk(Math.round(n));}catch(e){return Math.round(n).toLocaleString()+' ISK';}}
+    function vol(n){try{return intf(n);}catch(e){return String(n);}}
+    function clk(){var d=new Date();return d.toTimeString().slice(0,8);}
+    function setStatus(t){var s=$('ab-live-status');if(s)s.textContent=t;}
+    function setUpd(){lastUpd=Date.now();var u=$('ab-live-updated');if(u)u.textContent='updated '+clk();}
+    function addFeed(html){var ul=$('ab-feed');if(!ul)return;var li=document.createElement('li');li.style.padding='4px 0';li.style.borderBottom='1px solid rgba(84,194,218,.08)';li.innerHTML=html;ul.insertBefore(li,ul.firstChild);while(ul.children.length>30)ul.removeChild(ul.lastChild);}
+
+    async function poll(){
+      var it=curItem();
+      if(!it){setStatus('select an item to go live');return;}
+      if(it.id!==lastId){lastId=it.id;snap={};var f=$('ab-feed');if(f)f.innerHTML='';}
+      var rb=$('ab-refresh'); if(rb) rb.click();
+      HUBK.forEach(function(hk){
+        fuzzAgg(HUBS[hk].region,[it.id]).then(function(agg){
+          var o=agg[it.id]||{};
+          var sv=o.sell?Number(o.sell.volume):0, bv=o.buy?Number(o.buy.volume):0;
+          var smin=o.sell?Number(o.sell.min):0, bmax=o.buy?Number(o.buy.max):0;
+          var prev=snap[hk];
+          if(prev){
+            var ds=prev.sv-sv, db=prev.bv-bv;
+            if(ds>0 && smin>0) addFeed('<span class="muted">'+clk()+'</span> &middot; <b>'+HUBS[hk].name+'</b> &middot; <span style="color:var(--bad)">&#9660; ~'+vol(ds)+' sold</span> @ <span style="color:var(--accent)">'+money(smin)+'</span>');
+            if(db>0 && bmax>0) addFeed('<span class="muted">'+clk()+'</span> &middot; <b>'+HUBS[hk].name+'</b> &middot; <span style="color:var(--good)">&#9650; ~'+vol(db)+' bought</span> @ '+money(bmax));
+          }
+          snap[hk]={sv:sv,bv:bv};
+        }).catch(function(){});
+      });
+      setUpd();
+      setStatus('live · polling every '+(POLL/1000)+'s across '+HUBK.length+' hubs');
+    }
+
+    function start(){ if(timer)return; var t=$('ab-live-toggle'); if(t)t.classList.add('on'); poll(); timer=setInterval(function(){ var tab=$('tab-arb'); if(tab&&tab.hidden)return; poll(); }, POLL); }
+    function stop(){ if(timer){clearInterval(timer);timer=null;} var t=$('ab-live-toggle'); if(t)t.classList.remove('on'); setStatus('paused'); }
+
+    $('ab-live-toggle').addEventListener('click',function(){ live=!live; if(live)start(); else stop(); });
+
+    var pn=$('ab-product-name');
+    if(pn) new MutationObserver(function(){ var e=$('ab-product-name'); if(!e)return; var n=e.textContent.trim(); if(n===lastName)return; lastName=n; if(live){ if(!timer) start(); else poll(); } }).observe(pn,{childList:true,characterData:true,subtree:true});
+
+    ['ab-bestsell','ab-bestbuy','ab-net','ab-margin'].forEach(function(id){var el=$(id);if(!el)return;var prevTxt=el.textContent;new MutationObserver(function(){var t=el.textContent;if(t===prevTxt)return;prevTxt=t;el.classList.remove('ab-flash');void el.offsetWidth;el.classList.add('ab-flash');setTimeout(function(){el.classList.remove('ab-flash');},850);}).observe(el,{childList:true,characterData:true,subtree:true});});
+
+    if(live) start();
+  });
+})();
+</script>
+
+
+<script>
+/* Category price breakdown — replaces Top 10 Profitable tab (self-contained) */
+(function(){
+  function $(id){return document.getElementById(id);}
+  function ready(cb){if(typeof ITEMS!=='undefined'&&ITEMS.length&&typeof fuzzAgg==='function'&&typeof HUBS!=='undefined'){cb();return;}var n=0,iv=setInterval(function(){if((typeof ITEMS!=='undefined'&&ITEMS.length&&typeof fuzzAgg==='function'&&typeof HUBS!=='undefined')||n++>100){clearInterval(iv);cb();}},100);}
+  ready(function(){
+    var tab=$('tab-top'); if(!tab)return;
+    var HUBK=['jita','amarr','dodixie','rens','hek'];
+    var GROUPS=null;var CATMAP={"Combat Battlecruiser":"Ships","Mining Barge":"Ships","Assault Frigate":"Ships","Heavy Assault Cruiser":"Ships","Clone":"Accessories","Freighter":"Ships","Battleship":"Ships","Deep Space Transport":"Ships","Destroyer":"Ships","Interdictor":"Ships","Command Ship":"Ships","Titan":"Ships","Exhumer":"Ships","Fuel Block":"Materials","Frigate":"Ships","Dreadnought":"Ships","Shuttle":"Ships","Cruiser":"Ships","Hauler":"Ships","Carrier":"Ships","Supercarrier":"Ships","Covert Ops":"Ships","Interceptor":"Ships","Logistics":"Ships","Force Recon Ship":"Ships","Stealth Bomber":"Ships","Heavy Interdiction Cruiser":"Ships","Black Ops":"Ships","Electronic Attack Ship":"Ships","Capital Industrial Ship":"Ships","Marauder":"Ships","Combat Recon Ship":"Ships","Jump Freighter":"Ships","Industrial Command Ship":"Ships","Logistics Frigate":"Ships","Expedition Frigate":"Ships","Command Destroyer":"Ships","Attack Battlecruiser":"Ships","Tactical Destroyer":"Ships","Force Auxiliary":"Ships","Lancer Dreadnought":"Ships","Expedition Command Ship":"Ships","Special Edition Yachts":"Ships","Remote Shield Booster":"Modules","Warp Scrambler":"Modules","Shield Booster":"Modules","Mining Laser":"Modules","Shield Extender":"Modules","Energy Weapon":"Modules","Ship Scanner":"Modules","Mining Survey Chipset":"Modules","Propulsion Module":"Modules","Capacitor Recharger":"Modules","Command Carrier":"Ships","Shield Recharger":"Modules","Cargo Scanner":"Modules","Flag Cruiser":"Ships","Projectile Weapon":"Modules","Blockade Runner":"Ships","Strategic Cruiser":"Ships","Shield Power Relay":"Modules","Gyrostabilizer":"Modules","Capacitor Battery":"Modules","Damage Control":"Modules","Armor Repair Unit":"Modules","Hull Repair Unit":"Modules","Stasis Web":"Modules","Remote Capacitor Transmitter":"Modules","Energy Nosferatu":"Modules","Smart Bomb":"Modules","Energy Neutralizer":"Modules","Hybrid Weapon":"Modules","Capacitor Booster":"Modules","Shield Hardener":"Modules","Reinforced Bulkhead":"Modules","Burst Jammer":"Modules","Sensor Dampener":"Modules","Remote Tracking Computer":"Modules","Heat Sink":"Modules","ECCM":"Modules","Sensor Backup Array":"Modules","Signal Amplifier":"Modules","Passive Targeting System":"Modules","Armor Coating":"Modules","Automated Targeting System":"Modules","Tracking Enhancer":"Modules","ECM":"Modules","Sensor Booster":"Modules","Tracking Computer":"Modules","CPU Enhancer":"Modules","Projected ECCM":"Modules","Remote Sensor Booster":"Modules","Weapon Disruptor":"Modules","Shield Resistance Amplifier":"Modules","Magnetic Field Stabilizer":"Modules","Countermeasure Launcher":"Modules","Warp Core Stabilizer":"Modules","Gang Coordinator":"Modules","Armor Plate":"Modules","Remote Armor Repairer":"Modules","Armor Hardener":"Modules","Energized Armor Membrane":"Modules","Shield Boost Amplifier":"Modules","Auxiliary Power Core":"Modules","Cloaking Device":"Modules","QA Module":"Modules","Ballistic Control System":"Modules","Signature Scrambling":"Modules","Target Painter":"Modules","Fighter Support Unit":"Modules","Strip Miner":"Modules","System Scanner":"Modules","Scan Probe Launcher":"Modules","Frequency Mining Laser":"Modules","Missile Launcher Rocket":"Modules","Missile Launcher Cruise":"Modules","Missile Launcher Torpedo":"Modules","Missile Launcher Light":"Modules","Missile Launcher Heavy":"Modules","Missile Launcher Rapid Light":"Modules","Missile Launcher Defender":"Modules","ECM Stabilizer":"Modules","Siege Module":"Modules","Missile Launcher XL Torpedo":"Modules","Mining Upgrade":"Modules","Remote Hull Repairer":"Modules","Interdiction Sphere Launcher":"Modules","Jump Portal Generator":"Modules","Super Weapon":"Modules","Tractor Beam":"Modules","Drone Damage Modules":"Modules","Drone Tracking Modules":"Modules","Drone Control Range Module":"Modules","Data Miners":"Modules","Drone Navigation Computer":"Modules","Gas Cloud Scoops":"Modules","Cynosural Field Generator":"Modules","Overdrive Injector System":"Modules","Reactor Control Unit":"Modules","Expanded Cargohold":"Modules","Inertial Stabilizer":"Modules","Rig Energy Weapon":"Modules","Shield Flux Coil":"Modules","Missile Launcher Heavy Assault":"Modules","Nanofiber Internal Structure":"Modules","Capacitor Power Relay":"Modules","Rig Shield":"Modules","Rig Armor":"Modules","Capacitor Flux Coil":"Modules","Power Diagnostic System":"Modules","Rig Projectile Weapon":"Modules","Rig Hybrid Weapon":"Modules","Rig Drones":"Modules","Rig Launcher":"Modules","Rig Navigation":"Modules","Rig Core":"Modules","Rig Electronic Systems":"Modules","Warp Disrupt Field Generator":"Modules","Missile Launcher Bomb":"Modules","Clone Vat Bay":"Modules","Burst Projectors":"Modules","Rig Mining":"Modules","Salvager":"Modules","Ancillary Shield Booster":"Modules","Micro Jump Drive":"Modules","Rig Resource Processing":"Modules","Armor Resistance Shift Hardener":"Modules","Ancillary Armor Repairer":"Modules","Signature Suppressor":"Modules","Scanning Upgrade":"Modules","Survey Probe Launcher":"Modules","Rig Scanning":"Modules","Rig Targeting":"Modules","Scanning Upgrade Time":"Modules","Jump Drive Economizer":"Modules","Missile Guidance Computer":"Modules","Entosis Link":"Modules","Missile Launcher Rapid Heavy":"Modules","Drone Tracking Enhancer":"Modules","Rig Anchor":"Modules","Missile Guidance Enhancer":"Modules","Micro Jump Field Generators":"Modules","Warp Accelerator":"Modules","Stasis Grappler":"Modules","Missile Launcher Rapid Torpedo":"Modules","Missile Launcher XL Cruise":"Modules","Ancillary Remote Shield Booster":"Modules","Capital Sensor Array":"Modules","Flex Armor Hardener":"Modules","Ancillary Remote Armor Repairer":"Modules","Flex Shield Hardener":"Modules","Command Burst":"Modules","Titan Phenomena Generator":"Modules","Precursor Weapon":"Modules","Entropic Radiation Sink":"Modules","Mutadaptive Remote Armor Repairer":"Modules","Vorton Projector Upgrade":"Modules","Covert Jump Portal Generator":"Modules","Mass Entanglers":"Modules","Interdiction Nullifier":"Modules","Stasis Nullifiers":"Modules","Gas Cloud Harvesters":"Modules","Vorton Projector":"Modules","Hybrid Charge":"Ammo & Charges","Frequency Crystal":"Ammo & Charges","Compressors":"Modules","Projectile Ammo":"Ammo & Charges","Capital Mobility Modules":"Modules","Industrial Jump Portal Generator":"Modules","Breacher Pod Launchers":"Modules","Defender Missiles":"Ammo & Charges","Capacitor Booster Charge":"Ammo & Charges","Torpedo":"Ammo & Charges","Bomb":"Ammo & Charges","Mine":"Ammo & Charges","Advanced Autocannon Ammo":"Ammo & Charges","Advanced Blaster Charge":"Ammo & Charges","Advanced Beam Laser Crystal":"Ammo & Charges","Advanced Railgun Charge":"Ammo & Charges","Advanced Artillery Ammo":"Ammo & Charges","Advanced Pulse Laser Crystal":"Ammo & Charges","Heavy Missile":"Ammo & Charges","Rocket":"Ammo & Charges","Auto-Targeting Light Missile":"Ammo & Charges","Cruise Missile":"Ammo & Charges","Auto-Targeting Heavy Missile":"Ammo & Charges","Auto-Targeting Cruise Missile":"Ammo & Charges","Light Missile":"Ammo & Charges","XL Torpedo":"Ammo & Charges","Mining Crystal":"Ammo & Charges","Advanced Light Missile":"Ammo & Charges","Advanced Heavy Assault Missile":"Ammo & Charges","Interdiction Probe":"Ammo & Charges","Scanner Probe":"Ammo & Charges","Advanced Rocket":"Ammo & Charges","Survey Probe":"Ammo & Charges","Advanced Cruise Missile":"Ammo & Charges","Advanced Torpedo":"Ammo & Charges","Mercoxit Mining Crystal":"Ammo & Charges","Heavy Assault Missile":"Ammo & Charges","Bomb Energy":"Ammo & Charges","Planet Satellites":"Ammo & Charges","Warp Disruption Script":"Ammo & Charges","Tracking Disruption Script":"Ammo & Charges","Tracking Script":"Ammo & Charges","Sensor Dampener Script":"Ammo & Charges","Nanite Repair Paste":"Ammo & Charges","Sensor Booster Script":"Ammo & Charges","XL Cruise Missile":"Ammo & Charges","Bomb ECM":"Ammo & Charges","Advanced Heavy Missile":"Ammo & Charges","Shield Booster Script":"Ammo & Charges","Missile Guidance Script":"Ammo & Charges","Structure Anti-Capital Missile":"Ammo & Charges","Structure Anti-Subcapital Missile":"Ammo & Charges","Guided Bomb":"Ammo & Charges","Structure ECM script":"Ammo & Charges","Structure Resistance Switcher Script":"Ammo & Charges","Structure Warp Disruptor Script":"Ammo & Charges","Guidance Disruption Script":"Ammo & Charges","Flex Shield Hardener Script":"Ammo & Charges","Advanced XL Torpedo":"Ammo & Charges","Flex Armor Hardener Script":"Ammo & Charges","Advanced XL Cruise Missile":"Ammo & Charges","Skirmish Command Burst Charges":"Ammo & Charges","Shield Command Burst Charges":"Ammo & Charges","Mining Foreman Burst Charges":"Ammo & Charges","Information Command Burst Charges":"Ammo & Charges","Advanced Exotic Plasma Charge":"Ammo & Charges","Exotic Plasma Charge":"Ammo & Charges","Armor Command Burst Charges":"Ammo & Charges","Advanced Condenser Pack":"Ammo & Charges","SCARAB Breacher Pods":"Ammo & Charges","Structure Area Denial Ammunition":"Ammo & Charges","Expedition Command Burst Charges":"Ammo & Charges","Interdiction Burst Probes":"Ammo & Charges","General":"Commodities","Livestock":"Commodities","Condenser Pack":"Ammo & Charges","Miscellaneous":"Commodities","Tool":"Commodities","Construction Components":"Commodities","Commodities":"Commodities","Structure Components":"Commodities","Data Interfaces":"Commodities","Capital Construction Components":"Commodities","Advanced Capital Construction Components":"Commodities","Depricated Subsystems":"Commodities","Hybrid Tech Components":"Commodities","Warp Matrix Filaments":"Commodities","Mining Drone":"Drones","Electronic Warfare Drone":"Drones","Expired Jump Filaments":"Commodities","Stasis Webifying Drone":"Drones","Unknown Components":"Commodities","Jump Filaments":"Commodities","Logistic Drone":"Drones","Mutaplasmids":"Commodities","Energy Neutralizer Drone":"Drones","Expired Abyssal Battlefields Filaments":"Commodities","Combat Drone":"Drones","Salvage Drone":"Drones","Cyberimplant":"Implants & Boosters","Booster":"Implants & Boosters","Cyber Electronic Systems":"Implants & Boosters","Cyber Scanning":"Implants & Boosters","Mobile Warp Disruptor":"Deployables","Mobile Depot":"Deployables","Mobile Cyno Inhibitor":"Deployables","Mobile Siphon Unit":"Deployables","Mobile Tractor Unit":"Deployables","Mobile Jump Disruptor":"Deployables","Mobile Scan Inhibitor":"Deployables","Mobile Analysis Beacon":"Deployables","Encounter Surveillance System":"Deployables","Reprocessing Array":"Starbase / POS","Mobile Cynosural Beacon":"Deployables","Mobile Micro Jump Unit":"Deployables","Control Tower":"Starbase / POS","Mobile Decoy Unit":"Deployables","Ship Maintenance Array":"Starbase / POS","Mobile Phase Anchor":"Deployables","Assembly Array":"Starbase / POS","Mobile Observatory":"Deployables","Mobile Vault":"Deployables","Silo":"Starbase / POS","Mercenary Den":"Deployables","Moon Mining":"Starbase / POS","Mobile Projectile Sentry":"Starbase / POS","Mobile Missile Sentry":"Starbase / POS","Electronic Warfare Battery":"Starbase / POS","Stasis Webification Battery":"Starbase / POS","Sensor Dampening Battery":"Starbase / POS","Shield Hardening Array":"Starbase / POS","Mobile Hybrid Sentry":"Starbase / POS","Mobile Laser Sentry":"Starbase / POS","Jump Portal Array":"Starbase / POS","Corporate Hangar Array":"Starbase / POS","Energy Neutralizing Battery":"Starbase / POS","Personal Hangar":"Starbase / POS","Compression Array":"Starbase / POS","Propulsion Subsystem":"Subsystems","Offensive Subsystem":"Subsystems","Core Subsystem":"Subsystems","Infrastructure Hub Military Upgrades":"Infrastructure Upgrades","Sovereignty Hub Colony Resources Management Upgrades":"Infrastructure Upgrades","Sovereignty Blockade Unit":"Sovereignty Structures","Sovereignty Hub System Effect Generator Upgrades":"Infrastructure Upgrades","Sovereignty Hub":"Sovereignty Structures","Sovereignty Hub Service Infrastructure Upgrade":"Infrastructure Upgrades","Territorial Claim Unit":"Sovereignty Structures","Orbital Construction Platform":"Orbitals","Skyhook":"Orbitals","Special Edition Commodities":"Special Edition Assets","Observatory Array":"Structures","Engineering Complex":"Structures","Administration Hub":"Structures","Upwell Jump Bridge":"Structures","Laboratory":"Starbase / POS","Advertisement Center":"Structures","Sovereignty Hub Site Detection Upgrades":"Infrastructure Upgrades","Infrastructure Hub Industrial Upgrades":"Infrastructure Upgrades","Defensive Subsystem":"Subsystems","Cynosural Generator Array":"Starbase / POS","Citadel":"Structures","Cynosural System Jammer":"Starbase / POS","Upwell Monument":"Structures","Upwell Cyno Jammer":"Structures","Upwell Cyno Beacon":"Structures","Upwell Moon Drill":"Structures","Structure Citadel Service Module":"Structure Modules","Structure Resource Processing Service Module":"Structure Modules","Structure Observatory Service Module":"Structure Modules","Structure FLEX Service Module":"Structure Modules","Structure Advertisement Service Module":"Structure Modules","Structure XL Missile Launcher":"Structure Modules","Structure Guided Bomb Launcher":"Structure Modules","Structure Administration Service Module":"Structure Modules","Structure Energy Neutralizer":"Structure Modules","Structure Area Denial Module":"Structure Modules","Structure Burst Projector":"Structure Modules","Structure ECM Battery":"Structure Modules","Structure Research Service Module":"Structure Modules","Structure Doomsday Weapon":"Structure Modules","Structure Engineering Service Module":"Structure Modules","Structure Stasis Webifier":"Structure Modules","Structure Warp Scrambler":"Structure Modules","Structure Fitting Module":"Structure Modules","Structure Weapon Upgrade":"Structure Modules","Structure Signal Amplifier":"Structure Modules","Structure Multirole Missile Launcher":"Structure Modules","Refinery":"Structures","Infrastructure Hub Strategic Upgrades":"Infrastructure Upgrades","Mobile Reactor":"Starbase / POS","Warp Scrambling Battery":"Starbase / POS","Structure Laboratory Rig M - Drone":"Structure Modules","Structure Laboratory Rig M - Small Ship":"Structure Modules","Structure Laboratory Rig M - Consumable":"Structure Modules","Structure Laboratory Rig M - Medium Ship":"Structure Modules","Structure Laboratory Rig M - Large Ship":"Structure Modules","Structure Assembly Rig L - Subsystem":"Structure Modules","Structure Laboratory Rig M - Module":"Structure Modules","Structure Laboratory Rig L - Module, Consumable, Drone":"Structure Modules","Structure Laboratory Rig L - Ship":"Structure Modules","Structure Laboratory Rig L - Structure Component":"Structure Modules","Structure Laboratory Rig L - Capital Component":"Structure Modules","Structure Laboratory Rig L - Component":"Structure Modules","Structure Laboratory Rig L - Subsystem":"Structure Modules","Structure Laboratory Rig XL - Equipment":"Structure Modules","Structure Combat Rig M - Missile Application":"Structure Modules","Structure Combat Rig M - Energy Neutralizer Projection":"Structure Modules","Structure Combat Rig M - Missile Projection":"Structure Modules","Structure Laboratory Rig XL - Ship":"Structure Modules","Structure Citadel Rig M - Drone Hitpoints":"Structure Modules","Structure Citadel Rig M - Drone Speed":"Structure Modules","Structure Combat Rig M - Energy Neutralizer Cap Reduction":"Structure Modules","Structure Combat Rig M - EW projection":"Structure Modules","Structure Combat Rig M - EW Cap Reduction":"Structure Modules","Structure Combat Rig M - Max Targets":"Structure Modules","Structure Combat Rig L - Missile Application and Projection":"Structure Modules","Structure Combat Rig L - Energy Neutralizer Projection and Cap Reduction":"Structure Modules","Structure Citadel Rig L - Drone Hitpoints and Speed":"Structure Modules","Structure Combat Rig M - Boosted Sensors":"Structure Modules","Structure Combat Rig L - EW Projection and Cap Reduction":"Structure Modules","Structure Combat Rig L - AoE Launcher Application and Projection":"Structure Modules","Structure Combat Rig L - Point Defense Battery Application and Projection":"Structure Modules","Structure Combat Rig L - Max Targets and Sensor Boosting":"Structure Modules","Structure Combat Rig XL - Missile and AoE Missile":"Structure Modules","OLD Structure Resource Rig L - Ore Reprocessing":"Structure Modules","Structure Combat Rig XL - Energy Neutralizer and EW":"Structure Modules","OLD Structure Resource Rig M - HS Ore Reprocessing":"Structure Modules","OLD Structure Resource Rig XL - Reprocessing":"Structure Modules","OLD Structure Resource Rig L - Ice Reprocessing":"Structure Modules","OLD Structure Resource Rig M - LNS Ore Reprocessing":"Structure Modules","Structure Combat Rig XL - Doomsday and Targeting":"Structure Modules","OLD Structure Resource Rig M - Ice 1 Reprocessing":"Structure Modules","Unpublished Structure Modules":"Structure Modules","Structure Engineering Rig M - Equipment ME":"Structure Modules","Structure Disruption Battery":"Structure Modules","Structure Engineering Rig M - Equipment TE":"Structure Modules","Structure Engineering Rig M - Ammunition ME":"Structure Modules","Structure Engineering Rig M - Drone and Fighter TE":"Structure Modules","Structure Engineering Rig M - Ammunition TE":"Structure Modules","Structure Engineering Rig M - Drone and Fighter ME":"Structure Modules","Structure Engineering Rig M - Basic Small Ship ME":"Structure Modules","Structure Engineering Rig M - Basic Large Ship TE":"Structure Modules","Structure Engineering Rig M - Basic Medium Ship TE":"Structure Modules","Structure Engineering Rig M - Basic Small Ship TE":"Structure Modules","Structure Engineering Rig M - Basic Medium Ship ME":"Structure Modules","Structure Engineering Rig M - Advanced Medium Ship ME":"Structure Modules","Structure Engineering Rig M - Advanced Small Ship TE":"Structure Modules","Structure Engineering Rig M - Advanced Medium Ship TE":"Structure Modules","Structure Engineering Rig M - Advanced Large Ship ME":"Structure Modules","Structure Engineering Rig M - Advanced Small Ship ME":"Structure Modules","Structure Engineering Rig M - Basic Large Ship ME":"Structure Modules","Structure Engineering Rig M - Advanced Large Ship TE":"Structure Modules","OLD Structure Resource Rig M - Ice 2 Reprocessing":"Structure Modules","Structure Citadel Rig XL - Drone and PDB":"Structure Modules","Structure Engineering Rig M - Advanced Component ME":"Structure Modules","Structure Engineering Rig M - Advanced Component TE":"Structure Modules","Structure Engineering Rig M - Basic Capital Component ME":"Structure Modules","Structure Engineering Rig M - Basic Capital Component TE":"Structure Modules","Structure Engineering Rig M - Structure ME":"Structure Modules","Structure Engineering Rig M - Invention Cost Optimization":"Structure Modules","Structure Engineering Rig M - Invention Accelerator":"Structure Modules","Structure Engineering Rig M - Structure TE":"Structure Modules","Structure Engineering Rig M - ME Research Cost Optimization":"Structure Modules","Structure Engineering Rig M - ME Research Accelerator":"Structure Modules","Structure Engineering Rig M - TE Research Cost Optimization":"Structure Modules","Structure Engineering Rig L - Equipment Efficiency":"Structure Modules","Structure Engineering Rig M - Blueprint Copy Accelerator":"Structure Modules","Structure Engineering Rig M - Blueprint Copy Cost Optimization":"Structure Modules","Structure Engineering Rig M - TE Research Accelerator":"Structure Modules","Structure Engineering Rig L - Ammunition Efficiency":"Structure Modules","Structure Engineering Rig L - Basic Small Ship Efficiency":"Structure Modules","Structure Engineering Rig L - Basic Medium Ship Efficiency":"Structure Modules","Structure Engineering Rig L - Basic Large Ship Efficiency":"Structure Modules","Structure Engineering Rig L - Advanced Small Ship Efficiency":"Structure Modules","Structure Engineering Rig L - Advanced Large Ship Efficiency":"Structure Modules","Structure Engineering Rig L - Capital Ship Efficiency":"Structure Modules","Structure Engineering Rig L - Structure Efficiency":"Structure Modules","Structure Engineering Rig L - Advanced Medium Ship Efficiency":"Structure Modules","Structure Engineering Rig L - Basic Capital Component Efficiency":"Structure Modules","Structure Engineering Rig L - ME Research Optimization":"Structure Modules","Structure Engineering Rig L - Invention Optimization":"Structure Modules","Structure Engineering Rig L - Advanced Component Efficiency":"Structure Modules","Structure Engineering Rig XL - Equipment and Consumable Efficiency":"Structure Modules","Structure Engineering Rig XL - Ship Efficiency":"Structure Modules","Structure Engineering Rig L - Blueprint Copy Optimization":"Structure Modules","Structure Engineering Rig L - TE Research Optimization":"Structure Modules","Structure Engineering Rig L - Drone and Fighter Efficiency":"Structure Modules","Structure Engineering Rig XL - Structure and Component Efficiency":"Structure Modules","Structure Engineering Rig XL - Laboratory Optimization":"Structure Modules","Structure Moon Drilling Service Module":"Structure Modules","Structure Drilling Rig M - Efficiency":"Structure Modules","Structure Drilling Rig M - Stability":"Structure Modules","Structure Drilling Rig L - Proficiency":"Structure Modules","Structure Composite Reactor Rig M - TE":"Structure Modules","Structure Hybrid Reactor Rig M - TE":"Structure Modules","Structure Composite Reactor Rig M - ME":"Structure Modules","Structure Hybrid Reactor Rig M - ME":"Structure Modules","Structure Biochemical Reactor Rig M - TE":"Structure Modules","Structure Biochemical Reactor Rig M - ME":"Structure Modules","Structure Resource Rig M - Asteroid Ore Reprocessing":"Structure Modules","Structure Reactor Rig L - Efficiency":"Structure Modules","Structure Resource Rig M - Ice Reprocessing":"Structure Modules","Structure Resource Rig M - Moon Ore Reprocessing":"Structure Modules","Structure Resource Rig L - Reprocessing":"Structure Modules","Structure Resource Rig XL - Reprocessing":"Structure Modules","Structure Armor Reinforcer":"Structure Modules","Structure Capacitor Power Relay":"Structure Modules","Structure Capacitor Battery":"Structure Modules","Support Fighter":"Fighters","Light Fighter":"Fighters","Heavy Fighter":"Fighters","Structure Light Fighter":"Fighters","Structure Heavy Fighter":"Fighters","Structure Support Fighter":"Fighters"};
+
+    var st=document.createElement('style');
+    st.textContent='#cat-body td.hit{color:var(--good);font-weight:600}#cat-body td.hi{color:var(--warn)}#cat-body td:first-child{white-space:normal}#cat-controls .field.grow{min-width:260px}';
+    document.head.appendChild(st);
+
+    [].slice.call(tab.children).forEach(function(c){c.style.display='none';});
+
+    var ui=document.createElement('div'); ui.id='cat-ui';
+    ui.innerHTML=
+      '<section class="controls panel" id="cat-controls">'
+      +'<div class="field grow"><label for="cat-select">Category / market group</label><select id="cat-select"></select></div>'
+      +'<div class="field narrow"><label for="cat-basis">Price basis</label><select id="cat-basis"><option value="sell">Sell (lowest ask)</option><option value="buy">Buy (highest bid)</option></select></div>'
+      +'<div class="field narrow"><label for="cat-refresh">&nbsp;</label><button id="cat-refresh" class="btn">&#8635; Refresh</button></div>'
+      +'</section>'
+      +'<div class="panel"><div id="cat-status" class="muted small" style="padding:6px 4px">Loading market groups&hellip;</div>'
+      +'<div id="cat-table-wrap" hidden style="overflow-x:auto"><table class="materials"><thead><tr><th>Item</th>'
       +'<th class="num">Jita</th><th class="num">Amarr</th><th class="num">Dodixie</th><th class="num">Rens</th><th class="num">Hek</th><th class="num">Spread</th></tr></thead><tbody id="cat-body"></tbody></table></div></div>'
       +'<p class="muted small" style="margin-top:8px">Pick a group to see every buildable item\'s live price at each of the five major hubs. Cheapest hub in <span style="color:var(--good)">green</span>, priciest in <span style="color:var(--warn)">amber</span>. Spread = (max&minus;min)/min. Live via Fuzzwork.</p>';
     tab.insertBefore(ui, tab.firstChild);
