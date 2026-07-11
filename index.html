@@ -1847,7 +1847,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     document.head.appendChild(stl);
 
     var btn=document.createElement('button');btn.className='tab';btn.setAttribute('data-tab','haul');btn.textContent='Haul';
-    document.querySelector('nav.tabs').appendChild(btn);
+    (function(){var nav=document.querySelector('nav.tabs');var arb=[].slice.call(nav.querySelectorAll('.tab')).find(function(x){return x.textContent.trim()==='Arbitrage';});if(arb&&arb.nextSibling){nav.insertBefore(btn,arb.nextSibling);}else{nav.appendChild(btn);}})();
 
     var div=document.createElement('div');div.id='tab-haul';div.hidden=true;
     div.innerHTML=
