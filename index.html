@@ -2265,15 +2265,34 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 
 
 <script>
-/* Manufacture-in-system cost index — accurate job fees for any system, not just hubs */
+/* Manufacture-in-system cost index (v2, tidy layout) — accurate job fees for any system */
 (function(){
   function $(id){return document.getElementById(id);}
   function ready(cb){function ok(){return $('f-sci')&&$('hub')&&typeof getSysAll==='function';}if(ok()){cb();return;}var n=0,iv=setInterval(function(){if(ok()||n++>200){clearInterval(iv);if(ok())cb();}},100);}
   ready(function(){
     var hubField=$('hub').closest('.field'); if(!hubField)return;
-    var wrap=document.createElement('div'); wrap.className='field'; wrap.style.position='relative';
-    wrap.innerHTML='<label for="mf-sys">Manufacture in (system)</label><input id="mf-sys" type="text" autocomplete="off" placeholder="e.g. Jita, Sobaseki, 1DQ1-A" /><div id="mf-note" class="muted small" style="margin-top:4px">Any system &mdash; job install fee uses that system&rsquo;s live cost index.</div>';
+    var controls=hubField.parentNode;
+
+    var stl=document.createElement('style');
+    stl.textContent=
+      '#mf-field{min-width:230px;max-width:340px}'
+      +'#mf-field input{width:100%}'
+      +'#mf-note{flex:0 0 100%;margin-top:2px}'
+      +'#tab-calc .field.mf-wl{min-width:150px}'
+      +'#tab-calc .field.mf-wl label{white-space:nowrap}'
+      +'nav.tabs{flex-wrap:wrap;overflow-x:visible;justify-content:center;row-gap:6px;column-gap:5px}'
+      +'nav.tabs .tab{padding-left:9px;padding-right:9px}';
+    document.head.appendChild(stl);
+
+    var wrap=document.createElement('div'); wrap.className='field'; wrap.id='mf-field';
+    wrap.innerHTML='<label for="mf-sys">Manufacture in (system)</label><input id="mf-sys" type="text" autocomplete="off" placeholder="e.g. Jita, Sobaseki, 1DQ1-A" />';
     hubField.parentNode.insertBefore(wrap, hubField.nextSibling);
+
+    var note=document.createElement('div'); note.id='mf-note'; note.className='muted small';
+    note.innerHTML='Any system &mdash; job install fee uses that system&rsquo;s live cost index.';
+    controls.appendChild(note);
+
+    var meF=$('me')?$('me').closest('.field'):null; if(meF) meF.classList.add('mf-wl');
 
     var SYS=null;
     async function sysData(){ if(SYS)return SYS; try{SYS=await getSysAll();}catch(e){SYS={};} return SYS; }
