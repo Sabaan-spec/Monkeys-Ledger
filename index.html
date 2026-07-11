@@ -2275,7 +2275,10 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 
     var stl=document.createElement('style');
     stl.textContent=
-      '#mf-field{min-width:230px;max-width:340px}'
+      '#tab-calc .controls{gap:12px}'
+      +'#tab-calc .controls .field.grow{flex:1 1 190px;min-width:180px}'
+      +'#tab-calc #hub{min-width:150px}'
+      +'#mf-field{min-width:185px;max-width:230px}'
       +'#mf-field input{width:100%}'
       +'#mf-note{flex:0 0 100%;margin-top:2px}'
       +'#tab-calc .field.mf-wl{min-width:150px}'
