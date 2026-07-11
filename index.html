@@ -221,11 +221,11 @@ nav.tabs{gap:6px;flex-wrap:nowrap;overflow-x:auto;justify-content:safe center}na
 <main class="wrap">
   <nav class="tabs">
     <button class="tab active" data-tab="calc">Manufacturing</button>
-    <button class="tab" data-tab="top">Category Prices</button>
+    <button class="tab" data-tab="top">Categories</button>
     <button class="tab" data-tab="ore">Ore &amp; Gas</button>
     <button class="tab" data-tab="research">Research</button>
     <button class="tab" data-tab="repro">Reprocessing</button>
-    <button class="tab" data-tab="arb">Hub Arbitrage</button>
+    <button class="tab" data-tab="arb">Arbitrage</button>
     <button class="tab" data-tab="react">Reactions</button>
     <button class="tab" data-tab="invent">Invention</button>
     <button class="tab" data-tab="watch">Watchlist</button>
@@ -2091,7 +2091,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 
 
 <script>
-/* Build vs Buy tree — recursively finds the cheapest way to source every component */
+/* Build vs Buy tree (v2) — cheapest source for every component: buy, build, or react */
 (function(){
   function $(id){return document.getElementById(id);}
   function ready(cb){function ok(){return typeof ITEMS!=='undefined'&&ITEMS.length&&typeof fuzzAgg==='function'&&typeof HUBS!=='undefined'&&typeof getMarketStats==='function';}if(ok()){cb();return;}var n=0,iv=setInterval(function(){if(ok()||n++>200){clearInterval(iv);if(ok())cb();}},100);}
@@ -2099,6 +2099,8 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     var main=document.querySelector('main.wrap'); if(!main)return;
     var byId={}; ITEMS.forEach(function(it){byId[it.id]=it;});
     var HUBK=['jita','amarr','dodixie','rens','hek'];
+    var REACT={}, RNAMES={};
+    (function(){ fetch('./data/reactions.json?cb='+Date.now()).then(function(r){return r.json();}).then(function(j){ if(j&&j.recipes) REACT=j.recipes; if(j&&j.names) RNAMES=j.names; }).catch(function(){}); })();
 
     var calcBtn=[].slice.call(document.querySelectorAll('.tab')).find(function(b){return b.dataset.tab==='calc';});
     var btn=document.createElement('button');btn.className='tab';btn.setAttribute('data-tab','tree');btn.textContent='Build Tree';
@@ -2111,12 +2113,12 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       +'<div class="field grow" style="position:relative"><label for="bt-search">Item to build</label><input id="bt-search" type="text" autocomplete="off" placeholder="Start typing&hellip; e.g. Cerberus, Hobgoblin II, Damage Control II" /><ul id="bt-sug" class="suggestions" hidden></ul></div>'
       +'<div class="field narrow"><label for="bt-hub">Buy materials at</label><select id="bt-hub">'+hubOpts+'</select></div>'
       +'<div class="field narrow"><label for="bt-me">ME %</label><input id="bt-me" type="number" min="0" max="10" step="1" value="10" /></div>'
-      +'<div class="field narrow"><label for="bt-fee" title="Job install fee as % of EIV, applied at each build step">Job fee %</label><input id="bt-fee" type="number" min="0" step="0.1" value="5" /></div>'
+      +'<div class="field narrow"><label for="bt-fee" title="Job install fee as % of EIV, applied at each build/react step">Job fee %</label><input id="bt-fee" type="number" min="0" step="0.1" value="5" /></div>'
       +'</section>'
       +'<div id="bt-summary"></div>'
       +'<div class="panel" id="bt-tree-wrap" hidden style="margin-top:12px"><div id="bt-tree"></div></div>'
-      +'<div id="bt-empty" class="panel muted small" style="padding:10px">Search an item to see the cheapest way to source every component &mdash; buy it, or build it from raw materials. Buildable components are compared buy-vs-build recursively.</div>'
-      +'<p class="muted small" style="margin-top:8px">Each buildable component is priced both ways: <b>buy</b> from the market, or <b>build</b> from its own materials + a job fee. The cheaper path is chosen and marked. Materials valued at sell (list) price; ME% applied at every build step; job fee = EIV &times; your %. Excludes build time, slots &amp; invention. Live via Fuzzwork &amp; CCP ESI.</p>';
+      +'<div id="bt-empty" class="panel muted small" style="padding:10px">Search an item to see the cheapest way to source every component &mdash; <b>buy</b> it, <b>build</b> it, or <b>react</b> it &mdash; recursively down to raw minerals &amp; moon materials.</div>'
+      +'<p class="muted small" style="margin-top:8px">Each component is priced every way it can be sourced: <b>buy</b> from market, <b>build</b> from its materials, or <b>react</b> from its reaction inputs. The cheapest path is chosen &amp; marked. Materials at sell (list) price; ME% applied to build steps (not reactions); job fee = EIV &times; your %. Excludes time, slots &amp; invention. Live via Fuzzwork &amp; CCP ESI.</p>';
     main.appendChild(div);
 
     document.querySelectorAll('.tab').forEach(function(b){
@@ -2131,6 +2133,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 
     function short(n){try{return iskShort(n);}catch(e){return Math.round(n).toLocaleString();}}
     function money(n){try{return isk(Math.round(n));}catch(e){return Math.round(n).toLocaleString()+' ISK';}}
+    function nameOf(id){ return (byId[id]&&byId[id].name)||RNAMES[id]||('#'+id); }
 
     var chosen=null;
     var sug=$('bt-sug'), sInput=$('bt-search');
@@ -2147,48 +2150,68 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 
     var PRICE={}, ms=null, ME=0.9, FEE=0.05;
     function price(id){ var p=PRICE[id]; if(p>0) return p; var a=ms&&ms.avg?ms.avg[id]:0; return a>0?a:0; }
-    function collectIds(id, set, depth){ if(depth>8||set[id])return; set[id]=1; var it=byId[id]; if(it&&it.materials) it.materials.forEach(function(m){ set[m.id]=1; if(byId[m.id]) collectIds(m.id,set,depth+1); }); }
+    function adj(id){ return (ms&&ms.adj?(ms.adj[id]||0):0); }
+    function collectIds(id, set, depth){
+      if(depth>9||set[id])return; set[id]=1;
+      var it=byId[id]; if(it&&it.materials) it.materials.forEach(function(m){ collectIds(m.id,set,depth+1); });
+      var rx=REACT[id]; if(rx&&rx.m) rx.m.forEach(function(p){ collectIds(p[0],set,depth+1); });
+    }
 
-    var UNIT={};
+    var BUNIT={}, RUNIT={};
     function buildUnitCost(id, depth){
-      if(UNIT[id]!=null) return UNIT[id];
-      var it=byId[id]; if(!it||!it.materials||depth>8){ return UNIT[id]=Infinity; }
-      UNIT[id]=Infinity;
+      if(BUNIT[id]!=null) return BUNIT[id];
+      var it=byId[id]; if(!it||!it.materials||depth>9){ return BUNIT[id]=Infinity; }
+      BUNIT[id]=Infinity;
       var matCost=0, eiv=0;
       it.materials.forEach(function(m){
         var needQty=Math.max(1,Math.ceil(m.qty*ME));
-        var unit=chosenUnitCost(m.id, depth+1);
-        matCost += unit*needQty;
-        eiv += (ms&&ms.adj?(ms.adj[m.id]||0):0)*m.qty;
+        matCost += chosenUnitCost(m.id, depth+1)*needQty;
+        eiv += adj(m.id)*m.qty;
       });
-      var per=(matCost+eiv*FEE)/(it.productQty||1);
-      return UNIT[id]=per;
+      return BUNIT[id]=(matCost+eiv*FEE)/(it.productQty||1);
+    }
+    function reactUnitCost(id, depth){
+      if(RUNIT[id]!=null) return RUNIT[id];
+      var rx=REACT[id]; if(!rx||!rx.m||depth>9){ return RUNIT[id]=Infinity; }
+      RUNIT[id]=Infinity;
+      var matCost=0, eiv=0;
+      rx.m.forEach(function(p){
+        matCost += chosenUnitCost(p[0], depth+1)*p[1];
+        eiv += adj(p[0])*p[1];
+      });
+      return RUNIT[id]=(matCost+eiv*FEE)/(rx.q||1);
     }
     function chosenUnitCost(id, depth){
       var buy=price(id);
-      if(byId[id] && depth<=8){
-        var build=buildUnitCost(id, depth);
-        if(build<Infinity){ if(buy<=0) return build; return Math.min(buy, build); }
-      }
+      var b=(byId[id]&&depth<=9)?buildUnitCost(id,depth):Infinity;
+      var r=(REACT[id]&&depth<=9)?reactUnitCost(id,depth):Infinity;
+      var make=Math.min(b,r);
+      if(make<Infinity){ if(buy<=0) return make; return Math.min(buy, make); }
       return buy>0?buy:0;
     }
 
     function nodeRow(id, name, qty, depth){
-      var it=byId[id];
       var buyUnit=price(id), buyCost=buyUnit*qty;
-      var buildable = !!(it&&it.materials&&it.materials.length);
-      var buildUnit = buildable? buildUnitCost(id,depth):Infinity;
-      var buildCost = buildUnit*qty;
-      var mode = (buildable && buildUnit<Infinity && (buildCost<buyCost || buyUnit<=0))?'build':'buy';
-      var pad = 6 + depth*18;
-      var badge = mode==='build'?'<span style="color:var(--good);font-weight:600">BUILD</span>':'<span class="muted">buy</span>';
-      var buyTxt = buyUnit>0? short(buyCost):'&mdash;';
-      var buildTxt = (buildable&&buildUnit<Infinity)? short(buildCost):'&mdash;';
-      var html='<tr><td style="padding-left:'+pad+'px">'+((it&&it.name)||name||('#'+id))+' <span class="muted">&times;'+intf(qty)+'</span></td>'
-        +'<td class="num">'+buyTxt+'</td><td class="num">'+buildTxt+'</td><td>'+badge+'</td></tr>';
-      var expand = (depth===0)? buildable : (mode==='build');
-      if(expand && buildable && depth<8){
-        it.materials.forEach(function(m){ html+=nodeRow(m.id, m.name, Math.max(1,Math.ceil(m.qty*ME))*qty, depth+1); });
+      var b=(byId[id])?buildUnitCost(id,depth):Infinity;
+      var r=(REACT[id])?reactUnitCost(id,depth):Infinity;
+      var makeUnit=Math.min(b,r); var makeCost=makeUnit*qty;
+      var makeMode=(b<=r)?'build':'react';
+      var canMake=makeUnit<Infinity;
+      var mode=(canMake && (makeCost<buyCost || buyUnit<=0))?makeMode:'buy';
+      if(depth===0 && canMake) mode=makeMode;
+      var pad=6+depth*18;
+      var badge = mode==='build'?'<span style="color:var(--good);font-weight:600">BUILD</span>' :(mode==='react'?'<span style="color:var(--accent);font-weight:600">REACT</span>':'<span class="muted">buy</span>');
+      var buyTxt=buyUnit>0?short(buyCost):'&mdash;';
+      var makeTxt=canMake?short(makeCost):'&mdash;';
+      var html='<tr><td style="padding-left:'+pad+'px">'+(nameOf(id))+' <span class="muted">&times;'+intf(qty)+'</span></td>'
+        +'<td class="num">'+buyTxt+'</td><td class="num">'+makeTxt+'</td><td>'+badge+'</td></tr>';
+      if(depth<9){
+        if(mode==='build' && byId[id] && byId[id].materials){
+          byId[id].materials.forEach(function(m){ html+=nodeRow(m.id, m.name, Math.max(1,Math.ceil(m.qty*ME))*qty, depth+1); });
+        } else if(mode==='react' && REACT[id] && REACT[id].m){
+          var rq=REACT[id].q||1;
+          REACT[id].m.forEach(function(p){ html+=nodeRow(p[0], RNAMES[p[0]], Math.ceil(p[1]*qty/rq), depth+1); });
+        }
       }
       return html;
     }
@@ -2205,23 +2228,23 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       var ids=Object.keys(set).map(Number);
       try{ ms=await getMarketStats(); }catch(e){}
       try{ var agg=await fuzzAgg(HUBS[hub].region, ids); PRICE={}; ids.forEach(function(id){var o=agg[id]||{};var s=o.sell&&Number(o.sell.min);PRICE[id]=s>0?s:0;}); }catch(e){ $('bt-summary').innerHTML='<div class="panel">pricing failed: '+e.message+'</div>'; busy=false; return; }
-      UNIT={};
+      BUNIT={}; RUNIT={};
       var buyFinished=price(chosen.id);
       var buildOptimal=buildUnitCost(chosen.id,0);
       var naive=0, eiv0=0;
-      (chosen.materials||[]).forEach(function(m){var need=Math.max(1,Math.ceil(m.qty*ME));naive+=price(m.id)*need;eiv0+=(ms&&ms.adj?(ms.adj[m.id]||0):0)*m.qty;});
+      (chosen.materials||[]).forEach(function(m){var need=Math.max(1,Math.ceil(m.qty*ME));naive+=price(m.id)*need;eiv0+=adj(m.id)*m.qty;});
       naive=(naive+eiv0*FEE)/(chosen.productQty||1);
       function card(lbl,val,col){return '<div class="stat panel"><span class="stat-label">'+lbl+'</span><span class="stat-val" style="color:'+(col||'var(--text)')+'">'+val+'</span></div>';}
-      var save = (buyFinished>0)? (buyFinished-buildOptimal):0;
-      var savePct = buyFinished>0? save/buyFinished*100:0;
-      var cheaper = buyFinished>0 && buildOptimal<buyFinished;
+      var save=(buyFinished>0)?(buyFinished-buildOptimal):0;
+      var savePct=buyFinished>0?save/buyFinished*100:0;
+      var cheaper=buyFinished>0&&buildOptimal<buyFinished;
       $('bt-summary').innerHTML='<div class="summary-grid">'
         +card('Buy finished', buyFinished>0?money(buyFinished):'&mdash;')
         +card('Build (buy all mats)', naive<Infinity?money(naive):'&mdash;')
-        +card('Build (optimal)', buildOptimal<Infinity?money(buildOptimal):'&mdash;','var(--good)')
+        +card('Optimal (build/react)', buildOptimal<Infinity?money(buildOptimal):'&mdash;','var(--good)')
         +card('Cheapest path saves', cheaper?(money(save)+' ('+savePct.toFixed(0)+'%)'):'buying is cheaper', cheaper?'var(--good)':'var(--muted)')
         +'</div>';
-      $('bt-tree').innerHTML='<div style="overflow-x:auto"><table class="materials"><thead><tr><th>Component (tree)</th><th class="num">Buy</th><th class="num">Build</th><th>Cheapest</th></tr></thead><tbody>'+nodeRow(chosen.id, chosen.name, 1, 0)+'</tbody></table></div>';
+      $('bt-tree').innerHTML='<div style="overflow-x:auto"><table class="materials"><thead><tr><th>Component (tree)</th><th class="num">Buy</th><th class="num">Make</th><th>Cheapest</th></tr></thead><tbody>'+nodeRow(chosen.id, chosen.name, 1, 0)+'</tbody></table></div>';
       $('bt-tree-wrap').hidden=false;
       busy=false;
     }
@@ -2330,6 +2353,94 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     $('mf-sys').addEventListener('keydown',function(e){ if(e.key==='Enter'){e.preventDefault();apply();} });
     $('mf-sys').addEventListener('blur',function(){ if(($('mf-sys').value||'').trim())apply(); });
     try{ var last=localStorage.getItem('eveMfgSystem'); if(last){ $('mf-sys').value=last; } }catch(e){}
+  });
+})();
+</script>
+
+
+<script>
+/* Recent kills by region — zKillboard + CCP ESI */
+(function(){
+  function $(id){return document.getElementById(id);}
+  function ready(cb){function ok(){return document.querySelector('nav.tabs')&&document.querySelector('main.wrap');}if(ok()){cb();return;}var n=0,iv=setInterval(function(){if(ok()||n++>200){clearInterval(iv);if(ok())cb();}},100);}
+  ready(function(){
+    var main=document.querySelector('main.wrap'); if(!main)return;
+
+    var stl=document.createElement('style');
+    stl.textContent='nav.tabs button.tab{font-size:.73rem;padding-left:8px;padding-right:8px}#tab-kills td a{color:var(--accent);text-decoration:none}#tab-kills td a:hover{text-decoration:underline}';
+    document.head.appendChild(stl);
+
+    var btn=document.createElement('button');btn.className='tab';btn.setAttribute('data-tab','kills');btn.textContent='Kills';
+    document.querySelector('nav.tabs').appendChild(btn);
+
+    var div=document.createElement('div');div.id='tab-kills';div.hidden=true;
+    div.innerHTML=
+      '<section class="controls panel">'
+      +'<div class="field grow"><label for="kl-region">Region</label><input id="kl-region" type="text" autocomplete="off" placeholder="e.g. The Forge, Delve, Domain, Providence" /></div>'
+      +'<div class="field narrow"><label for="kl-min">Min ISK (M)</label><input id="kl-min" type="number" min="0" step="10" value="0" /></div>'
+      +'<div class="field narrow"><label for="kl-sort">Sort</label><select id="kl-sort"><option value="time">Newest</option><option value="value">ISK lost</option></select></div>'
+      +'<div class="field narrow"><label for="kl-go">&nbsp;</label><button id="kl-go" class="btn">&#128225; Load kills</button></div>'
+      +'</section>'
+      +'<div class="panel"><div id="kl-status" class="muted small" style="padding:6px 4px">Enter a region to see the most recent player kills there.</div>'
+      +'<div id="kl-wrap" hidden style="overflow-x:auto"><table class="materials"><thead><tr><th>When</th><th>Victim</th><th>Ship</th><th>System</th><th class="num">ISK lost</th><th></th></tr></thead><tbody id="kl-body"></tbody></table></div></div>'
+      +'<p class="muted small" style="margin-top:8px">Recent killmails via <a href="https://zkillboard.com" target="_blank" rel="noopener">zKillboard</a>; names via CCP ESI. Shows up to 80 most recent kills in the region. Click &#8599; to open the full killmail on zKillboard.</p>';
+    main.appendChild(div);
+
+    document.querySelectorAll('.tab').forEach(function(b){
+      b.addEventListener('click',function(){
+        var n=b.dataset.tab; var d=$('tab-kills'); if(d) d.hidden=n!=='kills';
+        if(n==='kills'){
+          [].slice.call(document.querySelectorAll('main.wrap > [id^="tab-"]')).forEach(function(el){ if(el.id!=='tab-kills') el.hidden=true; });
+          document.querySelectorAll('.tab').forEach(function(x){ x.classList.toggle('active', x===b); });
+        }
+      });
+    });
+
+    function isk(n){try{return iskShort(n);}catch(e){return Math.round(n).toLocaleString();}}
+    function ago(t){var s=(Date.now()-new Date(t).getTime())/1000; if(s<60)return Math.max(0,Math.floor(s))+'s ago'; if(s<3600)return Math.floor(s/60)+'m ago'; if(s<86400)return Math.floor(s/3600)+'h ago'; return Math.floor(s/86400)+'d ago';}
+    function setStatus(t){var s=$('kl-status'); if(s)s.textContent=t;}
+    async function resolveNames(ids){
+      var out={}; var uniq=[]; var seen={}; ids.forEach(function(x){ if(x&&!seen[x]){seen[x]=1;uniq.push(x);} });
+      for(var i=0;i<uniq.length;i+=1000){
+        var chunk=uniq.slice(i,i+1000);
+        try{ var nm=await fetch('https://esi.evetech.net/latest/universe/names/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(chunk)}).then(function(r){return r.json();}); if(Array.isArray(nm)) nm.forEach(function(n){out[n.id]=n.name;}); }catch(e){}
+      }
+      return out;
+    }
+
+    var busy=false;
+    async function load(){
+      if(busy)return; var name=($('kl-region').value||'').trim(); if(!name){setStatus('type a region name first');return;}
+      var minISK=(Number($('kl-min').value)||0)*1e6; var sort=$('kl-sort').value;
+      busy=true; $('kl-go').disabled=true; setStatus('Resolving '+name+'…'); $('kl-wrap').hidden=true;
+      try{
+        var idr=await fetch('https://esi.evetech.net/latest/universe/ids/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify([name])}).then(function(r){return r.json();});
+        var reg=(idr.regions||[])[0];
+        if(!reg){ setStatus('No region called "'+name+'". Try the exact region name (e.g. The Forge).'); busy=false;$('kl-go').disabled=false; return; }
+        setStatus('Loading recent kills in '+reg.name+'…');
+        var kills=await fetch('https://zkillboard.com/api/regionID/'+reg.id+'/').then(function(r){return r.json();});
+        if(!Array.isArray(kills)||!kills.length){ setStatus('No recent kills returned for '+reg.name+'.'); busy=false;$('kl-go').disabled=false; return; }
+        kills=kills.filter(function(k){return k.zkb&&k.zkb.totalValue>=minISK;});
+        if(sort==='value') kills.sort(function(a,b){return b.zkb.totalValue-a.zkb.totalValue;});
+        kills=kills.slice(0,80);
+        var ids=[]; kills.forEach(function(k){ var v=k.victim||{}; ids.push(v.character_id, v.ship_type_id, k.solar_system_id); });
+        var names=await resolveNames(ids);
+        $('kl-body').innerHTML=kills.map(function(k){
+          var v=k.victim||{};
+          var vic=names[v.character_id]||(v.character_id?('#'+v.character_id):'NPC / structure');
+          var ship=names[v.ship_type_id]||('#'+v.ship_type_id);
+          var sys=names[k.solar_system_id]||('#'+k.solar_system_id);
+          var val=k.zkb?k.zkb.totalValue:0;
+          return '<tr><td class="muted">'+ago(k.killmail_time)+'</td><td>'+vic+'</td><td>'+ship+'</td><td>'+sys+'</td><td class="num" style="color:var(--bad)">'+isk(val)+'</td><td><a href="https://zkillboard.com/kill/'+k.killmail_id+'/" target="_blank" rel="noopener" title="open on zKillboard">&#8599;</a></td></tr>';
+        }).join('');
+        $('kl-wrap').hidden=false;
+        setStatus(kills.length+' kills in '+reg.name+' · '+(sort==='value'?'by ISK lost':'newest first')+(minISK>0?' · ≥ '+isk(minISK):''));
+      }catch(e){ setStatus('load failed: '+e.message); }
+      busy=false; $('kl-go').disabled=false;
+    }
+    $('kl-go').addEventListener('click',load);
+    $('kl-region').addEventListener('keydown',function(e){ if(e.key==='Enter'){e.preventDefault();load();} });
+    ['kl-min','kl-sort'].forEach(function(id){var e=$(id);if(e)e.addEventListener('change',function(){if(($('kl-region').value||'').trim())load();});});
   });
 })();
 </script>
