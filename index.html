@@ -224,7 +224,7 @@ nav.tabs{gap:6px;flex-wrap:nowrap;overflow-x:auto;justify-content:safe center}na
     <button class="tab" data-tab="top">Categories</button>
     <button class="tab" data-tab="ore">Ore &amp; Gas</button>
     <button class="tab" data-tab="research">Research</button>
-    <button class="tab" data-tab="repro">Reprocessing</button>
+    <button class="tab" data-tab="repro">Reprocess</button>
     <button class="tab" data-tab="arb">Arbitrage</button>
     <button class="tab" data-tab="react">Reactions</button>
     <button class="tab" data-tab="invent">Invention</button>
@@ -2448,6 +2448,138 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     var _lb=$('kl-live');if(_lb)_lb.addEventListener('click',function(){_setLive(!_live);if(_live&&$('kl-region').value)load();});
     $('kl-region').addEventListener('keydown',function(e){ if(e.key==='Enter'){e.preventDefault();load();} });
     ['kl-region','kl-min','kl-sort'].forEach(function(id){var e=$(id);if(e)e.addEventListener('change',function(){if($('kl-region').value)load();});});
+  });
+})();
+</script>
+
+
+<script>
+/* Ship fit suggester — most-common modules per slot from recent killmails (zKillboard + ESI) */
+(function(){
+  function $(id){return document.getElementById(id);}
+  function ready(cb){function ok(){return typeof ITEMS!=='undefined'&&ITEMS.length&&typeof fuzzAgg==='function'&&typeof HUBS!=='undefined'&&document.querySelector('nav.tabs');}if(ok()){cb();return;}var n=0,iv=setInterval(function(){if(ok()||n++>200){clearInterval(iv);if(ok())cb();}},100);}
+  ready(function(){
+    var main=document.querySelector('main.wrap'); if(!main)return;
+    var ships=ITEMS.filter(function(it){return it.kind==='Ships';});
+
+    var stl=document.createElement('style');
+    stl.textContent='#tab-fits .fit-cat{margin-top:14px}#tab-fits .fit-cat h3{font-size:.8rem;letter-spacing:1px;text-transform:uppercase;color:var(--accent);margin:0 0 6px}#tab-fits td.pct{color:var(--good);font-weight:600}#tab-fits #sf-eft{width:100%;min-height:150px;background:var(--bg-2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;font-family:var(--mono);font-size:.78rem;resize:vertical}';
+    document.head.appendChild(stl);
+
+    var btn=document.createElement('button');btn.className='tab';btn.setAttribute('data-tab','fits');btn.textContent='Fits';
+    document.querySelector('nav.tabs').appendChild(btn);
+
+    var div=document.createElement('div');div.id='tab-fits';div.hidden=true;
+    div.innerHTML=
+      '<section class="controls panel">'
+      +'<div class="field grow" style="position:relative"><label for="sf-search">Ship</label><input id="sf-search" type="text" autocomplete="off" placeholder="Start typing&hellip; e.g. Rifter, Caracal, Ishtar, Hurricane" /><ul id="sf-sug" class="suggestions" hidden></ul></div>'
+      +'<div class="field narrow"><label for="sf-hub">Price at</label><select id="sf-hub"><option value="jita">Jita (The Forge)</option><option value="amarr">Amarr (Domain)</option><option value="dodixie">Dodixie</option><option value="rens">Rens</option><option value="hek">Hek</option></select></div>'
+      +'</section>'
+      +'<div id="sf-summary"></div>'
+      +'<div id="sf-results"></div>'
+      +'<div id="sf-empty" class="panel muted small" style="padding:10px">Pick a ship to see how it&rsquo;s commonly fit &mdash; the most-used modules per slot, pulled from recent killmails.</div>'
+      +'<p class="muted small" style="margin-top:8px">Fits are aggregated from recent <a href="https://zkillboard.com" target="_blank" rel="noopener">zKillboard</a> killmails (i.e. how real pilots fit this hull, based on losses). The suggested loadout fills each slot with the most common modules; percentages show how often a module appears. Not a tuned/optimal fit &mdash; verify CPU/PG in-game. Prices live via Fuzzwork.</p>';
+    main.appendChild(div);
+
+    document.querySelectorAll('.tab').forEach(function(b){
+      b.addEventListener('click',function(){
+        var n=b.dataset.tab; var d=$('tab-fits'); if(d) d.hidden=n!=='fits';
+        if(n==='fits'){
+          [].slice.call(document.querySelectorAll('main.wrap > [id^="tab-"]')).forEach(function(el){ if(el.id!=='tab-fits') el.hidden=true; });
+          document.querySelectorAll('.tab').forEach(function(x){ x.classList.toggle('active', x===b); });
+        }
+      });
+    });
+
+    function short(n){try{return iskShort(n);}catch(e){return Math.round(n).toLocaleString();}}
+    function money(n){try{return isk(Math.round(n));}catch(e){return Math.round(n).toLocaleString()+' ISK';}}
+    function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26)return 'mid'; if(flag>=11&&flag<=18)return 'low'; if(flag>=92&&flag<=94)return 'rig'; if(flag>=125&&flag<=132)return 'sub'; if(flag===87)return 'drone'; return null; }
+    var CATS=[['high','High slots','hi'],['mid','Mid slots','med'],['low','Low slots','low'],['rig','Rigs','rig'],['sub','Subsystems','sub'],['drone','Drones',null]];
+
+    var chosen=null;
+    var sug=$('sf-sug'), sInput=$('sf-search');
+    sInput.addEventListener('input',function(){
+      var q=sInput.value.trim().toLowerCase(); if(q.length<2){sug.hidden=true;return;}
+      var m=ships.filter(function(it){return it.name.toLowerCase().indexOf(q)>=0;}).slice(0,12);
+      if(!m.length){sug.hidden=true;return;}
+      sug.innerHTML=m.map(function(it){return '<li data-id="'+it.id+'">'+it.name+'</li>';}).join('');
+      sug.hidden=false;
+    });
+    sug.addEventListener('mousedown',function(e){var li=e.target.closest('li');if(!li)return;var id=Number(li.getAttribute('data-id'));chosen=ships.find(function(x){return x.id===id;});sInput.value=chosen.name;sug.hidden=true;analyze();});
+    sInput.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();var q=sInput.value.trim().toLowerCase();var it=ships.find(function(x){return x.name.toLowerCase()===q;})||ships.find(function(x){return x.name.toLowerCase().indexOf(q)>=0;});if(it){chosen=it;sInput.value=it.name;sug.hidden=true;analyze();}}});
+    document.addEventListener('click',function(e){ if(!e.target.closest('#sf-search')&&!e.target.closest('#sf-sug')) sug.hidden=true; });
+
+    var busy=false;
+    async function analyze(){
+      if(busy||!chosen)return; busy=true;
+      var hub=$('sf-hub').value;
+      $('sf-empty').hidden=true;
+      $('sf-summary').innerHTML='<div class="panel muted small" style="padding:10px">Pulling recent fits for '+chosen.name+'&hellip;</div>';
+      $('sf-results').innerHTML='';
+      try{
+        var kills=await fetch('https://zkillboard.com/api/shipID/'+chosen.id+'/').then(function(r){return r.json();});
+        var dogma=await fetch('https://esi.evetech.net/latest/universe/types/'+chosen.id).then(function(r){return r.json();});
+        var da={}; (dogma.dogma_attributes||[]).forEach(function(a){da[a.attribute_id]=a.value;});
+        var slots={hi:da[14]||0,med:da[13]||0,low:da[12]||0,rig:da[1137]||0,sub:da[1367]||0};
+        if(!Array.isArray(kills)||!kills.length){ $('sf-summary').innerHTML='<div class="panel muted small" style="padding:10px">No recent killmails found for '+chosen.name+'.</div>'; busy=false; return; }
+        kills=kills.slice(0,150);
+        var agg={high:{},mid:{},low:{},rig:{},sub:{},drone:{}}; var numFits=0;
+        kills.forEach(function(k){
+          var v=k.victim||{}; if(!v.items||!v.items.length)return; numFits++;
+          var seen={high:{},mid:{},low:{},rig:{},sub:{},drone:{}};
+          v.items.forEach(function(it){ var c=catOf(it.flag); if(!c)return; var q=(it.quantity_destroyed||0)+(it.quantity_dropped||0); if(c!=='drone' && q!==1) return; if(q<=0)q=1; seen[c][it.item_type_id]=(seen[c][it.item_type_id]||0)+q; });
+          Object.keys(seen).forEach(function(c){ Object.keys(seen[c]).forEach(function(id){ var a=agg[c][id]=agg[c][id]||{fits:0,total:0}; a.fits++; a.total+=seen[c][id]; }); });
+        });
+        // collect ids for names + prices
+        var allIds={}; Object.keys(agg).forEach(function(c){ Object.keys(agg[c]).forEach(function(id){allIds[id]=1;}); }); allIds[chosen.id]=1;
+        var idArr=Object.keys(allIds).map(Number);
+        var names={}; try{ for(var i=0;i<idArr.length;i+=1000){ var _nm=await fetch('https://esi.evetech.net/latest/universe/names/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(idArr.slice(i,i+1000))}).then(function(r){return r.json();}); if(Array.isArray(_nm)) _nm.forEach(function(n){names[n.id]=n.name;}); } }catch(e){}
+        var agg2={}; try{ agg2=await fuzzAgg(HUBS[hub].region, idArr); }catch(e){}
+        function price(id){ var o=agg2[id]||{}; var s=o.sell&&Number(o.sell.min); return s>0?s:0; }
+        function nm(id){ return names[id]||('#'+id); }
+
+        // suggested loadout per category (fill slots)
+        var slotFor={high:slots.hi,mid:slots.med,low:slots.low,rig:slots.rig,sub:slots.sub};
+        var loadout={}; var fitCost=0;
+        ['high','mid','low','rig','sub'].forEach(function(c){
+          var S=slotFor[c]||0; if(!S)return;
+          var ranked=Object.keys(agg[c]).map(function(id){return {id:Number(id),fits:agg[c][id].fits,avg:agg[c][id].total/Math.max(1,agg[c][id].fits)};}).sort(function(a,b){return b.fits-a.fits;});
+          var out=[]; var left=S;
+          ranked.forEach(function(m){ if(left<=0)return; var n=Math.min(left, Math.max(1, Math.round(m.avg))); for(var i=0;i<n;i++){out.push(m.id);} left-=n; });
+          loadout[c]=out; out.forEach(function(id){fitCost+=price(id);});
+        });
+        // drones: top by total count
+        var droneRanked=Object.keys(agg.drone).map(function(id){return {id:Number(id),fits:agg.drone[id].fits,total:agg.drone[id].total};}).sort(function(a,b){return b.total-a.total;}).slice(0,6);
+
+        function card(lbl,val,col){return '<div class="stat panel"><span class="stat-label">'+lbl+'</span><span class="stat-val" style="color:'+(col||'var(--text)')+'">'+val+'</span></div>';}
+        var hullPrice=price(chosen.id);
+        $('sf-summary').innerHTML='<div class="summary-grid">'
+          +card('Ship', chosen.name)
+          +card('Slots', slots.hi+'H / '+slots.med+'M / '+slots.low+'L / '+slots.rig+'R')
+          +card('Suggested fit cost', money(fitCost)+' <span class="muted small">+ hull '+short(hullPrice)+'</span>','var(--good)')
+          +card('Based on', numFits+' recent killmails')
+          +'</div>';
+
+        // per-category tables
+        var html='';
+        CATS.forEach(function(cat){
+          var c=cat[0]; var rows=Object.keys(agg[c]).map(function(id){return {id:Number(id),fits:agg[c][id].fits,total:agg[c][id].total};}).sort(function(a,b){return b.fits-a.fits;});
+          if(!rows.length)return;
+          rows=rows.slice(0,10);
+          var body=rows.map(function(m){var p=price(m.id);return '<tr><td>'+nm(m.id)+'</td><td class="num pct">'+Math.round(m.fits/numFits*100)+'%</td><td class="num">'+(c==='drone'?intf(Math.round(m.total/Math.max(1,m.fits)))+'&times;':'')+'</td><td class="num">'+(p?short(p):'&mdash;')+'</td></tr>';}).join('');
+          html+='<div class="fit-cat"><h3>'+cat[1]+(cat[2]&&slots[cat[2]]?' &middot; '+slots[cat[2]]+' slots':'')+'</h3><div style="overflow-x:auto"><table class="materials"><thead><tr><th>Module</th><th class="num">Fitted in</th><th class="num">'+(c==='drone'?'Typical qty':'')+'</th><th class="num">Price</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+        });
+        // EFT export
+        var eft='[' + chosen.name + ', ' + chosen.name + ' - common fit]\n';
+        ['low','mid','high','rig'].forEach(function(c){ (loadout[c]||[]).forEach(function(id){ eft+=nm(id)+'\n'; }); eft+='\n'; });
+        droneRanked.forEach(function(d){ eft+=nm(d.id)+' x'+Math.max(1,Math.round(d.total/Math.max(1,d.fits)))+'\n'; });
+        html+='<div class="fit-cat"><h3>Suggested loadout &mdash; EFT / multibuy</h3><div class="panel"><textarea id="sf-eft" readonly>'+eft.replace(/</g,'&lt;')+'</textarea><div style="margin-top:8px"><button id="sf-copy" class="btn">&#9112; Copy fit</button></div></div></div>';
+        $('sf-results').innerHTML=html;
+        var cp=$('sf-copy'); if(cp) cp.addEventListener('click',function(){ var ta=$('sf-eft'); ta.select(); try{document.execCommand('copy');}catch(e){} try{navigator.clipboard.writeText(ta.value);}catch(e){} cp.textContent='✓ Copied'; setTimeout(function(){cp.innerHTML='&#9112; Copy fit';},1500); });
+      }catch(e){ $('sf-summary').innerHTML='<div class="panel">failed: '+e.message+'</div>'; }
+      busy=false;
+    }
+    $('sf-hub').addEventListener('change',function(){ if(chosen) analyze(); });
   });
 })();
 </script>
