@@ -1917,5 +1917,147 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 })();
 </script>
 
+
+<script>
+/* System-driven Ore & Gas tab — enter your system, see minable ores with live prices + yields */
+(function(){
+  function $(id){return document.getElementById(id);}
+  function ready(cb){function ok(){return typeof OREGAS!=='undefined'&&OREGAS.ore&&OREGAS.ore.length&&typeof REPRO!=='undefined'&&REPRO.rows&&typeof fuzzAgg==='function'&&typeof HUBS!=='undefined';}if(ok()){cb();return;}var n=0,iv=setInterval(function(){if(ok()||n++>200){clearInterval(iv);if(ok())cb();}},100);}
+  ready(function(){
+    var tab=$('tab-ore'); if(!tab)return;
+    var HUBK=['jita','amarr','dodixie','rens','hek'];
+
+    var BANDS={
+      high:{common:['Veldspar','Scordite','Pyroxeres','Plagioclase'], situational:['Omber','Kernite','Mordunium']},
+      low:{common:['Pyroxeres','Plagioclase','Kernite','Omber','Jaspet','Hemorphite','Hedbergite'], situational:['Gneiss','Dark Ochre','Crokite','Mordunium']},
+      nul:{common:['Pyroxeres','Kernite','Omber','Gneiss','Dark Ochre','Crokite','Bistot','Arkonor','Spodumain','Mercoxit'], situational:['Griemeer','Hezorime','Kylixium','Nocxite','Ueganite','Ducinium','Eifyrium','Ytirium','Mordunium','Tyranite','Mutanite'], gas:true},
+      wh:{common:['Veldspar','Scordite','Pyroxeres','Plagioclase','Omber','Kernite','Jaspet','Hemorphite','Hedbergite','Gneiss','Dark Ochre','Crokite','Bistot','Arkonor','Spodumain'], situational:['Mercoxit'], gas:true},
+      pochven:{common:['Bezdnacine','Rakovene','Talassonite','Spodumain'], situational:['Mercoxit'], gas:true}
+    };
+    var BANDLABEL={high:'High security',low:'Low security',nul:'Null security',wh:'Wormhole space',pochven:'Pochven (Triglavian)'};
+
+    [].slice.call(tab.children).forEach(function(c){c.style.display='none';});
+
+    var st=document.createElement('style');
+    st.textContent='#os-wrap .tier{margin-top:14px}#os-wrap .tier h3{font-size:.8rem;letter-spacing:1px;text-transform:uppercase;color:var(--accent);margin:0 0 6px}#os-wrap td.mins{white-space:normal;font-size:.78rem;color:var(--muted)}#os-wrap td.iskm3{color:var(--good);font-weight:600}#os-sysbar b{color:var(--text)}.os-hi{color:var(--good)}.os-lo{color:var(--warn)}.os-nu{color:var(--bad)}';
+    document.head.appendChild(st);
+
+    var ui=document.createElement('div'); ui.id='os-wrap';
+    var hubOpts=HUBK.map(function(h){return '<option value="'+h+'">'+HUBS[h].name+'</option>';}).join('');
+    ui.innerHTML=
+      '<section class="controls panel">'
+      +'<div class="field grow"><label for="os-sys">Your system</label><input id="os-sys" type="text" autocomplete="off" placeholder="Enter a system, e.g. Jita, Amarr, Rancer, 1DQ1-A" /></div>'
+      +'<div class="field narrow"><label for="os-hub">Price at</label><select id="os-hub">'+hubOpts+'</select></div>'
+      +'<div class="field narrow"><label for="os-go">&nbsp;</label><button id="os-go" class="btn">&#128269; Look up</button></div>'
+      +'</section>'
+      +'<div class="panel"><div id="os-sysbar" class="muted small" style="padding:6px 4px">Enter the system you are docked/mining in to see which ores are minable there, with live prices and mineral yields.</div></div>'
+      +'<div id="os-results"></div>'
+      +'<p class="muted small" style="margin-top:8px">Ores shown are those minable for the system&rsquo;s <b>security class</b> (EVE has no public API for a system&rsquo;s live belt contents). <b>Common</b> = normally in belts/anomalies; <b>situational</b> = anomalies, sovereignty-hub upgrades (Equinox), or rare spawns that vary by region &amp; sov. Yields are perfect-refine (100%) minerals per 100 units; your real yield is lower. Prices &amp; ISK/m&sup3; live via Fuzzwork.</p>';
+    tab.insertBefore(ui, tab.firstChild);
+
+    function short(n){try{return iskShort(n);}catch(e){return Math.round(n).toLocaleString();}}
+    function setBar(html){var b=$('os-sysbar'); if(b) b.innerHTML=html;}
+
+    function bandOf(sec, regionId, regionName){
+      if(regionName==='Pochven'||regionId===10000070) return 'pochven';
+      if(regionId>=11000000) return 'wh';
+      if(sec>=0.45) return 'high';
+      if(sec>0.0) return 'low';
+      return 'nul';
+    }
+
+    function yieldStr(id){
+      var row=REPRO.rows[id]; if(!row||!row.o) return '&mdash;';
+      return row.o.map(function(pair){return (REPRO.mats[pair[0]]||('#'+pair[0]))+' '+intf(pair[1]);}).join(' &middot; ');
+    }
+
+    function baseOreOf(grp){
+      var cands=(OREGAS.ore||[]).filter(function(o){return o.grp===grp && REPRO.rows[o.id];});
+      if(!cands.length) return null;
+      var exact=cands.find(function(o){return o.name===grp;});
+      if(exact) return exact;
+      return cands.sort(function(a,b){return a.name.length-b.name.length;})[0];
+    }
+    function oresForBand(band){
+      var cfg=BANDS[band]; var out={common:[],situational:[]}; var seen={};
+      ['common','situational'].forEach(function(tier){
+        (cfg[tier]||[]).forEach(function(grp){
+          var base=baseOreOf(grp);
+          if(base && !seen[base.id]){ seen[base.id]=1; out[tier].push(base); }
+        });
+      });
+      return {out:out, gas:cfg.gas};
+    }
+
+    var busy=false;
+    async function lookup(){
+      if(busy)return;
+      var name=($('os-sys').value||'').trim(); if(!name){setBar('type a system name first');return;}
+      var hub=$('os-hub').value;
+      busy=true; $('os-go').disabled=true;
+      setBar('Resolving <b>'+name+'</b>&hellip;');
+      $('os-results').innerHTML='';
+      try{
+        var idr=await fetch('https://esi.evetech.net/latest/universe/ids/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify([name])}).then(function(r){return r.json();});
+        var sysRef=(idr.systems||[])[0];
+        if(!sysRef){ setBar('No system called <b>'+name+'</b> found. Check spelling (use the exact system name).'); busy=false;$('os-go').disabled=false; return; }
+        var sys=await fetch('https://esi.evetech.net/latest/universe/systems/'+sysRef.id).then(function(r){return r.json();});
+        var con=await fetch('https://esi.evetech.net/latest/universe/constellations/'+sys.constellation_id).then(function(r){return r.json();});
+        var reg=await fetch('https://esi.evetech.net/latest/universe/regions/'+con.region_id).then(function(r){return r.json();});
+        var secR=Math.round(sys.security_status*10)/10;
+        var band=bandOf(sys.security_status, con.region_id, reg.name);
+        var secClass = band==='high'?'os-hi':(band==='low'?'os-lo':'os-nu');
+        try{localStorage.setItem('eveOreSystem',sysRef.name);}catch(e){}
+        setBar('<b>'+sysRef.name+'</b> &middot; sec <span class="'+secClass+'">'+secR.toFixed(1)+'</span> &middot; '+reg.name+' &middot; <b>'+BANDLABEL[band]+'</b> &middot; pricing at '+HUBS[hub].name);
+
+        var packed=oresForBand(band);
+        var allIds=[];
+        ['common','situational'].forEach(function(t){packed.out[t].forEach(function(o){allIds.push(o.id);});});
+        var gasList=[];
+        if(packed.gas){ (OREGAS.gas||[]).forEach(function(g){ if(g.grp==='Harvestable Cloud'){ gasList.push(g); allIds.push(g.id); } }); }
+        var agg={};
+        try{ agg=await fuzzAgg(HUBS[hub].region, allIds); }catch(e){}
+        function priceRow(o, showYield){
+          var d=agg[o.id]||{};
+          var sell=d.sell&&Number(d.sell.min); var buy=d.buy&&Number(d.buy.max);
+          var iskm3=(sell>0&&o.vol>0)?sell/o.vol:0;
+          return {o:o, sell:sell||0, buy:buy||0, iskm3:iskm3, yieldCell: showYield?yieldStr(o.id):''};
+        }
+        function tableHTML(rows, showYield){
+          var head='<thead><tr><th>Ore</th><th class="num">Sell (min)</th><th class="num">Buy (max)</th><th class="num">ISK / m&sup3;</th>'+(showYield?'<th>Refines to (per 100)</th>':'')+'</tr></thead>';
+          var body=rows.map(function(r){
+            return '<tr><td>'+r.o.name+'</td>'
+              +'<td class="num">'+(r.sell?short(r.sell):'&mdash;')+'</td>'
+              +'<td class="num">'+(r.buy?short(r.buy):'&mdash;')+'</td>'
+              +'<td class="num iskm3">'+(r.iskm3?short(r.iskm3):'&mdash;')+'</td>'
+              +(showYield?'<td class="mins">'+r.yieldCell+'</td>':'')
+              +'</tr>';
+          }).join('');
+          return '<div style="overflow-x:auto"><table class="materials">'+head+'<tbody>'+body+'</tbody></table></div>';
+        }
+        var html='';
+        [['common','Common in belts here'],['situational','Situational (anomalies / sov-hub / rare)']].forEach(function(pair){
+          var list=packed.out[pair[0]];
+          if(!list.length)return;
+          var rows=list.map(function(o){return priceRow(o,true);}).sort(function(a,b){return b.iskm3-a.iskm3;});
+          html+='<div class="tier"><h3>'+pair[1]+' &middot; '+rows.length+'</h3>'+tableHTML(rows,true)+'</div>';
+        });
+        if(packed.gas && gasList.length){
+          var grows=gasList.map(function(o){return priceRow(o,false);}).filter(function(r){return r.sell>0||r.buy>0;}).sort(function(a,b){return b.iskm3-a.iskm3;}).slice(0,40);
+          if(grows.length) html+='<div class="tier"><h3>Gas (cosmic signatures &mdash; varies by region) &middot; '+grows.length+'</h3>'+tableHTML(grows,false)+'</div>';
+        }
+        if(!html) html='<div class="panel muted small">No standard belt ores are defined for this security class.</div>';
+        $('os-results').innerHTML=html;
+      }catch(e){ setBar('lookup failed: '+e.message); }
+      busy=false; $('os-go').disabled=false;
+    }
+
+    $('os-go').addEventListener('click',lookup);
+    $('os-sys').addEventListener('keydown',function(e){ if(e.key==='Enter'){e.preventDefault();lookup();} });
+    try{ var last=localStorage.getItem('eveOreSystem'); if(last){ $('os-sys').value=last; } }catch(e){}
+  });
+})();
+</script>
+
 </body>
 </html>
