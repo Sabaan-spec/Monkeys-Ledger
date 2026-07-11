@@ -1947,7 +1947,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     ui.innerHTML=
       '<section class="controls panel">'
       +'<div class="field grow"><label for="os-sys">Your system</label><input id="os-sys" type="text" autocomplete="off" placeholder="Enter a system, e.g. Jita, Amarr, Rancer, 1DQ1-A" /></div>'
-      +'<div class="field narrow"><label for="os-hub">Price at</label><select id="os-hub">'+hubOpts+'</select></div>'
+      +'<div class="field narrow"><label for="os-hub">Price at</label><select id="os-hub">'+hubOpts+'</select></div>'+'<div class="field narrow"><label for="os-rate">m&sup3; / hour</label><input id="os-rate" type="number" min="0" step="1000" value="20000" /></div>'
       +'<div class="field narrow"><label for="os-go">&nbsp;</label><button id="os-go" class="btn">&#128269; Look up</button></div>'
       +'</section>'
       +'<div class="panel"><div id="os-sysbar" class="muted small" style="padding:6px 4px">Enter the system you are docked/mining in to see which ores are minable there, with live prices and mineral yields.</div></div>'
@@ -1993,7 +1993,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     async function lookup(){
       if(busy)return;
       var name=($('os-sys').value||'').trim(); if(!name){setBar('type a system name first');return;}
-      var hub=$('os-hub').value;
+      var hub=$('os-hub').value; var rate=Number(($('os-rate')||{}).value)||0;
       busy=true; $('os-go').disabled=true;
       setBar('Resolving <b>'+name+'</b>&hellip;');
       $('os-results').innerHTML='';
@@ -2024,12 +2024,12 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
           return {o:o, sell:sell||0, buy:buy||0, iskm3:iskm3, yieldCell: showYield?yieldStr(o.id):''};
         }
         function tableHTML(rows, showYield){
-          var head='<thead><tr><th>Ore</th><th class="num">Sell (min)</th><th class="num">Buy (max)</th><th class="num">ISK / m&sup3;</th>'+(showYield?'<th>Refines to (per 100)</th>':'')+'</tr></thead>';
+          var head='<thead><tr><th>Ore</th><th class="num">Sell (min)</th><th class="num">Buy (max)</th><th class="num">ISK / m&sup3;</th>'+(rate>0?'<th class="num">ISK / hour</th>':'')+(showYield?'<th>Refines to (per 100)</th>':'')+'</tr></thead>';
           var body=rows.map(function(r){
             return '<tr><td>'+r.o.name+'</td>'
               +'<td class="num">'+(r.sell?short(r.sell):'&mdash;')+'</td>'
               +'<td class="num">'+(r.buy?short(r.buy):'&mdash;')+'</td>'
-              +'<td class="num iskm3">'+(r.iskm3?short(r.iskm3):'&mdash;')+'</td>'
+              +'<td class="num iskm3">'+(r.iskm3?short(r.iskm3):'&mdash;')+'</td>'+(rate>0?'<td class="num" style="color:var(--accent)">'+(r.iskm3?short(r.iskm3*rate):'&mdash;')+'</td>':'')
               +(showYield?'<td class="mins">'+r.yieldCell+'</td>':'')
               +'</tr>';
           }).join('');
@@ -2055,6 +2055,147 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     $('os-go').addEventListener('click',lookup);
     $('os-sys').addEventListener('keydown',function(e){ if(e.key==='Enter'){e.preventDefault();lookup();} });
     try{ var last=localStorage.getItem('eveOreSystem'); if(last){ $('os-sys').value=last; } }catch(e){}
+  });
+})();
+</script>
+
+
+<script>
+/* Build vs Buy tree — recursively finds the cheapest way to source every component */
+(function(){
+  function $(id){return document.getElementById(id);}
+  function ready(cb){function ok(){return typeof ITEMS!=='undefined'&&ITEMS.length&&typeof fuzzAgg==='function'&&typeof HUBS!=='undefined'&&typeof getMarketStats==='function';}if(ok()){cb();return;}var n=0,iv=setInterval(function(){if(ok()||n++>200){clearInterval(iv);if(ok())cb();}},100);}
+  ready(function(){
+    var main=document.querySelector('main.wrap'); if(!main)return;
+    var byId={}; ITEMS.forEach(function(it){byId[it.id]=it;});
+    var HUBK=['jita','amarr','dodixie','rens','hek'];
+
+    var calcBtn=[].slice.call(document.querySelectorAll('.tab')).find(function(b){return b.dataset.tab==='calc';});
+    var btn=document.createElement('button');btn.className='tab';btn.setAttribute('data-tab','tree');btn.textContent='Build Tree';
+    if(calcBtn&&calcBtn.parentNode) calcBtn.parentNode.insertBefore(btn, calcBtn.nextSibling); else document.querySelector('nav.tabs').appendChild(btn);
+
+    var div=document.createElement('div'); div.id='tab-tree'; div.hidden=true;
+    var hubOpts=HUBK.map(function(h){return '<option value="'+h+'">'+HUBS[h].name+'</option>';}).join('');
+    div.innerHTML=
+      '<section class="controls panel">'
+      +'<div class="field grow" style="position:relative"><label for="bt-search">Item to build</label><input id="bt-search" type="text" autocomplete="off" placeholder="Start typing&hellip; e.g. Cerberus, Hobgoblin II, Damage Control II" /><ul id="bt-sug" class="suggestions" hidden></ul></div>'
+      +'<div class="field narrow"><label for="bt-hub">Buy materials at</label><select id="bt-hub">'+hubOpts+'</select></div>'
+      +'<div class="field narrow"><label for="bt-me">ME %</label><input id="bt-me" type="number" min="0" max="10" step="1" value="10" /></div>'
+      +'<div class="field narrow"><label for="bt-fee" title="Job install fee as % of EIV, applied at each build step">Job fee %</label><input id="bt-fee" type="number" min="0" step="0.1" value="5" /></div>'
+      +'</section>'
+      +'<div id="bt-summary"></div>'
+      +'<div class="panel" id="bt-tree-wrap" hidden style="margin-top:12px"><div id="bt-tree"></div></div>'
+      +'<div id="bt-empty" class="panel muted small" style="padding:10px">Search an item to see the cheapest way to source every component &mdash; buy it, or build it from raw materials. Buildable components are compared buy-vs-build recursively.</div>'
+      +'<p class="muted small" style="margin-top:8px">Each buildable component is priced both ways: <b>buy</b> from the market, or <b>build</b> from its own materials + a job fee. The cheaper path is chosen and marked. Materials valued at sell (list) price; ME% applied at every build step; job fee = EIV &times; your %. Excludes build time, slots &amp; invention. Live via Fuzzwork &amp; CCP ESI.</p>';
+    main.appendChild(div);
+
+    document.querySelectorAll('.tab').forEach(function(b){
+      b.addEventListener('click',function(){
+        var n=b.dataset.tab; var d=$('tab-tree'); if(d) d.hidden=n!=='tree';
+        if(n==='tree'){
+          [].slice.call(document.querySelectorAll('main.wrap > [id^="tab-"]')).forEach(function(el){ if(el.id!=='tab-tree') el.hidden=true; });
+          document.querySelectorAll('.tab').forEach(function(x){ x.classList.toggle('active', x===b); });
+        }
+      });
+    });
+
+    function short(n){try{return iskShort(n);}catch(e){return Math.round(n).toLocaleString();}}
+    function money(n){try{return isk(Math.round(n));}catch(e){return Math.round(n).toLocaleString()+' ISK';}}
+
+    var chosen=null;
+    var sug=$('bt-sug'), sInput=$('bt-search');
+    sInput.addEventListener('input',function(){
+      var q=sInput.value.trim().toLowerCase(); if(q.length<2){sug.hidden=true;return;}
+      var m=ITEMS.filter(function(it){return it.name.toLowerCase().indexOf(q)>=0;}).slice(0,12);
+      if(!m.length){sug.hidden=true;return;}
+      sug.innerHTML=m.map(function(it){return '<li data-id="'+it.id+'">'+it.name+'</li>';}).join('');
+      sug.hidden=false;
+    });
+    sug.addEventListener('mousedown',function(e){var li=e.target.closest('li');if(!li)return;var id=Number(li.getAttribute('data-id'));chosen=byId[id];sInput.value=chosen.name;sug.hidden=true;analyze();});
+    sInput.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();var q=sInput.value.trim().toLowerCase();var it=ITEMS.find(function(x){return x.name.toLowerCase()===q;})||ITEMS.find(function(x){return x.name.toLowerCase().indexOf(q)>=0;});if(it){chosen=it;sInput.value=it.name;sug.hidden=true;analyze();}}});
+    document.addEventListener('click',function(e){ if(!e.target.closest('#bt-search')&&!e.target.closest('#bt-sug')) sug.hidden=true; });
+
+    var PRICE={}, ms=null, ME=0.9, FEE=0.05;
+    function price(id){ var p=PRICE[id]; if(p>0) return p; var a=ms&&ms.avg?ms.avg[id]:0; return a>0?a:0; }
+    function collectIds(id, set, depth){ if(depth>8||set[id])return; set[id]=1; var it=byId[id]; if(it&&it.materials) it.materials.forEach(function(m){ set[m.id]=1; if(byId[m.id]) collectIds(m.id,set,depth+1); }); }
+
+    var UNIT={};
+    function buildUnitCost(id, depth){
+      if(UNIT[id]!=null) return UNIT[id];
+      var it=byId[id]; if(!it||!it.materials||depth>8){ return UNIT[id]=Infinity; }
+      UNIT[id]=Infinity;
+      var matCost=0, eiv=0;
+      it.materials.forEach(function(m){
+        var needQty=Math.max(1,Math.ceil(m.qty*ME));
+        var unit=chosenUnitCost(m.id, depth+1);
+        matCost += unit*needQty;
+        eiv += (ms&&ms.adj?(ms.adj[m.id]||0):0)*m.qty;
+      });
+      var per=(matCost+eiv*FEE)/(it.productQty||1);
+      return UNIT[id]=per;
+    }
+    function chosenUnitCost(id, depth){
+      var buy=price(id);
+      if(byId[id] && depth<=8){
+        var build=buildUnitCost(id, depth);
+        if(build<Infinity){ if(buy<=0) return build; return Math.min(buy, build); }
+      }
+      return buy>0?buy:0;
+    }
+
+    function nodeRow(id, name, qty, depth){
+      var it=byId[id];
+      var buyUnit=price(id), buyCost=buyUnit*qty;
+      var buildable = !!(it&&it.materials&&it.materials.length);
+      var buildUnit = buildable? buildUnitCost(id,depth):Infinity;
+      var buildCost = buildUnit*qty;
+      var mode = (buildable && buildUnit<Infinity && (buildCost<buyCost || buyUnit<=0))?'build':'buy';
+      var pad = 6 + depth*18;
+      var badge = mode==='build'?'<span style="color:var(--good);font-weight:600">BUILD</span>':'<span class="muted">buy</span>';
+      var buyTxt = buyUnit>0? short(buyCost):'&mdash;';
+      var buildTxt = (buildable&&buildUnit<Infinity)? short(buildCost):'&mdash;';
+      var html='<tr><td style="padding-left:'+pad+'px">'+((it&&it.name)||name||('#'+id))+' <span class="muted">&times;'+intf(qty)+'</span></td>'
+        +'<td class="num">'+buyTxt+'</td><td class="num">'+buildTxt+'</td><td>'+badge+'</td></tr>';
+      var expand = (depth===0)? buildable : (mode==='build');
+      if(expand && buildable && depth<8){
+        it.materials.forEach(function(m){ html+=nodeRow(m.id, m.name, Math.max(1,Math.ceil(m.qty*ME))*qty, depth+1); });
+      }
+      return html;
+    }
+
+    var busy=false;
+    async function analyze(){
+      if(busy||!chosen)return; busy=true;
+      ME=1-(Number($('bt-me').value)||0)/100; FEE=(Number($('bt-fee').value)||0)/100;
+      var hub=$('bt-hub').value;
+      $('bt-empty').hidden=true;
+      $('bt-summary').innerHTML='<div class="panel muted small" style="padding:10px">Pricing materials&hellip;</div>';
+      $('bt-tree-wrap').hidden=true;
+      var set={}; collectIds(chosen.id, set, 0);
+      var ids=Object.keys(set).map(Number);
+      try{ ms=await getMarketStats(); }catch(e){}
+      try{ var agg=await fuzzAgg(HUBS[hub].region, ids); PRICE={}; ids.forEach(function(id){var o=agg[id]||{};var s=o.sell&&Number(o.sell.min);PRICE[id]=s>0?s:0;}); }catch(e){ $('bt-summary').innerHTML='<div class="panel">pricing failed: '+e.message+'</div>'; busy=false; return; }
+      UNIT={};
+      var buyFinished=price(chosen.id);
+      var buildOptimal=buildUnitCost(chosen.id,0);
+      var naive=0, eiv0=0;
+      (chosen.materials||[]).forEach(function(m){var need=Math.max(1,Math.ceil(m.qty*ME));naive+=price(m.id)*need;eiv0+=(ms&&ms.adj?(ms.adj[m.id]||0):0)*m.qty;});
+      naive=(naive+eiv0*FEE)/(chosen.productQty||1);
+      function card(lbl,val,col){return '<div class="stat panel"><span class="stat-label">'+lbl+'</span><span class="stat-val" style="color:'+(col||'var(--text)')+'">'+val+'</span></div>';}
+      var save = (buyFinished>0)? (buyFinished-buildOptimal):0;
+      var savePct = buyFinished>0? save/buyFinished*100:0;
+      var cheaper = buyFinished>0 && buildOptimal<buyFinished;
+      $('bt-summary').innerHTML='<div class="summary-grid">'
+        +card('Buy finished', buyFinished>0?money(buyFinished):'&mdash;')
+        +card('Build (buy all mats)', naive<Infinity?money(naive):'&mdash;')
+        +card('Build (optimal)', buildOptimal<Infinity?money(buildOptimal):'&mdash;','var(--good)')
+        +card('Cheapest path saves', cheaper?(money(save)+' ('+savePct.toFixed(0)+'%)'):'buying is cheaper', cheaper?'var(--good)':'var(--muted)')
+        +'</div>';
+      $('bt-tree').innerHTML='<div style="overflow-x:auto"><table class="materials"><thead><tr><th>Component (tree)</th><th class="num">Buy</th><th class="num">Build</th><th>Cheapest</th></tr></thead><tbody>'+nodeRow(chosen.id, chosen.name, 1, 0)+'</tbody></table></div>';
+      $('bt-tree-wrap').hidden=false;
+      busy=false;
+    }
+    ['bt-hub','bt-me','bt-fee'].forEach(function(id){var e=$(id);if(e)e.addEventListener('change',function(){if(chosen)analyze();});});
   });
 })();
 </script>
