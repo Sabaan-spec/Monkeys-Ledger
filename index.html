@@ -2376,7 +2376,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     var div=document.createElement('div');div.id='tab-kills';div.hidden=true;
     div.innerHTML=
       '<section class="controls panel">'
-      +'<div class="field grow"><label for="kl-region">Region</label><input id="kl-region" type="text" autocomplete="off" placeholder="e.g. The Forge, Delve, Domain, Providence" /></div>'
+      +'<div class="field"><label for="kl-region">Region</label><select id="kl-region"><option value="">Loading regions&hellip;</option></select></div>'
       +'<div class="field narrow"><label for="kl-min">Min ISK (M)</label><input id="kl-min" type="number" min="0" step="10" value="0" /></div>'
       +'<div class="field narrow"><label for="kl-sort">Sort</label><select id="kl-sort"><option value="time">Newest</option><option value="value">ISK lost</option></select></div>'
       +'<div class="field narrow"><label for="kl-go">&nbsp;</label><button id="kl-go" class="btn">&#128225; Load kills</button></div>'
@@ -2407,10 +2407,13 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       }
       return out;
     }
+    var _kpop=false;
+    async function populateRegions(){ if(_kpop)return; _kpop=true; try{ var rids=await fetch('https://esi.evetech.net/latest/universe/regions/').then(function(r){return r.json();}); rids=rids.filter(function(id){return id>=10000000&&id<11000000;}); var rn=await resolveNames(rids); var arr=rids.map(function(id){return {id:id,name:rn[id]||('#'+id)};}).sort(function(a,b){return a.name.localeCompare(b.name);}); var sel=$('kl-region'); sel.innerHTML=arr.map(function(r){return '<option value="'+r.id+'"'+(r.name==='The Forge'?' selected':'')+'>'+r.name+'</option>';}).join(''); }catch(e){} }
+    var _kb=[].slice.call(document.querySelectorAll('.tab')).find(function(x){return x.dataset.tab==='kills';}); if(_kb) _kb.addEventListener('click',populateRegions);
 
     var busy=false;
     async function load(){
-      if(busy)return; var name=($('kl-region').value||'').trim(); if(!name){setStatus('type a region name first');return;}
+      if(busy)return; var _s=$('kl-region'); var name=(_s.options[_s.selectedIndex]?_s.options[_s.selectedIndex].text.trim():''); if(!name){setStatus('pick a region first');return;}
       var minISK=(Number($('kl-min').value)||0)*1e6; var sort=$('kl-sort').value;
       busy=true; $('kl-go').disabled=true; setStatus('Resolving '+name+'…'); $('kl-wrap').hidden=true;
       try{
@@ -2440,7 +2443,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     }
     $('kl-go').addEventListener('click',load);
     $('kl-region').addEventListener('keydown',function(e){ if(e.key==='Enter'){e.preventDefault();load();} });
-    ['kl-min','kl-sort'].forEach(function(id){var e=$(id);if(e)e.addEventListener('change',function(){if(($('kl-region').value||'').trim())load();});});
+    ['kl-region','kl-min','kl-sort'].forEach(function(id){var e=$(id);if(e)e.addEventListener('change',function(){if($('kl-region').value)load();});});
   });
 })();
 </script>
