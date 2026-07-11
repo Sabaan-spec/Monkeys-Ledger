@@ -2367,7 +2367,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     var main=document.querySelector('main.wrap'); if(!main)return;
 
     var stl=document.createElement('style');
-    stl.textContent='nav.tabs button.tab{font-size:.73rem;padding-left:8px;padding-right:8px}#tab-kills td a{color:var(--accent);text-decoration:none}#tab-kills td a:hover{text-decoration:underline}';
+    stl.textContent='nav.tabs button.tab{font-size:.73rem;padding-left:8px;padding-right:8px}#tab-kills td a{color:var(--accent);text-decoration:none}#tab-kills td a:hover{text-decoration:underline}#tab-kills #kl-region{min-width:200px}#tab-kills .kl-btn{width:100%;display:inline-flex;align-items:center;justify-content:center;gap:6px;font-weight:600;letter-spacing:.5px}#kl-live.on{border-color:var(--good);color:var(--good);animation:kl-pulse 1.6s ease-in-out infinite}@keyframes kl-pulse{0%,100%{box-shadow:0 0 8px rgba(86,208,168,.15)}50%{box-shadow:0 0 15px rgba(86,208,168,.55)}}';
     document.head.appendChild(stl);
 
     var btn=document.createElement('button');btn.className='tab';btn.setAttribute('data-tab','kills');btn.textContent='Kills';
@@ -2379,7 +2379,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       +'<div class="field"><label for="kl-region">Region</label><select id="kl-region"><option value="">Loading regions&hellip;</option></select></div>'
       +'<div class="field narrow"><label for="kl-min">Min ISK (M)</label><input id="kl-min" type="number" min="0" step="10" value="0" /></div>'
       +'<div class="field narrow"><label for="kl-sort">Sort</label><select id="kl-sort"><option value="time">Newest</option><option value="value">ISK lost</option></select></div>'
-      +'<div class="field narrow"><label for="kl-go">&nbsp;</label><button id="kl-go" class="btn">&#128225; Load kills</button></div>'
+      +'<div class="field narrow"><label for="kl-go">&nbsp;</label><button id="kl-go" class="btn kl-btn">Load kills</button></div>'+'<div class="field narrow"><label for="kl-live">&nbsp;</label><button id="kl-live" class="btn kl-btn kl-live">&#9675; LIVE</button></div>'
       +'</section>'
       +'<div class="panel"><div id="kl-status" class="muted small" style="padding:6px 4px">Enter a region to see the most recent player kills there.</div>'
       +'<div id="kl-wrap" hidden style="overflow-x:auto"><table class="materials"><thead><tr><th>When</th><th>Victim</th><th>Ship</th><th>System</th><th class="num">ISK lost</th><th></th></tr></thead><tbody id="kl-body"></tbody></table></div></div>'
@@ -2412,10 +2412,10 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     var _kb=[].slice.call(document.querySelectorAll('.tab')).find(function(x){return x.dataset.tab==='kills';}); if(_kb) _kb.addEventListener('click',populateRegions);
 
     var busy=false;
-    async function load(){
+    async function load(silent){
       if(busy)return; var _s=$('kl-region'); var name=(_s.options[_s.selectedIndex]?_s.options[_s.selectedIndex].text.trim():''); if(!name){setStatus('pick a region first');return;}
       var minISK=(Number($('kl-min').value)||0)*1e6; var sort=$('kl-sort').value;
-      busy=true; $('kl-go').disabled=true; setStatus('Resolving '+name+'…'); $('kl-wrap').hidden=true;
+      busy=true; $('kl-go').disabled=true; if(!silent){ setStatus('Resolving '+name+'…'); $('kl-wrap').hidden=true; }
       try{
         var idr=await fetch('https://esi.evetech.net/latest/universe/ids/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify([name])}).then(function(r){return r.json();});
         var reg=(idr.regions||[])[0];
@@ -2437,11 +2437,15 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
           return '<tr><td class="muted">'+ago(k.killmail_time)+'</td><td>'+vic+'</td><td>'+ship+'</td><td>'+sys+'</td><td class="num" style="color:var(--bad)">'+isk(val)+'</td><td><a href="https://zkillboard.com/kill/'+k.killmail_id+'/" target="_blank" rel="noopener" title="open on zKillboard">&#8599;</a></td></tr>';
         }).join('');
         $('kl-wrap').hidden=false;
-        setStatus(kills.length+' kills in '+reg.name+' · '+(sort==='value'?'by ISK lost':'newest first')+(minISK>0?' · ≥ '+isk(minISK):''));
+        setStatus(kills.length+' kills in '+reg.name+' · '+(sort==='value'?'by ISK lost':'newest first')+(minISK>0?' · ≥ '+isk(minISK):'')+(_live?' · live':''));
+        if(!silent) _setLive(true);
       }catch(e){ setStatus('load failed: '+e.message); }
       busy=false; $('kl-go').disabled=false;
     }
-    $('kl-go').addEventListener('click',load);
+    $('kl-go').addEventListener('click',function(){load();});
+    var _live=false,_timer=null;
+    function _setLive(on){_live=on;var b=$('kl-live');if(b){b.classList.toggle('on',on);b.innerHTML=on?'&#9679; LIVE':'&#9675; LIVE';}if(on){if(!_timer)_timer=setInterval(function(){var tk=$('tab-kills');if(tk&&tk.hidden)return;if(busy)return;if($('kl-region').value)load(true);},30000);}else{if(_timer){clearInterval(_timer);_timer=null;}}}
+    var _lb=$('kl-live');if(_lb)_lb.addEventListener('click',function(){_setLive(!_live);if(_live&&$('kl-region').value)load();});
     $('kl-region').addEventListener('keydown',function(e){ if(e.key==='Enter'){e.preventDefault();load();} });
     ['kl-region','kl-min','kl-sort'].forEach(function(id){var e=$(id);if(e)e.addEventListener('change',function(){if($('kl-region').value)load();});});
   });
