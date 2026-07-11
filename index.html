@@ -1,4 +1,4 @@
-0<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
@@ -2259,6 +2259,55 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     }
     var bar=document.getElementById('ticker-bar');
     bar.addEventListener('click',function(e){ var tk=e.target.closest('.tk'); if(!tk)return; var b=tk.querySelector('b'); var name=b?b.textContent.trim():''; if(name) openInArb(name); });
+  });
+})();
+</script>
+
+
+<script>
+/* Manufacture-in-system cost index — accurate job fees for any system, not just hubs */
+(function(){
+  function $(id){return document.getElementById(id);}
+  function ready(cb){function ok(){return $('f-sci')&&$('hub')&&typeof getSysAll==='function';}if(ok()){cb();return;}var n=0,iv=setInterval(function(){if(ok()||n++>200){clearInterval(iv);if(ok())cb();}},100);}
+  ready(function(){
+    var hubField=$('hub').closest('.field'); if(!hubField)return;
+    var wrap=document.createElement('div'); wrap.className='field'; wrap.style.position='relative';
+    wrap.innerHTML='<label for="mf-sys">Manufacture in (system)</label><input id="mf-sys" type="text" autocomplete="off" placeholder="e.g. Jita, Sobaseki, 1DQ1-A" /><div id="mf-note" class="muted small" style="margin-top:4px">Any system &mdash; job install fee uses that system&rsquo;s live cost index.</div>';
+    hubField.parentNode.insertBefore(wrap, hubField.nextSibling);
+
+    var SYS=null;
+    async function sysData(){ if(SYS)return SYS; try{SYS=await getSysAll();}catch(e){SYS={};} return SYS; }
+    function recompute(){
+      var f=$('f-sci'); if(f){ f.dispatchEvent(new Event('input',{bubbles:true})); f.dispatchEvent(new Event('change',{bubbles:true})); }
+      var pn=$('product-name'); if(pn && pn.textContent.trim() && pn.textContent.trim()!=='—'){ var rb=$('refresh'); if(rb) rb.click(); }
+    }
+
+    var busy=false;
+    async function apply(){
+      if(busy)return; var name=($('mf-sys').value||'').trim(); if(!name){return;}
+      busy=true;
+      $('mf-note').textContent='Resolving '+name+'…';
+      try{
+        var r=await fetch('https://esi.evetech.net/latest/universe/ids/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify([name])}).then(function(x){return x.json();});
+        var sys=(r.systems||[])[0];
+        if(!sys){ $('mf-note').innerHTML='<span style="color:var(--bad)">no system called <b>'+name+'</b></span>'; busy=false; return; }
+        var full=await fetch('https://esi.evetech.net/latest/universe/systems/'+sys.id).then(function(x){return x.json();});
+        var con=await fetch('https://esi.evetech.net/latest/universe/constellations/'+full.constellation_id).then(function(x){return x.json();});
+        var reg=await fetch('https://esi.evetech.net/latest/universe/regions/'+con.region_id).then(function(x){return x.json();});
+        var data=await sysData();
+        var idx=(data[sys.id]&&data[sys.id].manufacturing)||0;
+        var pct=idx*100;
+        var secR=Math.round(full.security_status*10)/10;
+        $('f-sci').value=pct.toFixed(2);
+        recompute();
+        try{localStorage.setItem('eveMfgSystem',sys.name);}catch(e){}
+        $('mf-note').innerHTML='Building in <b>'+sys.name+'</b> &middot; sec '+secR.toFixed(1)+' &middot; '+reg.name+' &middot; mfg index <b>'+pct.toFixed(2)+'%</b> &middot; job fees updated';
+      }catch(e){ $('mf-note').textContent='lookup failed: '+e.message; }
+      busy=false;
+    }
+    $('mf-sys').addEventListener('keydown',function(e){ if(e.key==='Enter'){e.preventDefault();apply();} });
+    $('mf-sys').addEventListener('blur',function(){ if(($('mf-sys').value||'').trim())apply(); });
+    try{ var last=localStorage.getItem('eveMfgSystem'); if(last){ $('mf-sys').value=last; } }catch(e){}
   });
 })();
 </script>
