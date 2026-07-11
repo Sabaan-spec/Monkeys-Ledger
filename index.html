@@ -2457,7 +2457,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 /* Ship fit suggester — most-common modules per slot from recent killmails (zKillboard + ESI) */
 (function(){
   function $(id){return document.getElementById(id);}
-  function ready(cb){function ok(){return typeof ITEMS!=='undefined'&&ITEMS.length&&typeof fuzzAgg==='function'&&typeof HUBS!=='undefined'&&document.querySelector('nav.tabs');}if(ok()){cb();return;}var n=0,iv=setInterval(function(){if(ok()||n++>200){clearInterval(iv);if(ok())cb();}},100);}
+  function ready(cb){function ok(){return typeof ITEMS!=='undefined'&&ITEMS.filter(function(it){return it.kind==='Ships';}).length&&typeof fuzzAgg==='function'&&typeof HUBS!=='undefined'&&document.querySelector('nav.tabs');}if(ok()){cb();return;}var n=0,iv=setInterval(function(){if(ok()||n++>200){clearInterval(iv);if(ok())cb();}},100);}
   ready(function(){
     var main=document.querySelector('main.wrap'); if(!main)return;
     var ships=ITEMS.filter(function(it){return it.kind==='Ships';});
