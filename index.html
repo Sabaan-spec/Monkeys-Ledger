@@ -2463,7 +2463,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     var ships=ITEMS.filter(function(it){return it.kind==='Ships';});
 
     var stl=document.createElement('style');
-    stl.textContent='#tab-fits .fit-cat{margin-top:14px}#tab-fits .fit-cat h3{font-size:.8rem;letter-spacing:1px;text-transform:uppercase;color:var(--accent);margin:0 0 6px}#tab-fits td.pct{color:var(--good);font-weight:600}#tab-fits #sf-eft{width:100%;min-height:150px;background:var(--bg-2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;font-family:var(--mono);font-size:.78rem;resize:vertical}';
+    stl.textContent='#tab-fits .fit-cat{margin-top:14px}#tab-fits .fit-cat h3{font-size:.8rem;letter-spacing:1px;text-transform:uppercase;color:var(--accent);margin:0 0 6px}#tab-fits td.pct{color:var(--good);font-weight:600}#tab-fits #sf-eft{width:100%;min-height:150px;background:var(--bg-2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;font-family:var(--mono);font-size:.78rem;resize:vertical}#tab-fits .sf-spin{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;display:inline-block;flex:0 0 auto;animation:sfspin .8s linear infinite}@keyframes sfspin{to{transform:rotate(360deg)}}';
     document.head.appendChild(stl);
 
     var btn=document.createElement('button');btn.className='tab';btn.setAttribute('data-tab','fits');btn.textContent='Fits';
@@ -2514,10 +2514,10 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       if(busy||!chosen)return; busy=true;
       var hub=$('sf-hub').value;
       $('sf-empty').hidden=true;
-      $('sf-summary').innerHTML='<div class="panel muted small" style="padding:10px">Pulling recent fits for '+chosen.name+'&hellip;</div>';
+      $('sf-summary').innerHTML='<div class="panel" style="padding:14px;display:flex;align-items:center;gap:12px"><span class="sf-spin"></span><span class="small">Loading recent fits for <b>'+chosen.name+'</b>&hellip;<br><span class="muted">pulling killmails from zKillboard &mdash; this can take 5&ndash;10 seconds</span></span></div>';
       $('sf-results').innerHTML='';
       try{
-        var kills=await fetch('https://zkillboard.com/api/shipID/'+chosen.id+'/').then(function(r){return r.json();});
+        var kills=await Promise.race([fetch('https://zkillboard.com/api/shipID/'+chosen.id+'/'),new Promise(function(_z,_rej){setTimeout(function(){_rej(new Error('zKillboard timed out \u2014 please try again'));},25000);})]).then(function(r){return r.json();});
         var dogma=await fetch('https://esi.evetech.net/latest/universe/types/'+chosen.id).then(function(r){return r.json();});
         var da={}; (dogma.dogma_attributes||[]).forEach(function(a){da[a.attribute_id]=a.value;});
         var slots={hi:da[14]||0,med:da[13]||0,low:da[12]||0,rig:da[1137]||0,sub:da[1367]||0};
