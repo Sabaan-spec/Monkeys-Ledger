@@ -2983,7 +2983,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
         var routes=[]; var budget0=(Number($('pl-budget').value)||1000)*1e6;
         inRange.forEach(function(idS){ var id=Number(idS); if(id===start.id)return; var b=books[id]; if(!b)return; var dst=(mode==='buy')?b.buy:b.sell; if(!Object.keys(dst).length)return;
           var opps=[];
-          Object.keys(src).forEach(function(tid){ var s=src[tid], d=dst[tid]; if(!d)return; var unit=d.p*(1-tax)-s.p; if(unit<=0)return; var units=(mode==='buy')?Math.min(s.vol,d.vol):s.vol; if(units<=0)return; opps.push({id:Number(tid),unit:unit,units:units,price:s.p,margin:unit/s.p}); });
+          Object.keys(src).forEach(function(tid){ var s=src[tid]; if(!s||s.p<=0||s.p===Infinity)return; var po=(mode==='buy')?b.buy[tid]:b.sell[tid]; if(!po||po.p<=0)return; var unit=po.p*(1-tax)-s.p; if(unit<=0)return; var mg=unit/s.p; if(mg>5)return; var demand=b.buy[tid]?b.buy[tid].vol:0; if(demand<=0)return; var units=Math.min(s.vol,demand); if(units<=0)return; opps.push({id:Number(tid),unit:unit,units:units,price:s.p,margin:mg}); });
           if(!opps.length)return;
           opps.sort(function(a,b){return b.margin-a.margin;});
           var budget=budget0, profit=0, best=null, items=0;
