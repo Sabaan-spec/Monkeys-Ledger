@@ -1834,197 +1834,6 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 })();
 </script>
 
-<script>
-/* What should I haul? — per-system order-book trade scanner */
-(function(){
-  function $(id){return document.getElementById(id);}
-  function ready(cb){function ok(){return typeof HUBS!=='undefined'&&typeof arbItems!=='undefined'&&arbItems.length&&document.querySelector('nav.tabs');}if(ok()){cb();return;}var n=0,iv=setInterval(function(){if(ok()||n++>300){clearInterval(iv);if(ok())cb();}},100);}
-  ready(function(){
-    var main=document.querySelector('main.wrap'); if(!main)return;
-
-    var stl=document.createElement('style');
-    stl.textContent='#tab-haul .suggestions{position:absolute;z-index:60;left:0;right:0;top:100%;max-height:260px;overflow:auto;margin:2px 0 0;padding:0;list-style:none;background:var(--bg-2);border:1px solid var(--border);border-radius:6px}#tab-haul .suggestions li{padding:5px 9px;cursor:pointer;font-size:.82rem}#tab-haul .suggestions li:hover{background:rgba(120,180,255,.12)}#tab-haul .hub-pick button{background:var(--bg-2);border:1px solid var(--border);color:var(--accent);border-radius:5px;padding:2px 8px;margin:0 4px 4px 0;cursor:pointer;font-size:.72rem}#tab-haul .hub-pick button:hover{border-color:var(--accent)}#tab-haul #hl-progbar{height:6px;background:var(--bg-2);border-radius:4px;overflow:hidden;margin:6px 0}#tab-haul #hl-progbar>i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}#tab-haul td.pos{color:var(--good);font-weight:600}';
-    document.head.appendChild(stl);
-
-    var btn=document.createElement('button');btn.className='tab';btn.setAttribute('data-tab','haul');btn.textContent='Haul';
-    (function(){var nav=document.querySelector('nav.tabs');var arb=[].slice.call(nav.querySelectorAll('.tab')).find(function(x){return x.textContent.trim()==='Arbitrage';});if(arb&&arb.nextSibling){nav.insertBefore(btn,arb.nextSibling);}else{nav.appendChild(btn);}})();
-
-    var div=document.createElement('div');div.id='tab-haul';div.hidden=true;
-    div.innerHTML=
-      '<section class="controls panel">'
-      +'<div class="field" style="position:relative"><label for="hl-from">From system</label><input id="hl-from" type="text" autocomplete="off" placeholder="Start typing&hellip; e.g. Jita" /><ul id="hl-fromsug" class="suggestions" hidden></ul></div>'
-      +'<div class="field" style="position:relative"><label for="hl-to">To system</label><input id="hl-to" type="text" autocomplete="off" placeholder="Start typing&hellip; e.g. Amarr" /><ul id="hl-tosug" class="suggestions" hidden></ul></div>'
-      +'<div class="field narrow"><label for="hl-tax">Sales tax %</label><input id="hl-tax" type="number" min="0" step="0.1" value="4.5" /></div>'
-      +'<div class="field narrow"><label for="hl-min">Min profit (K)</label><input id="hl-min" type="number" min="0" step="10" value="200" /></div>'
-      +'<div class="field narrow"><label for="hl-mode">Sell method</label><select id="hl-mode"><option value="sell">Relist as sell orders</option><option value="buy">Into buy orders (instant)</option></select></div>'
-      +'<div class="field narrow"><label for="hl-scan">&nbsp;</label><button id="hl-scan" class="btn">Scan hauls</button></div>'
-      +'</section>'
-      +'<div class="hub-pick" style="padding:2px 2px 0"><span class="muted small">Quick start:</span> <span id="hl-qfrom"></span> &nbsp;<span class="muted small">Quick end:</span> <span id="hl-qto"></span></div>'
-      +'<div class="panel">'
-      +'<div id="hl-status" class="muted small" style="padding:6px 4px">Pick a start and end system, then scan. Prices are live per-system order books from CCP ESI.</div>'
-      +'<div id="hl-prog" hidden style="padding:2px 4px 6px"><div id="hl-proglbl" class="muted small"></div><div id="hl-progbar"><i></i></div></div>'
-      +'<div id="hl-wrap" hidden style="overflow-x:auto"><table class="materials"><thead><tr><th>Item</th><th class="num">Buy @ from</th><th class="num">Sell @ to</th><th class="num">Profit / unit</th><th class="num">Margin</th><th class="num">Units avail</th><th class="num">Total profit</th></tr></thead><tbody id="hl-body"></tbody></table></div>'
-      +'</div>'
-      +'<p class="muted small" style="margin-top:8px"><b>Buy</b> at the start system from the lowest sell orders, then either <b>relist as sell orders</b> at the end system&rsquo;s going price (patient) or <b>sell into buy orders</b> there (instant fill) &mdash; choose via <b>Sell method</b>. Profit is after sales tax (broker fees not included). &ldquo;Units avail&rdquo; is an upper bound. Only systems with an active market return prices. Live order books via <a href="https://esi.evetech.net" target="_blank" rel="noopener">CCP ESI</a>; big regions (e.g. The Forge/Jita) can take up to a minute to load the first time, then it&rsquo;s cached.</p>';
-    main.appendChild(div);
-
-    document.querySelectorAll('.tab').forEach(function(b){
-      b.addEventListener('click',function(){
-        var n=b.dataset.tab; var d=$('tab-haul'); if(d) d.hidden=n!=='haul';
-        if(n==='haul'){
-          [].slice.call(document.querySelectorAll('main.wrap > [id^="tab-"]')).forEach(function(el){ if(el.id!=='tab-haul') el.hidden=true; });
-          document.querySelectorAll('.tab').forEach(function(x){ x.classList.toggle('active', x===b); });
-        }
-      });
-    });
-
-    function money(n){try{return isk(Math.round(n));}catch(e){return Math.round(n).toLocaleString()+' ISK';}}
-    function shortISK(n){try{return iskShort(n);}catch(e){return Math.round(n).toLocaleString();}}
-    function intfn(n){try{return intf(n);}catch(e){return Math.round(n).toLocaleString();}}
-    function setStatus(t){var s=$('hl-status'); if(s)s.textContent=t;}
-    function setProgress(done,total,region){ var pw=$('hl-prog'); if(!pw)return; pw.hidden=false; var bar=$('hl-progbar'); if(bar&&bar.firstChild)bar.firstChild.style.width=Math.round(done/Math.max(1,total)*100)+'%'; var lbl=$('hl-proglbl'); if(lbl)lbl.textContent='Loading order book · region '+region+' · page '+done+' / '+total; }
-
-    var HUBSYS={Jita:30000142,Amarr:30002187,Dodixie:30002659,Rens:30002510,Hek:30002053};
-    var hubOrder=['Jita','Amarr','Dodixie','Rens','Hek'];
-    function fillHubs(spanId,targetId){var sp=$(spanId); if(!sp)return; sp.innerHTML=hubOrder.map(function(h){return '<button type="button" data-h="'+h+'" data-t="'+targetId+'">'+h+'</button>';}).join('');}
-    fillHubs('hl-qfrom','hl-from'); fillHubs('hl-qto','hl-to');
-
-    // ---- system autocomplete data ----
-    var SYS=null, sysLoading=false;
-    async function loadSystems(){
-      if(SYS||sysLoading)return SYS; sysLoading=true;
-      try{
-        var ids=await fetch('https://esi.evetech.net/latest/universe/systems/').then(function(r){return r.json();});
-        var names=[];
-        for(var i=0;i<ids.length;i+=1000){
-          var chunk=ids.slice(i,i+1000);
-          try{ var nm=await fetch('https://esi.evetech.net/latest/universe/names/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(chunk)}).then(function(r){return r.json();}); if(Array.isArray(nm)) nm.forEach(function(x){ if(x.category==='solar_system') names.push({id:x.id,name:x.name,lc:x.name.toLowerCase()}); }); }catch(e){}
-        }
-        names.sort(function(a,b){return a.name.localeCompare(b.name);});
-        SYS=names;
-      }catch(e){ SYS=[]; }
-      sysLoading=false; return SYS;
-    }
-
-    var regionOf={};
-    async function sysRegion(sysId){
-      if(regionOf[sysId])return regionOf[sysId];
-      var s=await fetch('https://esi.evetech.net/latest/universe/systems/'+sysId).then(function(r){return r.json();});
-      var c=await fetch('https://esi.evetech.net/latest/universe/constellations/'+s.constellation_id).then(function(r){return r.json();});
-      regionOf[sysId]=c.region_id; return c.region_id;
-    }
-
-    var bookCache={}; // systemId -> {sell:{type:{p,vol}}, buy:{type:{p,vol}}}
-    async function fetchSystemBooks(systemIds){
-      var need=systemIds.filter(function(id){return !bookCache[id];});
-      if(!need.length)return;
-      var byRegion={};
-      for(var k=0;k<need.length;k++){ var rg=await sysRegion(need[k]); (byRegion[rg]=byRegion[rg]||[]).push(need[k]); bookCache[need[k]]={sell:{},buy:{}}; }
-      var regions=Object.keys(byRegion);
-      for(var ri=0; ri<regions.length; ri++){
-        var region=regions[ri]; var wantSys={}; byRegion[region].forEach(function(sid){wantSys[sid]=1;});
-        function ingest(arr){ if(!Array.isArray(arr))return; for(var a=0;a<arr.length;a++){ var o=arr[a]; if(!wantSys[o.system_id])continue; var m=bookCache[o.system_id]; if(o.is_buy_order){ var bb=m.buy[o.type_id]; if(!bb){bb=m.buy[o.type_id]={p:0,vol:0};} if(o.price>bb.p)bb.p=o.price; bb.vol+=o.volume_remain; } else { var ss=m.sell[o.type_id]; if(!ss){ss=m.sell[o.type_id]={p:Infinity,vol:0};} if(o.price<ss.p)ss.p=o.price; ss.vol+=o.volume_remain; } } }
-        var first=await fetch('https://esi.evetech.net/latest/markets/'+region+'/orders/?order_type=all&page=1');
-        var pages=parseInt(first.headers.get('x-pages')||'1',10);
-        ingest(await first.json());
-        var pageNums=[]; for(var p=2;p<=pages;p++)pageNums.push(p);
-        var idx=0, conc=16, doneP=1; setProgress(doneP,pages,region);
-        async function worker(){ while(true){ var myi=idx++; if(myi>=pageNums.length)return; var pg=pageNums[myi]; try{ var r=await fetch('https://esi.evetech.net/latest/markets/'+region+'/orders/?order_type=all&page='+pg); if(r.ok){ ingest(await r.json()); } }catch(e){} doneP++; if(doneP%6===0)setProgress(doneP,pages,region); } }
-        var ws=[]; for(var w=0;w<conc;w++)ws.push(worker()); await Promise.all(ws);
-        setProgress(pages,pages,region);
-      }
-    }
-
-    var nameCache={}; arbItems.forEach(function(it){nameCache[it.id]=it.name;});
-    async function resolveNames(rows){
-      var miss=rows.filter(function(r){return !nameCache[r.id];}).map(function(r){return r.id;});
-      for(var i=0;i<miss.length;i+=1000){
-        try{ var nm=await fetch('https://esi.evetech.net/latest/universe/names/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(miss.slice(i,i+1000))}).then(function(r){return r.json();}); if(Array.isArray(nm))nm.forEach(function(x){nameCache[x.id]=x.name;}); }catch(e){}
-      }
-    }
-    function nm(id){return nameCache[id]||('#'+id);}
-
-    function resolveSys(v){ v=(v||'').trim(); if(!v)return null; var lc=v.toLowerCase();
-      var hubName=hubOrder.find(function(k){return k.toLowerCase()===lc;});
-      if(hubName)return {id:HUBSYS[hubName],name:hubName};
-      if(SYS){ var ex=SYS.find(function(s){return s.lc===lc;}); if(ex)return {id:ex.id,name:ex.name}; var pre=SYS.find(function(s){return s.lc.indexOf(lc)===0;}); if(pre)return {id:pre.id,name:pre.name}; }
-      return null;
-    }
-
-    function renderRows(rows){
-      if(!rows.length){ $('hl-body').innerHTML='<tr><td colspan="7" class="muted">No profitable hauls found between these systems above the minimum profit.</td></tr>'; $('hl-wrap').hidden=false; return; }
-      $('hl-body').innerHTML=rows.map(function(r){
-        return '<tr><td>'+nm(r.id)+'</td><td class="num">'+money(r.buy)+'</td><td class="num">'+money(r.sell)+'</td><td class="num pos">'+money(r.unit)+'</td><td class="num pos">'+(r.margin*100).toFixed(1)+'%</td><td class="num">'+intfn(r.units)+'</td><td class="num pos">'+shortISK(r.tot)+'</td></tr>';
-      }).join('');
-      $('hl-wrap').hidden=false;
-    }
-
-    var busy=false;
-    async function scan(){
-      if(busy)return;
-      if(!SYS){ setStatus('Loading system list first&hellip;'); await loadSystems(); }
-      var fromSys=resolveSys($('hl-from').value), toSys=resolveSys($('hl-to').value);
-      if(!fromSys){setStatus('Could not find that start system &mdash; check the name.');return;}
-      if(!toSys){setStatus('Could not find that end system &mdash; check the name.');return;}
-      if(fromSys.id===toSys.id){setStatus('Start and end systems must be different.');return;}
-      busy=true; $('hl-scan').disabled=true; $('hl-wrap').hidden=true;
-      var tax=(Number($('hl-tax').value)||0)/100; var minP=(Number($('hl-min').value)||0)*1000;
-      try{
-        setStatus('Fetching live order books for '+fromSys.name+' and '+toSys.name+'&hellip;');
-        await fetchSystemBooks([fromSys.id,toSys.id]);
-        $('hl-prog').hidden=true;
-        var mode=($('hl-mode')&&$('hl-mode').value)||'sell';
-        var src=bookCache[fromSys.id].sell, dst=(mode==='buy')?bookCache[toSys.id].buy:bookCache[toSys.id].sell;
-        var srcN=Object.keys(src).length, dstN=Object.keys(dst).length;
-        var rows=[];
-        Object.keys(src).forEach(function(tid){
-          var s=src[tid], b=dst[tid]; if(!b)return;
-          var buyCost=s.p, sellRev=b.p*(1-tax);
-          var unit=sellRev-buyCost; if(unit<=0)return;
-          var units=(mode==='buy')?Math.min(s.vol,b.vol):s.vol; var tot=unit*units;
-          if(tot<minP)return;
-          rows.push({id:Number(tid),buy:buyCost,sell:b.p,unit:unit,margin:unit/buyCost,units:units,tot:tot});
-        });
-        rows.sort(function(a,b){return b.tot-a.tot;});
-        rows=rows.slice(0,100);
-        await resolveNames(rows);
-        renderRows(rows);
-        var how=(mode==='buy')?'sell into buy orders (instant)':'relist at sell-order price';
-        if(!rows.length){
-          var reason;
-          if(!srcN&&!dstN) reason='Neither '+fromSys.name+' nor '+toSys.name+' has an active market. A route needs both systems to trade — pick a hub (Jita, Amarr, Dodixie, Rens, Hek) or a busy regional market.';
-          else if(!srcN) reason=fromSys.name+' has no items listed for sale (empty market) — nothing to buy and haul from here. Choose a start system with an active market.';
-          else if(!dstN) reason=toSys.name+' has no active market ('+(mode==='buy'?'no buy orders':'no sell orders')+') — it is not a trading system, so there are no local prices to compare against. Pick a hub or busy market as the destination'+(mode==='buy'?', or switch Sell method to Relist.':'.');
-          else reason='No hauls clear your Min profit at current prices'+(mode==='buy'?'. Tip: switch Sell method to Relist as sell orders for many more routes.':' — try lowering Min profit.');
-          $('hl-body').innerHTML='<tr><td colspan="7" class="muted" style="padding:12px;line-height:1.6">'+reason+'</td></tr>';
-          $('hl-wrap').hidden=false;
-          setStatus('0 routes · '+fromSys.name+' ('+srcN+' on market) → '+toSys.name+' ('+dstN+' '+(mode==='buy'?'buy orders':'on market')+')');
-        } else {
-          setStatus(rows.length+' profitable item'+(rows.length===1?'':'s')+' · '+fromSys.name+' → '+toSys.name+' · '+how+' · tax '+($('hl-tax').value||0)+'%');
-        }
-      }catch(e){ setStatus('Scan failed: '+e.message); $('hl-prog').hidden=true; }
-      busy=false; $('hl-scan').disabled=false;
-    }
-
-    // ---- delegated wiring (robust to timing) ----
-    if(!window.__hlDelegated){ window.__hlDelegated=true;
-      document.addEventListener('input',function(e){var t=e.target;if(!t||(t.id!=='hl-from'&&t.id!=='hl-to'))return;var g=$(t.id+'sug');if(!g)return;if(!SYS){g.hidden=true;return;}var q=t.value.trim().toLowerCase();if(q.length<2){g.hidden=true;return;}var m=SYS.filter(function(s){return s.lc.indexOf(q)>=0;}).slice(0,12);if(!m.length){g.hidden=true;return;}g.innerHTML=m.map(function(s){return '<li data-name="'+s.name+'">'+s.name+'</li>';}).join('');g.hidden=false;});
-      document.addEventListener('mousedown',function(e){var li=e.target.closest?e.target.closest('#hl-fromsug li,#hl-tosug li'):null;if(!li)return;var ul=li.parentNode;var inp=$(ul.id.replace('sug',''));if(inp)inp.value=li.getAttribute('data-name');ul.hidden=true;});
-      document.addEventListener('click',function(e){
-        var hb=e.target.closest?e.target.closest('#tab-haul .hub-pick button'):null;
-        if(hb){var inp=$(hb.getAttribute('data-t'));if(inp)inp.value=hb.getAttribute('data-h');return;}
-        if(!e.target.closest('#hl-from')&&!e.target.closest('#hl-fromsug')){var a=$('hl-fromsug');if(a)a.hidden=true;}
-        if(!e.target.closest('#hl-to')&&!e.target.closest('#hl-tosug')){var b2=$('hl-tosug');if(b2)b2.hidden=true;}
-      });
-      document.addEventListener('keydown',function(e){var t=e.target;if(!t)return;if((t.id==='hl-from'||t.id==='hl-to'||t.id==='hl-tax'||t.id==='hl-min')&&e.key==='Enter'){e.preventDefault();var g=$('hl-fromsug');if(g)g.hidden=true;var g2=$('hl-tosug');if(g2)g2.hidden=true;scan();}});
-    }
-
-    $('hl-scan').addEventListener('click',scan);
-    $('hl-from').value='Jita'; $('hl-to').value='Amarr';
-    loadSystems();
-  });
-})();
-</script>
 
 
 <script>
@@ -2156,7 +1965,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
         var secClass = band==='high'?'os-hi':(band==='low'?'os-lo':'os-nu');
         try{localStorage.setItem('eveOreSystem',sysRef.name);}catch(e){}
         setBar('<b>'+sysRef.name+'</b> &middot; sec <span class="'+secClass+'">'+secR.toFixed(1)+'</span> &middot; '+reg.name+' &middot; <b>'+BANDLABEL[band]+'</b> &middot; pricing at '+HUBS[hub].name);
-        var haulBtn=$('os-haul'); if(haulBtn) haulBtn.style.display='';
+        var haulBtn=$('os-haul'); if(haulBtn) haulBtn.style.display='none';
 
         var packed=oresForBand(band);
         var oreObjs=[]; ['common','situational'].forEach(function(t){packed.out[t].forEach(function(o){oreObjs.push(o);});});
@@ -2840,8 +2649,8 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       +'<div class="panel"><div id="pl-status" class="muted small" style="padding:6px 4px">Set a start system, max jumps and minimum security, then plan routes. First run builds a one-time map of New Eden into your browser (cached).</div>'
       +'<div id="pl-prog" hidden style="padding:2px 4px 6px"><div id="pl-proglbl" class="muted small"></div><div id="pl-bar"><i></i></div></div>'
       +'<div style="padding:2px 4px"><button id="pl-buildmap" class="btn" style="font-size:.72rem">Build / refresh map</button> <span id="pl-mapinfo" class="muted small"></span></div>'
-      +'<div id="pl-wrap" hidden style="overflow-x:auto;margin-top:6px"><table class="materials"><thead><tr><th>Destination</th><th>Region</th><th class="num">Jumps</th><th class="num">Route min-sec</th><th class="num">Kills 24h</th><th>Risk</th><th class="num">Items</th><th>Best item</th><th class="num">Profit / budget</th></tr></thead><tbody id="pl-body"></tbody></table></div></div>'
-      +'<p class="muted small" style="margin-top:8px">Finds every system within your jump &amp; security limits that has a live market, prices what you can profitably haul there from your start (buy from sell orders; then relist at the local sell price or dump into buy orders), and rates <b>risk</b> from the safest route&rsquo;s lowest security plus recent <a href="https://zkillboard.com" target="_blank" rel="noopener">zKillboard</a> kills. Click a route to open it in the Haul scanner. Wide jump limits touch many regions and can take a few minutes the first time (order books are cached after).</p>';
+      +'<div id="pl-wrap" hidden style="overflow-x:auto;margin-top:6px"><table class="materials"><thead><tr><th>Destination</th><th>Region</th><th class="num">Jumps</th><th class="num">Route min-sec</th><th class="num">Kills 24h</th><th>Risk</th><th class="num">Items</th><th>Best item</th><th class="num">Profit / budget</th></tr></thead><tbody id="pl-body"></tbody></table></div><div id="pl-detail" style="margin-top:8px"></div></div>'
+      +'<p class="muted small" style="margin-top:8px">Finds every system within your jump &amp; security limits that has a live market, prices what you can profitably haul there from your start (buy from sell orders; then relist at the local sell price or dump into buy orders), and rates <b>risk</b> from the safest route&rsquo;s lowest security plus recent <a href="https://zkillboard.com" target="_blank" rel="noopener">zKillboard</a> kills. Click a route for its per-item breakdown. Wide jump limits touch many regions and can take a few minutes the first time (order books are cached after).</p>';
     main.appendChild(div);
 
     document.querySelectorAll('.tab').forEach(function(b){
@@ -2870,7 +2679,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     if(!window.__plDeleg){ window.__plDeleg=true;
       document.addEventListener('input',function(e){var t=e.target;if(!t||t.id!=='pl-from')return;var g=$('pl-fromsug');if(!g||!SYS)return;var q=t.value.trim().toLowerCase();if(q.length<2){g.hidden=true;return;}var m=SYS.filter(function(s){return s.lc.indexOf(q)>=0;}).slice(0,12);if(!m.length){g.hidden=true;return;}g.innerHTML=m.map(function(s){return '<li data-name="'+s.name+'">'+s.name+'</li>';}).join('');g.hidden=false;});
       document.addEventListener('mousedown',function(e){var li=e.target.closest?e.target.closest('#pl-fromsug li'):null;if(!li)return;var inp=$('pl-from');if(inp)inp.value=li.getAttribute('data-name');$('pl-fromsug').hidden=true;});
-      document.addEventListener('click',function(e){var g=$('pl-fromsug');if(g&&!e.target.closest('#pl-from')&&!e.target.closest('#pl-fromsug'))g.hidden=true; var row=e.target.closest?e.target.closest('#pl-body tr.route'):null; if(row){ openHaul(row.getAttribute('data-to')); }});
+      document.addEventListener('click',function(e){var g=$('pl-fromsug');if(g&&!e.target.closest('#pl-from')&&!e.target.closest('#pl-fromsug'))g.hidden=true; var row=e.target.closest?e.target.closest('#pl-body tr.route'):null; if(row){ showDetail(Number(row.getAttribute('data-id'))); }});
     }
     loadSystems();
 
@@ -2953,14 +2762,14 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     function riskOf(minSec, kills){ var s = minSec>=0.5?0:(minSec>0?1:2); var kk = kills<0?0:(kills>=20?2:(kills>=5?1:0)); var r=Math.max(s,kk)+(s&&kk?1:0); if(r>=3)r=2; return r; }
     function riskLabel(r){ return r<=0?'<span class="rk-low">Low</span>':(r===1?'<span class="rk-med">Medium</span>':'<span class="rk-high">High</span>'); }
 
-    var busy=false;
+    var busy=false, lastStart=null, lastMode='sell';
     async function plan(){
       if(busy)return;
       if(!SYS){ setStatus('Loading system list&hellip;'); await loadSystems(); }
       var start=resolveSys($('pl-from').value); if(!start){ setStatus('Enter a valid start system.'); return; }
       if(!loadMap()){ await buildMap(); if(!loadMap())return; }
       var maxJ=Math.max(1,Number($('pl-jumps').value)||8); var minSec=Number($('pl-sec').value); if(isNaN(minSec))minSec=-1;
-      var mode=$('pl-mode').value; var minP=(Number($('pl-min').value)||0)*1e6; var tax=0.045;
+      var mode=$('pl-mode').value; var minP=(Number($('pl-min').value)||0)*1e6; var tax=0.045; lastStart=start; lastMode=mode;
       busy=true; $('pl-go').disabled=true; $('pl-wrap').hidden=true;
       try{
         var m=loadMap();
@@ -3012,7 +2821,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       $('pl-body').innerHTML=routes.map(function(r){
         var reg=nameCache[r.region]||('#'+r.region);
         var kills=r.kills<0?'?':r.kills;
-        return '<tr class="route" data-to="'+r.name+'" title="Open in Haul scanner">'
+        return '<tr class="route" data-id="'+r.id+'" data-to="'+r.name+'" title="Click for item detail">'
           +'<td>'+r.name+' <span class="muted">'+r.sec.toFixed(1)+'</span></td>'
           +'<td class="muted">'+reg+'</td>'
           +'<td class="num">'+r.jumps+'</td>'
@@ -3027,11 +2836,20 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       $('pl-wrap').hidden=false;
       window.__plStart=start.name;
     }
-    function openHaul(destName){
-      var start=window.__plStart; if(!start)return;
-      var hf=$('hl-from'), ht=$('hl-to'), hmode=$('hl-mode'); if(hf)hf.value=start; if(ht)ht.value=destName; if(hmode&&$('pl-mode'))hmode.value=$('pl-mode').value;
-      var b=[].slice.call(document.querySelectorAll('.tab')).find(function(x){return x.dataset.tab==='haul';}); if(b)b.click();
-      var sc=$('hl-scan'); if(sc)sc.click();
+    function showDetail(destId){
+      if(!lastStart){return;}
+      var srcB=books[lastStart.id]; var b=books[destId]; if(!srcB||!b){var e0=$('pl-detail'); if(e0)e0.innerHTML='<p class="muted small" style="padding:6px">Detail unavailable — re-run the plan.</p>'; return;}
+      var src=srcB.sell; var mode=lastMode; var tax=0.045; var rows=[];
+      Object.keys(src).forEach(function(tid){ var s=src[tid]; if(!s||s.p<=0||s.p===Infinity)return; var po=(mode==='buy')?b.buy[tid]:b.sell[tid]; if(!po||po.p<=0)return; var unit=po.p*(1-tax)-s.p; if(unit<=0)return; var mg=unit/s.p; if(mg>5)return; var demand=b.buy[tid]?b.buy[tid].vol:0; if(demand<=0)return; var units=Math.min(s.vol,demand); if(units<=0)return; rows.push({id:Number(tid),buy:s.p,sell:po.p,unit:unit,units:units,tot:unit*units}); });
+      rows.sort(function(a,b){return b.tot-a.tot;}); rows=rows.slice(0,25);
+      resolveNames(rows.map(function(r){return r.id;})).then(function(){
+        var dn=((loadMap().sys[destId]||[])[2])||('#'+destId);
+        var h='<div style="background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:8px"><div style="color:var(--accent);text-transform:uppercase;letter-spacing:1px;font-size:.72rem;margin-bottom:6px">'+lastStart.name+' \u2192 '+dn+' \u00b7 top items ('+(mode==='buy'?'into buy orders':'relist at sell price')+')</div>';
+        h+='<div style="overflow-x:auto"><table class="materials"><thead><tr><th>Item</th><th class="num">Buy @ '+lastStart.name+'</th><th class="num">'+(mode==='buy'?'Buy @ ':'Sell @ ')+dn+'</th><th class="num">Profit / unit</th><th class="num">Units</th><th class="num">Total</th></tr></thead><tbody>';
+        h+=rows.map(function(r){ return '<tr><td>'+(nameCache[r.id]||('#'+r.id))+'</td><td class="num">'+money(r.buy)+'</td><td class="num">'+money(r.sell)+'</td><td class="num" style="color:var(--good)">'+money(r.unit)+'</td><td class="num">'+Math.round(r.units).toLocaleString()+'</td><td class="num" style="color:var(--good);font-weight:600">'+shortISK(r.tot)+'</td></tr>'; }).join('');
+        h+='</tbody></table></div></div>';
+        var el=$('pl-detail'); if(el){ el.innerHTML=h; el.scrollIntoView({block:'nearest'}); }
+      });
     }
 
     $('pl-go').addEventListener('click',plan);
