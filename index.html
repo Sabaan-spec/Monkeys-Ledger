@@ -2029,6 +2029,22 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       pochven:{common:['Bezdnacine','Rakovene','Talassonite','Spodumain'], situational:['Mercoxit'], gas:true}
     };
     var BANDLABEL={high:'High security',low:'Low security',nul:'Null security',wh:'Wormhole space',pochven:'Pochven (Triglavian)'};
+    var QUARTER={'Domain':'amarr','Tash-Murkon':'amarr','Kor-Azor':'amarr','Kador':'amarr','Devoid':'amarr','The Bleak Lands':'amarr','Aridia':'amarr','Genesis':'amarr','Delve':'amarr','Querious':'amarr','Period Basis':'amarr','Paragon Soul':'amarr','Esoteria':'amarr','Stain':'amarr','Catch':'amarr','Impass':'amarr','Providence':'amarr','The Forge':'cal','Lonetrek':'cal','The Citadel':'cal','Black Rise':'cal','Cobalt Edge':'cal','Malpais':'cal','Oasa':'cal','Outer Passage':'cal','Perrigen Falls':'cal','The Kalevala Expanse':'cal','The Spire':'cal','Cloud Ring':'cal','Fade':'cal','Fountain':'cal','Outer Ring':'cal','Syndicate':'cal','Pure Blind':'cal','Sinq Laison':'gal','Essence':'gal','Verge Vendor':'gal','Everyshore':'gal','Placid':'gal','Solitude':'gal','Cache':'gal','Detorid':'gal','Feythabolis':'gal','Great Wildlands':'gal','Immensea':'gal','Insmother':'gal','Omist':'gal','Scalding Pass':'gal','Tenerifis':'gal','Curse':'gal','Wicked Creek':'gal','Metropolis':'min','Heimatar':'min','Molden Heath':'min','Branch':'min','Deklein':'min','Geminate':'min','Tenal':'min','Tribute':'min','Vale of the Silent':'min','Venal':'min'};
+    var QICE={amarr:['Clear Icicle','Enriched Clear Icicle'],cal:['Blue Ice','Thick Blue Ice'],gal:['Glacial Mass','Smooth Glacial Mass'],min:['White Glaze','Pristine White Glaze']};
+    var QLABEL={amarr:'Amarr quarter',cal:'Caldari quarter',gal:'Gallente quarter',min:'Minmatar quarter'};
+    function oreByName(nm){return (OREGAS.ore||[]).find(function(o){return o.name===nm;});}
+    function iceForSystem(secR, band, regionName){
+      if(band==='wh') return {names:[],note:'Regular wormholes have no ice belts (only shattered WH have a Shattered Ice Field).'};
+      if(band==='pochven') return {names:[],note:'Pochven has no standard ice belts.'};
+      var q=QUARTER[regionName]; var names=[];
+      if(q) names.push(QICE[q][0]);
+      if(band==='low'||band==='nul') names.push('Glare Crust');
+      if(secR<=0.1) names.push('Dark Glitter');
+      if(band==='nul'){ names.push('Gelidus'); names.push('Krystallos'); if(q) names.push(QICE[q][1]); }
+      var seen={},outn=[]; names.forEach(function(n){ if(!seen[n]){seen[n]=1;outn.push(n);} });
+      var note=''; if(!q&&band==='nul') note='Universal null ices shown; the faction basic/enriched ice depends on the region racial quarter (not mapped here).'; else if(!q&&(band==='high'||band==='low')) note='This region empire quarter is not mapped, so faction ice may be missing.';
+      return {names:outn,note:note,q:q};
+    }
     var SHIPS=[['','Custom'],['3000','Venture ~3k'],['12000','Procurer ~12k'],['18000','Skiff ~18k'],['24000','Retriever ~24k'],['30000','Mackinaw ~30k'],['34000','Covetor ~34k'],['50000','Hulk ~50k']];
 
     [].slice.call(tab.children).forEach(function(c){c.style.display='none';});
@@ -2129,9 +2145,11 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 
         var packed=oresForBand(band);
         var oreObjs=[]; ['common','situational'].forEach(function(t){packed.out[t].forEach(function(o){oreObjs.push(o);});});
-        await resolveCompressed(oreObjs);
-        var allIds=oreObjs.map(function(o){return o.id;});
-        oreObjs.forEach(function(o){ var cid=CMPID[o.id]; if(cid) allIds.push(cid); });
+        var iceInfo=iceForSystem(secR, band, reg.name);
+        var iceObjs=iceInfo.names.map(oreByName).filter(Boolean);
+        await resolveCompressed(oreObjs.concat(iceObjs));
+        var allIds=oreObjs.concat(iceObjs).map(function(o){return o.id;});
+        oreObjs.concat(iceObjs).forEach(function(o){ var cid=CMPID[o.id]; if(cid) allIds.push(cid); });
         var gasList=[];
         if(packed.gas){ (OREGAS.gas||[]).forEach(function(g){ if(g.grp==='Harvestable Cloud'){ gasList.push(g); allIds.push(g.id); } }); }
         var agg={};
@@ -2164,6 +2182,12 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
           var rows=list.map(function(o){return priceRow(o,true,true);}).sort(function(a,b){return b.iskhr-a.iskhr;});
           html+='<div class="tier"><h3>'+pair[1]+' &middot; '+rows.length+'</h3>'+tableHTML(rows,true,true)+'</div>';
         });
+        if(iceObjs.length){
+          var irows=iceObjs.map(function(o){return priceRow(o,true,true);}).sort(function(a,b){return b.iskhr-a.iskhr;});
+          html+='<div class="tier"><h3>Ice belts'+(iceInfo.q?' &middot; '+QLABEL[iceInfo.q]:'')+' &middot; '+irows.length+'</h3>'+tableHTML(irows,true,true)+(iceInfo.note?'<p class="muted small" style="margin:4px 0 0">'+iceInfo.note+'</p>':'')+'</div>';
+        } else if(iceInfo.note){
+          html+='<div class="tier"><h3>Ice belts</h3><p class="muted small">'+iceInfo.note+'</p></div>';
+        }
         if(packed.gas && gasList.length){
           var grows=gasList.map(function(o){return priceRow(o,false,false);}).filter(function(r){return r.sell>0||r.buy>0;}).sort(function(a,b){return b.iskm3-a.iskm3;}).slice(0,40);
           if(grows.length) html+='<div class="tier"><h3>Gas (cosmic signatures &mdash; varies by region) &middot; '+grows.length+'</h3>'+tableHTML(grows,false,false)+'</div>';
