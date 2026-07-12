@@ -2582,16 +2582,16 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 
 
 <script>
-/* Ship fit suggester — most-common modules per slot from recent killmails (zKillboard + ESI) */
+/* Ship fit suggester v2 — real loss data, most-common actual fit, meta grouping, ammo, sample quality */
 (function(){
   function $(id){return document.getElementById(id);}
-  function ready(cb){function ok(){return typeof ITEMS!=='undefined'&&ITEMS.filter(function(it){return it.kind==='Ships';}).length&&typeof fuzzAgg==='function'&&typeof HUBS!=='undefined'&&document.querySelector('nav.tabs');}if(ok()){cb();return;}var n=0,iv=setInterval(function(){if(ok()||n++>200){clearInterval(iv);if(ok())cb();}},100);}
+  function ready(cb){function ok(){return typeof ITEMS!=='undefined'&&ITEMS.filter(function(it){return it.kind==='Ships';}).length&&typeof fuzzAgg==='function'&&typeof HUBS!=='undefined'&&document.querySelector('nav.tabs');}if(ok()){cb();return;}var n=0,iv=setInterval(function(){if(ok()||n++>300){clearInterval(iv);if(ok())cb();}},100);}
   ready(function(){
     var main=document.querySelector('main.wrap'); if(!main)return;
     var ships=ITEMS.filter(function(it){return it.kind==='Ships';});
 
     var stl=document.createElement('style');
-    stl.textContent='#tab-fits .fit-cat{margin-top:14px}#tab-fits .fit-cat h3{font-size:.8rem;letter-spacing:1px;text-transform:uppercase;color:var(--accent);margin:0 0 6px}#tab-fits td.pct{color:var(--good);font-weight:600}#tab-fits #sf-eft{width:100%;min-height:150px;background:var(--bg-2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;font-family:var(--mono);font-size:.78rem;resize:vertical}#tab-fits .sf-spin{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;display:inline-block;flex:0 0 auto;animation:sfspin .8s linear infinite}@keyframes sfspin{to{transform:rotate(360deg)}}';
+    stl.textContent='#tab-fits .fit-cat{margin-top:14px}#tab-fits .fit-cat h3{font-size:.8rem;letter-spacing:1px;text-transform:uppercase;color:var(--accent);margin:0 0 6px}#tab-fits td.pct{color:var(--good);font-weight:600}#tab-fits #sf-eft{width:100%;min-height:150px;background:var(--bg-2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;font-family:var(--mono);font-size:.78rem;resize:vertical}#tab-fits .sf-spin{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;display:inline-block;flex:0 0 auto;animation:sfspin .8s linear infinite}@keyframes sfspin{to{transform:rotate(360deg)}}#tab-fits .modal-fit{background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-top:10px}#tab-fits .modal-fit .slotline{padding:2px 0;font-size:.86rem}#tab-fits .modal-fit .slotcat{color:var(--accent);text-transform:uppercase;letter-spacing:1px;font-size:.7rem;margin:8px 0 2px}#tab-fits .subrow td{color:var(--muted);font-size:.76rem;padding-left:22px}#tab-fits .sq{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-top:6px}#tab-fits .sq label{font-size:.8rem;color:var(--muted)}';
     document.head.appendChild(stl);
 
     var btn=document.createElement('button');btn.className='tab';btn.setAttribute('data-tab','fits');btn.textContent='Fits';
@@ -2603,10 +2603,11 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       +'<div class="field grow" style="position:relative"><label for="sf-search">Ship</label><input id="sf-search" type="text" autocomplete="off" placeholder="Start typing&hellip; e.g. Rifter, Caracal, Ishtar, Hurricane" /><ul id="sf-sug" class="suggestions" hidden></ul></div>'
       +'<div class="field narrow"><label for="sf-hub">Price at</label><select id="sf-hub"><option value="jita">Jita (The Forge)</option><option value="amarr">Amarr (Domain)</option><option value="dodixie">Dodixie</option><option value="rens">Rens</option><option value="hek">Hek</option></select></div>'
       +'</section>'
+      +'<div class="sq"><label><input type="checkbox" id="sf-outlier" checked /> Exclude bling outliers (fit &gt; 3&times; median)</label></div>'
       +'<div id="sf-summary"></div>'
       +'<div id="sf-results"></div>'
-      +'<div id="sf-empty" class="panel muted small" style="padding:10px">Pick a ship to see how it&rsquo;s commonly fit &mdash; the most-used modules per slot, pulled from recent killmails.</div>'
-      +'<p class="muted small" style="margin-top:8px">Fits are aggregated from recent <a href="https://zkillboard.com" target="_blank" rel="noopener">zKillboard</a> killmails (i.e. how real pilots fit this hull, based on losses). The suggested loadout fills each slot with the most common modules; percentages show how often a module appears. Not a tuned/optimal fit &mdash; verify CPU/PG in-game. Prices live via Fuzzwork.</p>';
+      +'<div id="sf-empty" class="panel muted small" style="padding:10px">Pick a ship to see how it&rsquo;s actually flown &mdash; the most common real fit, module popularity, ammo and drones &mdash; built from recent killboard losses.</div>'
+      +'<p class="muted small" style="margin-top:8px">Built from recent <a href="https://zkillboard.com" target="_blank" rel="noopener">zKillboard</a> <b>losses</b> of this hull (i.e. real fits that died). The <b>Most common fit</b> is an actual killmail representing the largest cluster of similar fits; <b>Module popularity</b> groups meta/faction variants of each module. Not a tuned/optimal fit &mdash; verify CPU/PG in-game. Prices live via Fuzzwork.</p>';
     main.appendChild(div);
 
     document.querySelectorAll('.tab').forEach(function(b){
@@ -2622,10 +2623,23 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     function short(n){try{return iskShort(n);}catch(e){return Math.round(n).toLocaleString();}}
     function money(n){try{return isk(Math.round(n));}catch(e){return Math.round(n).toLocaleString()+' ISK';}}
     function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26)return 'mid'; if(flag>=11&&flag<=18)return 'low'; if(flag>=92&&flag<=94)return 'rig'; if(flag>=125&&flag<=132)return 'sub'; if(flag===87)return 'drone'; return null; }
-    var CATS=[['high','High slots','hi'],['mid','Mid slots','med'],['low','Low slots','low'],['rig','Rigs','rig'],['sub','Subsystems','sub'],['drone','Drones',null]];
+    var CATS=[['high','High slots','hi'],['mid','Mid slots','med'],['low','Low slots','low'],['rig','Rigs','rig'],['sub','Subsystems','sub']];
+
+    var FACTION=/\b(Caldari Navy|Imperial Navy|Federation Navy|Republic Fleet|Dread Guristas|True Sansha|Shadow Serpentis|Dark Blood|Domination|Khanid Navy|Ammatar Navy|Sisters|Syndicate|Guristas|Sansha|Serpentis|Blood Raider|Angel|Thukker|Mordu)\b/g;
+    var METAW=/\b(Compact|Enduring|Scoped|Restrained|Ample|Prototype|Experimental|Limited|Upgraded|Basic|Makeshift|Militia)\b/g;
+    function baseName(nm){
+      var s=' '+nm+' ';
+      s=s.replace(/'[^']*'/g,' ');
+      s=s.replace(FACTION,' ');
+      s=s.replace(METAW,' ');
+      s=s.replace(/\b[A-Z]{1,3}-?\d{2,4}\b/g,' ');
+      s=s.replace(/\b(I|II)\b/g,' ');
+      s=s.replace(/\s+/g,' ').trim();
+      return s.length>=4?s:nm.replace(/\s+(I|II)$/,'');
+    }
 
     var chosen=null;
-    var sug=$('sf-sug'), sInput=$('sf-search');if(!window.__sfDelegated){window.__sfDelegated=true;document.addEventListener('input',function(e){var t=e.target;if(!t||t.id!=='sf-search')return;var g=document.getElementById('sf-sug');if(!g)return;var q=t.value.trim().toLowerCase();if(q.length<2){g.hidden=true;return;}var m=ships.filter(function(it){return it.name.toLowerCase().indexOf(q)>=0;}).slice(0,12);if(!m.length){g.hidden=true;return;}g.innerHTML=m.map(function(it){return '<li data-id="'+it.id+'">'+it.name+'</li>';}).join('');g.hidden=false;});document.addEventListener('mousedown',function(e){var li=e.target.closest?e.target.closest('#sf-sug li'):null;if(!li)return;var id=Number(li.getAttribute('data-id'));chosen=ships.find(function(x){return x.id===id;});var inp=document.getElementById('sf-search');if(inp)inp.value=chosen.name;var g=document.getElementById('sf-sug');if(g)g.hidden=true;analyze();});document.addEventListener('keydown',function(e){var t=e.target;if(!t||t.id!=='sf-search'||e.key!=='Enter')return;e.preventDefault();var q=t.value.trim().toLowerCase();var it=ships.find(function(x){return x.name.toLowerCase()===q;})||ships.find(function(x){return x.name.toLowerCase().indexOf(q)>=0;});if(it){chosen=it;t.value=it.name;var g=document.getElementById('sf-sug');if(g)g.hidden=true;analyze();}});document.addEventListener('click',function(e){var g=document.getElementById('sf-sug');if(!g)return;if(!e.target.closest('#sf-search')&&!e.target.closest('#sf-sug'))g.hidden=true;});}
+    var sug=$('sf-sug'), sInput=$('sf-search');
     sInput.addEventListener('input',function(){
       var q=sInput.value.trim().toLowerCase(); if(q.length<2){sug.hidden=true;return;}
       var m=ships.filter(function(it){return it.name.toLowerCase().indexOf(q)>=0;}).slice(0,12);
@@ -2633,81 +2647,155 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       sug.innerHTML=m.map(function(it){return '<li data-id="'+it.id+'">'+it.name+'</li>';}).join('');
       sug.hidden=false;
     });
-    sug.addEventListener('mousedown',function(e){var li=e.target.closest('li');if(!li)return;var id=Number(li.getAttribute('data-id'));chosen=ships.find(function(x){return x.id===id;});sInput.value=chosen.name;sug.hidden=true;analyze();});
-    sInput.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();var q=sInput.value.trim().toLowerCase();var it=ships.find(function(x){return x.name.toLowerCase()===q;})||ships.find(function(x){return x.name.toLowerCase().indexOf(q)>=0;});if(it){chosen=it;sInput.value=it.name;sug.hidden=true;analyze();}}});
-    document.addEventListener('click',function(e){ if(!e.target.closest('#sf-search')&&!e.target.closest('#sf-sug')) sug.hidden=true; });
+    if(!window.__sfDelegated2){ window.__sfDelegated2=true;
+      document.addEventListener('input',function(e){var t=e.target;if(!t||t.id!=='sf-search')return;var g=$('sf-sug');if(!g)return;var q=t.value.trim().toLowerCase();if(q.length<2){g.hidden=true;return;}var m=ships.filter(function(it){return it.name.toLowerCase().indexOf(q)>=0;}).slice(0,12);if(!m.length){g.hidden=true;return;}g.innerHTML=m.map(function(it){return '<li data-id="'+it.id+'">'+it.name+'</li>';}).join('');g.hidden=false;});
+      document.addEventListener('mousedown',function(e){var li=e.target.closest?e.target.closest('#sf-sug li'):null;if(!li)return;var id=Number(li.getAttribute('data-id'));chosen=ships.find(function(x){return x.id===id;});var inp=$('sf-search');if(inp)inp.value=chosen.name;var g=$('sf-sug');if(g)g.hidden=true;analyze();});
+      document.addEventListener('keydown',function(e){var t=e.target;if(!t||t.id!=='sf-search'||e.key!=='Enter')return;e.preventDefault();var q=t.value.trim().toLowerCase();var it=ships.find(function(x){return x.name.toLowerCase()===q;})||ships.find(function(x){return x.name.toLowerCase().indexOf(q)>=0;});if(it){chosen=it;t.value=it.name;var g=$('sf-sug');if(g)g.hidden=true;analyze();}});
+      document.addEventListener('click',function(e){var g=$('sf-sug');if(!g)return;if(!e.target.closest('#sf-search')&&!e.target.closest('#sf-sug'))g.hidden=true;});
+    }
+    var oc=$('sf-outlier'); if(oc) oc.addEventListener('change',function(){ if(lastRaw&&chosen) render(); });
+    var hs=$('sf-hub'); if(hs) hs.addEventListener('change',function(){ if(lastRaw&&chosen) analyze(true); });
 
-    var busy=false;
-    async function analyze(){
+    function median(arr){ if(!arr.length)return 0; var s=arr.slice().sort(function(a,b){return a-b;}); var m=Math.floor(s.length/2); return s.length%2?s[m]:(s[m-1]+s[m])/2; }
+
+    var busy=false, lastRaw=null, lastSlots=null, names={}, agg2={};
+    async function analyze(reuse){
       if(busy||!chosen)return; busy=true;
       var hub=$('sf-hub').value;
       $('sf-empty').hidden=true;
-      $('sf-summary').innerHTML='<div class="panel" style="padding:14px;display:flex;align-items:center;gap:12px"><span class="sf-spin"></span><span class="small">Loading recent fits for <b>'+chosen.name+'</b>&hellip;<br><span class="muted">pulling killmails from zKillboard &mdash; this can take 5&ndash;10 seconds</span></span></div>';
+      $('sf-summary').innerHTML='<div class="panel" style="padding:14px;display:flex;align-items:center;gap:12px"><span class="sf-spin"></span><span class="small">Loading '+chosen.name+' losses&hellip;<br><span class="muted">pulling recent killmails from zKillboard</span></span></div>';
       $('sf-results').innerHTML='';
       try{
-        var kills=await Promise.race([fetch('https://zkillboard.com/api/shipID/'+chosen.id+'/'),new Promise(function(_z,_rej){setTimeout(function(){_rej(new Error('zKillboard timed out \u2014 please try again'));},25000);})]).then(function(r){return r.json();});
-        var dogma=await fetch('https://esi.evetech.net/latest/universe/types/'+chosen.id).then(function(r){return r.json();});
-        var da={}; (dogma.dogma_attributes||[]).forEach(function(a){da[a.attribute_id]=a.value;});
-        var slots={hi:da[14]||0,med:da[13]||0,low:da[12]||0,rig:da[1137]||0,sub:da[1367]||0};
-        if(!Array.isArray(kills)||!kills.length){ $('sf-summary').innerHTML='<div class="panel muted small" style="padding:10px">No recent killmails found for '+chosen.name+'.</div>'; busy=false; return; }
-        kills=kills.slice(0,150);
-        var agg={high:{},mid:{},low:{},rig:{},sub:{},drone:{}}; var numFits=0;
-        kills.forEach(function(k){
-          var v=k.victim||{}; if(!v.items||!v.items.length)return; numFits++;
-          var seen={high:{},mid:{},low:{},rig:{},sub:{},drone:{}};
-          v.items.forEach(function(it){ var c=catOf(it.flag); if(!c)return; var q=(it.quantity_destroyed||0)+(it.quantity_dropped||0); if(c!=='drone' && q!==1) return; if(q<=0)q=1; seen[c][it.item_type_id]=(seen[c][it.item_type_id]||0)+q; });
-          Object.keys(seen).forEach(function(c){ Object.keys(seen[c]).forEach(function(id){ var a=agg[c][id]=agg[c][id]||{fits:0,total:0}; a.fits++; a.total+=seen[c][id]; }); });
-        });
-        // collect ids for names + prices
-        var allIds={}; Object.keys(agg).forEach(function(c){ Object.keys(agg[c]).forEach(function(id){allIds[id]=1;}); }); allIds[chosen.id]=1;
-        var idArr=Object.keys(allIds).map(Number);
-        var names={}; try{ for(var i=0;i<idArr.length;i+=1000){ var _nm=await fetch('https://esi.evetech.net/latest/universe/names/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(idArr.slice(i,i+1000))}).then(function(r){return r.json();}); if(Array.isArray(_nm)) _nm.forEach(function(n){names[n.id]=n.name;}); } }catch(e){}
-        var agg2={}; try{ agg2=await fuzzAgg(HUBS[hub].region, idArr); }catch(e){}
-        function price(id){ var o=agg2[id]||{}; var s=o.sell&&Number(o.sell.min); return s>0?s:0; }
-        function nm(id){ return names[id]||('#'+id); }
-
-        // suggested loadout per category (fill slots)
-        var slotFor={high:slots.hi,mid:slots.med,low:slots.low,rig:slots.rig,sub:slots.sub};
-        var loadout={}; var fitCost=0;
-        ['high','mid','low','rig','sub'].forEach(function(c){
-          var S=slotFor[c]||0; if(!S)return;
-          var ranked=Object.keys(agg[c]).map(function(id){return {id:Number(id),fits:agg[c][id].fits,avg:agg[c][id].total/Math.max(1,agg[c][id].fits)};}).sort(function(a,b){return b.fits-a.fits;});
-          var out=[]; var left=S;
-          ranked.forEach(function(m){ if(left<=0)return; var n=Math.min(left, Math.max(1, Math.round(m.avg))); for(var i=0;i<n;i++){out.push(m.id);} left-=n; });
-          loadout[c]=out; out.forEach(function(id){fitCost+=price(id);});
-        });
-        // drones: top by total count
-        var droneRanked=Object.keys(agg.drone).map(function(id){return {id:Number(id),fits:agg.drone[id].fits,total:agg.drone[id].total};}).sort(function(a,b){return b.total-a.total;}).slice(0,6);
-
-        function card(lbl,val,col){return '<div class="stat panel"><span class="stat-label">'+lbl+'</span><span class="stat-val" style="color:'+(col||'var(--text)')+'">'+val+'</span></div>';}
-        var hullPrice=price(chosen.id);
-        $('sf-summary').innerHTML='<div class="summary-grid">'
-          +card('Ship', chosen.name)
-          +card('Slots', slots.hi+'H / '+slots.med+'M / '+slots.low+'L / '+slots.rig+'R')
-          +card('Suggested fit cost', money(fitCost)+' <span class="muted small">+ hull '+short(hullPrice)+'</span>','var(--good)')
-          +card('Based on', numFits+' recent killmails')
-          +'</div>';
-
-        // per-category tables
-        var html='';
-        CATS.forEach(function(cat){
-          var c=cat[0]; var rows=Object.keys(agg[c]).map(function(id){return {id:Number(id),fits:agg[c][id].fits,total:agg[c][id].total};}).sort(function(a,b){return b.fits-a.fits;});
-          if(!rows.length)return;
-          rows=rows.slice(0,10);
-          var body=rows.map(function(m){var p=price(m.id);return '<tr><td>'+nm(m.id)+'</td><td class="num pct">'+Math.round(m.fits/numFits*100)+'%</td><td class="num">'+(c==='drone'?intf(Math.round(m.total/Math.max(1,m.fits)))+'&times;':'')+'</td><td class="num">'+(p?short(p):'&mdash;')+'</td></tr>';}).join('');
-          html+='<div class="fit-cat"><h3>'+cat[1]+(cat[2]&&slots[cat[2]]?' &middot; '+slots[cat[2]]+' slots':'')+'</h3><div style="overflow-x:auto"><table class="materials"><thead><tr><th>Module</th><th class="num">Fitted in</th><th class="num">'+(c==='drone'?'Typical qty':'')+'</th><th class="num">Price</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
-        });
-        // EFT export
-        var eft='[' + chosen.name + ', ' + chosen.name + ' - common fit]\n';
-        ['low','mid','high','rig'].forEach(function(c){ (loadout[c]||[]).forEach(function(id){ eft+=nm(id)+'\n'; }); eft+='\n'; });
-        droneRanked.forEach(function(d){ eft+=nm(d.id)+' x'+Math.max(1,Math.round(d.total/Math.max(1,d.fits)))+'\n'; });
-        html+='<div class="fit-cat"><h3>Suggested loadout &mdash; EFT / multibuy</h3><div class="panel"><textarea id="sf-eft" readonly>'+eft.replace(/</g,'&lt;')+'</textarea><div style="margin-top:8px"><button id="sf-copy" class="btn">&#9112; Copy fit</button></div></div></div>';
-        $('sf-results').innerHTML=html;
-        var cp=$('sf-copy'); if(cp) cp.addEventListener('click',function(){ var ta=$('sf-eft'); ta.select(); try{document.execCommand('copy');}catch(e){} try{navigator.clipboard.writeText(ta.value);}catch(e){} cp.textContent='✓ Copied'; setTimeout(function(){cp.innerHTML='&#9112; Copy fit';},1500); });
-      }catch(e){ $('sf-summary').innerHTML='<div class="panel">failed: '+e.message+'</div>'; }
+        if(!reuse || !lastRaw){
+          var kills=await Promise.race([
+            fetch('https://zkillboard.com/api/losses/shipID/'+chosen.id+'/').then(function(r){return r.json();}),
+            new Promise(function(_z,_rej){setTimeout(function(){_rej(new Error('zKillboard timed out — please try again'));},25000);})
+          ]);
+          var dogma=await fetch('https://esi.evetech.net/latest/universe/types/'+chosen.id).then(function(r){return r.json();});
+          var da={}; (dogma.dogma_attributes||[]).forEach(function(a){da[a.attribute_id]=a.value;});
+          lastSlots={hi:da[14]||0,med:da[13]||0,low:da[12]||0,rig:da[1137]||0,sub:da[1367]||0};
+          if(!Array.isArray(kills)||!kills.length){ $('sf-summary').innerHTML='<div class="panel muted small" style="padding:10px">No recent losses found for '+chosen.name+'.</div>'; busy=false; return; }
+          kills=kills.filter(function(k){ return k.victim && k.victim.ship_type_id===chosen.id && k.victim.items && k.victim.items.length; });
+          lastRaw=kills;
+          // collect ids for names + prices
+          var idset={}; idset[chosen.id]=1;
+          kills.forEach(function(k){ k.victim.items.forEach(function(it){ idset[it.item_type_id]=1; }); });
+          var idArr=Object.keys(idset).map(Number);
+          names={};
+          try{ for(var i=0;i<idArr.length;i+=1000){ var nm=await fetch('https://esi.evetech.net/latest/universe/names/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(idArr.slice(i,i+1000))}).then(function(r){return r.json();}); if(Array.isArray(nm)) nm.forEach(function(n){names[n.id]=n.name;}); } }catch(e){}
+          try{ agg2=await fuzzAgg(HUBS[hub].region, idArr); }catch(e){ agg2={}; }
+        } else if(reuse){
+          try{ var idArr2=Object.keys(names).map(Number); agg2=await fuzzAgg(HUBS[hub].region, idArr2); }catch(e){}
+        }
+        render();
+      }catch(e){ $('sf-summary').innerHTML='<div class="panel muted small" style="padding:10px">Could not load fits: '+e.message+'</div>'; }
       busy=false;
     }
-    $('sf-hub').addEventListener('change',function(){ if(chosen) analyze(); });
+
+    function price(id){ var o=agg2[id]||{}; var s=o.sell&&Number(o.sell.min); return s>0?s:0; }
+    function nm(id){ return names[id]||('#'+id); }
+
+    function render(){
+      var slots=lastSlots;
+      // outlier filter
+      var kills=lastRaw.slice();
+      var vals=kills.map(function(k){return (k.zkb&&k.zkb.totalValue)||0;});
+      var med=median(vals.filter(function(v){return v>0;}));
+      if($('sf-outlier').checked && med>0){ kills=kills.filter(function(k){ var v=(k.zkb&&k.zkb.totalValue)||0; return v<=med*3 || v===0; }); }
+      if(!kills.length){ kills=lastRaw.slice(); }
+      var N=kills.length;
+
+      // parse each kill
+      function parse(k){
+        var cat={high:[],mid:[],low:[],rig:[],sub:[]}, drones={}, ammo={};
+        k.victim.items.forEach(function(it){
+          var c=catOf(it.flag); if(!c) return;
+          var q=(it.quantity_destroyed||0)+(it.quantity_dropped||0); if(q<=0)q=1;
+          if(c==='drone'){ drones[it.item_type_id]=(drones[it.item_type_id]||0)+q; return; }
+          if(q===1){ cat[c].push(it.item_type_id); }
+          else { ammo[it.item_type_id]=(ammo[it.item_type_id]||0)+q; }
+        });
+        return {cat:cat,drones:drones,ammo:ammo};
+      }
+      var parsed=kills.map(function(k){ var p=parse(k); p.k=k; return p; });
+
+      // ---- cluster by base-name signature (modules+rigs+subs) ----
+      parsed.forEach(function(p){
+        var bn=[]; ['high','mid','low','rig','sub'].forEach(function(c){ p.cat[c].forEach(function(id){ bn.push(baseName(nm(id))); }); });
+        p.sig=bn.sort().join('|');
+      });
+      var clusters={}; parsed.forEach(function(p){ (clusters[p.sig]=clusters[p.sig]||[]).push(p); });
+      var sigs=Object.keys(clusters).filter(function(s){return s;}).sort(function(a,b){return clusters[b].length-clusters[a].length;});
+      var modal=sigs.length?clusters[sigs[0]]:parsed;
+      var modalPct=Math.round(modal.length/N*100);
+      // representative = median-value kill in cluster
+      var rep=modal.slice().sort(function(a,b){ return ((a.k.zkb&&a.k.zkb.totalValue)||0)-((b.k.zkb&&b.k.zkb.totalValue)||0); })[Math.floor(modal.length/2)];
+
+      // ---- module popularity (grouped by baseName) across all kills ----
+      function popular(cat){
+        var g={}; // base -> {fits, variants:{id:count}}
+        parsed.forEach(function(p){ var seen={}; p.cat[cat].forEach(function(id){ var b=baseName(nm(id)); if(!g[b])g[b]={fits:0,variants:{}}; g[b].variants[id]=(g[b].variants[id]||0)+1; if(!seen[b]){seen[b]=1;g[b].fits++;} }); });
+        return Object.keys(g).map(function(b){ var v=g[b].variants; var topId=Object.keys(v).sort(function(x,y){return v[y]-v[x];})[0]; return {base:b,fits:g[b].fits,pct:Math.round(g[b].fits/N*100),topId:Number(topId),variants:v}; }).sort(function(a,b){return b.fits-a.fits;});
+      }
+      // ---- ammo & drones popularity ----
+      function popAmmo(){ var g={}; parsed.forEach(function(p){ var seen={}; Object.keys(p.ammo).forEach(function(id){ if(!seen[id]){seen[id]=1;g[id]=(g[id]||0)+1;} }); }); return Object.keys(g).map(function(id){return {id:Number(id),fits:g[id],pct:Math.round(g[id]/N*100)};}).sort(function(a,b){return b.fits-a.fits;}).slice(0,8); }
+      function popDrones(){ var g={}; parsed.forEach(function(p){ var seen={}; Object.keys(p.drones).forEach(function(id){ if(!seen[id]){seen[id]=1;g[id]=(g[id]||0)+1;} }); }); return Object.keys(g).map(function(id){return {id:Number(id),fits:g[id],pct:Math.round(g[id]/N*100)};}).sort(function(a,b){return b.fits-a.fits;}).slice(0,6); }
+
+      // ---- modal fit cost + EFT ----
+      var repMods=[]; ['high','mid','low','rig','sub'].forEach(function(c){ rep.cat[c].forEach(function(id){ repMods.push(id); }); });
+      var repDrones=Object.keys(rep.drones).map(Number);
+      var fitCost=0; repMods.forEach(function(id){ fitCost+=price(id); }); repDrones.forEach(function(id){ fitCost+=price(id)*rep.drones[id]; });
+      var hull=price(chosen.id);
+
+      // ---- render summary ----
+      var slotStr=(slots.sub?slots.sub+'S/':'')+slots.hi+'H/'+slots.med+'M/'+slots.low+'L/'+slots.rig+'R';
+      var days='';
+      try{ var ts=lastRaw.map(function(k){return +new Date(k.killmail_time);}).filter(Boolean); if(ts.length){ var span=Math.round((Date.now()-Math.min.apply(null,ts))/86400000); days=' · last '+span+' days'; } }catch(e){}
+      $('sf-summary').innerHTML=
+        '<div class="cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">'
+        +card('Ship',chosen.name)+card('Slots',slotStr)+card('Most common fit cost',money(fitCost)+' <span class="muted">+ hull '+short(hull)+'</span>')+card('Based on',N+' losses'+days)
+        +'</div>';
+
+      // ---- render most-common fit ----
+      var mf='<div class="fit-cat"><h3>Most common fit &middot; '+modalPct+'% of losses</h3><div class="modal-fit">';
+      [['high','High'],['mid','Mid'],['low','Low'],['rig','Rig'],['sub','Subsystem']].forEach(function(pair){
+        var ids=rep.cat[pair[0]]; if(!ids.length)return;
+        mf+='<div class="slotcat">'+pair[1]+'</div>';
+        var counts={}; ids.forEach(function(id){counts[id]=(counts[id]||0)+1;});
+        Object.keys(counts).forEach(function(id){ mf+='<div class="slotline">'+(counts[id]>1?counts[id]+'x ':'')+nm(id)+'</div>'; });
+      });
+      if(repDrones.length){ mf+='<div class="slotcat">Drones</div>'; repDrones.forEach(function(id){ mf+='<div class="slotline">'+rep.drones[id]+'x '+nm(id)+'</div>'; }); }
+      mf+='</div><div style="margin-top:8px"><textarea id="sf-eft" readonly></textarea><button id="sf-copy" class="btn" style="margin-top:6px">Copy EFT</button></div></div>';
+
+      // ---- render popularity tables ----
+      var pop='';
+      CATS.forEach(function(c){
+        if(!slots[c[2]])return;
+        var rows=popular(c[0]); if(!rows.length)return;
+        pop+='<div class="fit-cat"><h3>'+c[1]+' &middot; module popularity</h3><div style="overflow-x:auto"><table class="materials"><thead><tr><th>Module</th><th class="num">Fitted in</th><th class="num">Price</th></tr></thead><tbody>';
+        rows.slice(0,8).forEach(function(r){
+          var vn=Object.keys(r.variants).length;
+          pop+='<tr><td>'+r.base+(vn>1?' <span class="muted">('+vn+' variants)</span>':'')+'</td><td class="num pct">'+r.pct+'%</td><td class="num">'+(price(r.topId)?short(price(r.topId)):'&mdash;')+'</td></tr>';
+        });
+        pop+='</tbody></table></div></div>';
+      });
+      // ammo
+      var am=popAmmo();
+      if(am.length){ pop+='<div class="fit-cat"><h3>Ammo &amp; charges</h3><div style="overflow-x:auto"><table class="materials"><thead><tr><th>Charge</th><th class="num">Loaded in</th><th class="num">Price</th></tr></thead><tbody>'; am.forEach(function(r){ pop+='<tr><td>'+nm(r.id)+'</td><td class="num pct">'+r.pct+'%</td><td class="num">'+(price(r.id)?short(price(r.id)):'&mdash;')+'</td></tr>'; }); pop+='</tbody></table></div></div>'; }
+      // drones
+      var dr=popDrones();
+      if(dr.length){ pop+='<div class="fit-cat"><h3>Drones</h3><div style="overflow-x:auto"><table class="materials"><thead><tr><th>Drone</th><th class="num">Carried in</th><th class="num">Price</th></tr></thead><tbody>'; dr.forEach(function(r){ pop+='<tr><td>'+nm(r.id)+'</td><td class="num pct">'+r.pct+'%</td><td class="num">'+(price(r.id)?short(price(r.id)):'&mdash;')+'</td></tr>'; }); pop+='</tbody></table></div></div>'; }
+
+      $('sf-results').innerHTML=mf+pop;
+
+      // EFT text
+      var eft='[ '+chosen.name+', '+chosen.name+' most-common ]\n';
+      ['low','mid','high','rig','sub'].forEach(function(c){ rep.cat[c].forEach(function(id){ eft+=nm(id)+'\n'; }); });
+      if(repDrones.length){ eft+='\n'; repDrones.forEach(function(id){ eft+=nm(id)+' x'+rep.drones[id]+'\n'; }); }
+      var ta=$('sf-eft'); if(ta) ta.value=eft;
+      var cp=$('sf-copy'); if(cp) cp.addEventListener('click',function(){ try{ $('sf-eft').select(); document.execCommand('copy'); cp.textContent='Copied!'; setTimeout(function(){cp.textContent='Copy EFT';},1500); }catch(e){} });
+    }
+    function card(label,val){ return '<div class="panel" style="padding:10px"><div class="muted small" style="text-transform:uppercase;letter-spacing:1px;font-size:.68rem">'+label+'</div><div style="font-size:1rem;margin-top:2px">'+val+'</div></div>'; }
   });
 })();
 </script>
