@@ -2811,5 +2811,229 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 })();
 </script>
 
+<script>
+/* Auto route planner — jumps + security limits, per-system profit, kills risk */
+(function(){
+  function $(id){return document.getElementById(id);}
+  function ready(cb){function ok(){return typeof HUBS!=='undefined'&&typeof fuzzAgg==='function'&&document.querySelector('nav.tabs');}if(ok()){cb();return;}var n=0,iv=setInterval(function(){if(ok()||n++>300){clearInterval(iv);if(ok())cb();}},100);}
+  ready(function(){
+    var main=document.querySelector('main.wrap'); if(!main)return;
+
+    var stl=document.createElement('style');
+    stl.textContent='#tab-plan .suggestions{position:absolute;z-index:60;left:0;right:0;top:100%;max-height:260px;overflow:auto;margin:2px 0 0;padding:0;list-style:none;background:var(--bg-2);border:1px solid var(--border);border-radius:6px}#tab-plan .suggestions li{padding:5px 9px;cursor:pointer;font-size:.82rem}#tab-plan .suggestions li:hover{background:rgba(120,180,255,.12)}#tab-plan #pl-bar{height:6px;background:var(--bg-2);border-radius:4px;overflow:hidden;margin:6px 0}#tab-plan #pl-bar>i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}#tab-plan tr.route{cursor:pointer}#tab-plan tr.route:hover td{background:rgba(120,180,255,.08)}#tab-plan .rk-low{color:var(--good)}#tab-plan .rk-med{color:var(--warn)}#tab-plan .rk-high{color:var(--bad);font-weight:600}';
+    document.head.appendChild(stl);
+
+    var btn=document.createElement('button');btn.className='tab';btn.setAttribute('data-tab','plan');btn.textContent='Planner';
+    document.querySelector('nav.tabs').appendChild(btn);
+
+    var div=document.createElement('div');div.id='tab-plan';div.hidden=true;
+    div.innerHTML=
+      '<section class="controls panel">'
+      +'<div class="field" style="position:relative"><label for="pl-from">Start system</label><input id="pl-from" type="text" autocomplete="off" placeholder="e.g. Amarr" /><ul id="pl-fromsug" class="suggestions" hidden></ul></div>'
+      +'<div class="field narrow"><label for="pl-jumps">Max jumps</label><input id="pl-jumps" type="number" min="1" max="30" step="1" value="8" /></div>'
+      +'<div class="field narrow"><label for="pl-sec">Min security</label><input id="pl-sec" type="number" min="-1" max="1" step="0.1" value="0.5" /></div>'
+      +'<div class="field narrow"><label for="pl-mode">Sell method</label><select id="pl-mode"><option value="sell">Relist as sell orders</option><option value="buy">Into buy orders</option></select></div>'
+      +'<div class="field narrow"><label for="pl-min">Min profit (M)</label><input id="pl-min" type="number" min="0" step="1" value="5" /></div>'
+      +'<div class="field narrow"><label for="pl-go">&nbsp;</label><button id="pl-go" class="btn">Plan routes</button></div>'
+      +'</section>'
+      +'<div class="panel"><div id="pl-status" class="muted small" style="padding:6px 4px">Set a start system, max jumps and minimum security, then plan routes. First run builds a one-time map of New Eden into your browser (cached).</div>'
+      +'<div id="pl-prog" hidden style="padding:2px 4px 6px"><div id="pl-proglbl" class="muted small"></div><div id="pl-bar"><i></i></div></div>'
+      +'<div style="padding:2px 4px"><button id="pl-buildmap" class="btn" style="font-size:.72rem">Build / refresh map</button> <span id="pl-mapinfo" class="muted small"></span></div>'
+      +'<div id="pl-wrap" hidden style="overflow-x:auto;margin-top:6px"><table class="materials"><thead><tr><th>Destination</th><th>Region</th><th class="num">Jumps</th><th class="num">Route min-sec</th><th class="num">Kills 24h</th><th>Risk</th><th class="num">Items</th><th>Best item</th><th class="num">Est. profit</th></tr></thead><tbody id="pl-body"></tbody></table></div></div>'
+      +'<p class="muted small" style="margin-top:8px">Finds every system within your jump &amp; security limits that has a live market, prices what you can profitably haul there from your start (buy from sell orders; then relist at the local sell price or dump into buy orders), and rates <b>risk</b> from the safest route&rsquo;s lowest security plus recent <a href="https://zkillboard.com" target="_blank" rel="noopener">zKillboard</a> kills. Click a route to open it in the Haul scanner. Wide jump limits touch many regions and can take a few minutes the first time (order books are cached after).</p>';
+    main.appendChild(div);
+
+    document.querySelectorAll('.tab').forEach(function(b){
+      b.addEventListener('click',function(){
+        var n=b.dataset.tab; var d=$('tab-plan'); if(d) d.hidden=n!=='plan';
+        if(n==='plan'){
+          [].slice.call(document.querySelectorAll('main.wrap > [id^="tab-"]')).forEach(function(el){ if(el.id!=='tab-plan') el.hidden=true; });
+          document.querySelectorAll('.tab').forEach(function(x){ x.classList.toggle('active', x===b); });
+          updateMapInfo();
+        }
+      });
+    });
+
+    function money(n){try{return isk(Math.round(n));}catch(e){return Math.round(n).toLocaleString()+' ISK';}}
+    function shortISK(n){try{return iskShort(n);}catch(e){return Math.round(n).toLocaleString();}}
+    function setStatus(t){var s=$('pl-status'); if(s)s.innerHTML=t;}
+    function setProg(done,total,label){ var pw=$('pl-prog'); if(!pw)return; pw.hidden=false; var bar=$('pl-bar'); if(bar&&bar.firstChild)bar.firstChild.style.width=Math.round(done/Math.max(1,total)*100)+'%'; var l=$('pl-proglbl'); if(l)l.textContent=label+' '+done+' / '+total; }
+    function hideProg(){ var pw=$('pl-prog'); if(pw)pw.hidden=true; }
+
+    var HUBSYS={Jita:30000142,Amarr:30002187,Dodixie:30002659,Rens:30002510,Hek:30002053};
+
+    // ---- system name autocomplete (reuse ESI systems list) ----
+    var SYS=null;
+    async function loadSystems(){ if(SYS)return SYS; try{ var ids=await fetch('https://esi.evetech.net/latest/universe/systems/').then(function(r){return r.json();}); var names=[]; for(var i=0;i<ids.length;i+=1000){ try{ var nm=await fetch('https://esi.evetech.net/latest/universe/names/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(ids.slice(i,i+1000))}).then(function(r){return r.json();}); if(Array.isArray(nm)) nm.forEach(function(x){ if(x.category==='solar_system') names.push({id:x.id,name:x.name,lc:x.name.toLowerCase()}); }); }catch(e){} } names.sort(function(a,b){return a.name.localeCompare(b.name);}); SYS=names; }catch(e){ SYS=[]; } return SYS; }
+    function resolveSys(v){ v=(v||'').trim(); if(!v)return null; var lc=v.toLowerCase(); var h=Object.keys(HUBSYS).find(function(k){return k.toLowerCase()===lc;}); if(h)return {id:HUBSYS[h],name:h}; if(SYS){ var ex=SYS.find(function(s){return s.lc===lc;}); if(ex)return {id:ex.id,name:ex.name}; var pre=SYS.find(function(s){return s.lc.indexOf(lc)===0;}); if(pre)return {id:pre.id,name:pre.name}; } return null; }
+    if(!window.__plDeleg){ window.__plDeleg=true;
+      document.addEventListener('input',function(e){var t=e.target;if(!t||t.id!=='pl-from')return;var g=$('pl-fromsug');if(!g||!SYS)return;var q=t.value.trim().toLowerCase();if(q.length<2){g.hidden=true;return;}var m=SYS.filter(function(s){return s.lc.indexOf(q)>=0;}).slice(0,12);if(!m.length){g.hidden=true;return;}g.innerHTML=m.map(function(s){return '<li data-name="'+s.name+'">'+s.name+'</li>';}).join('');g.hidden=false;});
+      document.addEventListener('mousedown',function(e){var li=e.target.closest?e.target.closest('#pl-fromsug li'):null;if(!li)return;var inp=$('pl-from');if(inp)inp.value=li.getAttribute('data-name');$('pl-fromsug').hidden=true;});
+      document.addEventListener('click',function(e){var g=$('pl-fromsug');if(g&&!e.target.closest('#pl-from')&&!e.target.closest('#pl-fromsug'))g.hidden=true; var row=e.target.closest?e.target.closest('#pl-body tr.route'):null; if(row){ openHaul(row.getAttribute('data-to')); }});
+    }
+    loadSystems();
+
+    // ---- MAP (localStorage) ----
+    var MAP=null;
+    function loadMap(){ if(MAP)return MAP; try{ var s=localStorage.getItem('eveMapV2'); if(s){ MAP=JSON.parse(s); } }catch(e){} return MAP; }
+    function updateMapInfo(){ var m=loadMap(); var el=$('pl-mapinfo'); if(!el)return; if(m&&m.sys){ el.textContent='Map ready: '+Object.keys(m.sys).length+' systems (cached).'; } else { el.textContent='No map yet — first plan will build it (~3-5 min, one time).'; } }
+
+    var building=false;
+    async function buildMap(){
+      if(building)return; building=true;
+      try{
+        setStatus('Building New Eden map (one-time)&hellip; step 1/3: systems');
+        var all=await fetch('https://esi.evetech.net/latest/universe/systems/').then(function(r){return r.json();});
+        var ids=all.filter(function(id){return id<31000000;}); // k-space
+        var sysTmp={}, sgAll=[], conSet={};
+        var i=0, done=0, conc=40;
+        async function wSys(){ while(i<ids.length){ var id=ids[i++]; try{ var s=await fetch('https://esi.evetech.net/latest/universe/systems/'+id).then(function(r){return r.json();}); sysTmp[id]={sec:Math.round((s.security_status||0)*10)/10, con:s.constellation_id, name:s.name, sg:s.stargates||[]}; conSet[s.constellation_id]=1; (s.stargates||[]).forEach(function(g){sgAll.push(g);}); }catch(e){} done++; if(done%150===0)setProg(done,ids.length,'Systems'); } }
+        var ws=[]; for(var w=0;w<conc;w++)ws.push(wSys()); await Promise.all(ws);
+        setProg(ids.length,ids.length,'Systems');
+
+        setStatus('Building map&hellip; step 2/3: stargates ('+sgAll.length+')');
+        var sgDest={}; var j=0, d2=0;
+        async function wSg(){ while(j<sgAll.length){ var g=sgAll[j++]; try{ var gg=await fetch('https://esi.evetech.net/latest/universe/stargates/'+g).then(function(r){return r.json();}); sgDest[g]=gg.destination&&gg.destination.system_id; }catch(e){} d2++; if(d2%300===0)setProg(d2,sgAll.length,'Stargates'); } }
+        var ws2=[]; for(var w2=0;w2<conc;w2++)ws2.push(wSg()); await Promise.all(ws2);
+        setProg(sgAll.length,sgAll.length,'Stargates');
+
+        setStatus('Building map&hellip; step 3/3: regions');
+        var cons=Object.keys(conSet); var conReg={}; var c=0, d3=0;
+        async function wCon(){ while(c<cons.length){ var id=cons[c++]; try{ var cc=await fetch('https://esi.evetech.net/latest/universe/constellations/'+id).then(function(r){return r.json();}); conReg[id]=cc.region_id; }catch(e){} d3++; if(d3%50===0)setProg(d3,cons.length,'Regions'); } }
+        var ws3=[]; for(var w3=0;w3<20;w3++)ws3.push(wCon()); await Promise.all(ws3);
+
+        // assemble
+        var sys={}, adj={};
+        Object.keys(sysTmp).forEach(function(id){ var s=sysTmp[id]; sys[id]=[Math.round(s.sec*10), conReg[s.con]||0, s.name]; var nb=[]; s.sg.forEach(function(g){ var dst=sgDest[g]; if(dst&&sysTmp[dst])nb.push(dst); }); adj[id]=nb; });
+        MAP={v:2, sys:sys, adj:adj};
+        try{ localStorage.setItem('eveMapV2', JSON.stringify(MAP)); }catch(e){ setStatus('Map built but too large to cache; it will rebuild next time.'); }
+        hideProg(); updateMapInfo();
+        setStatus('Map built: '+Object.keys(sys).length+' systems. Ready to plan.');
+      }catch(e){ setStatus('Map build failed: '+e.message); hideProg(); }
+      building=false;
+    }
+    $('pl-buildmap').addEventListener('click',buildMap);
+
+    // ---- BFS within maxJumps, tracking shortest-path min security ----
+    function bfs(startId, maxJumps){
+      var m=loadMap(); if(!m)return null;
+      var startSec=(m.sys[startId]?m.sys[startId][0]:0)/10;
+      var seen={}; seen[startId]={j:0, minSec:startSec};
+      var q=[startId], head=0;
+      while(head<q.length){
+        var cur=q[head++]; var info=seen[cur]; if(info.j>=maxJumps)continue;
+        var nbrs=m.adj[cur]||[];
+        for(var k=0;k<nbrs.length;k++){ var nb=nbrs[k]; if(seen[nb])continue; var nsec=(m.sys[nb]?m.sys[nb][0]:0)/10; seen[nb]={j:info.j+1, minSec:Math.min(info.minSec,nsec)}; q.push(nb); }
+      }
+      return seen;
+    }
+
+    // ---- per-region order book fetch (cached) ----
+    var books={}; // sysId -> {sell:{},buy:{}}
+    var regionFetched={};
+    async function fetchRegion(region, wantSys){
+      if(regionFetched[region])return; regionFetched[region]=1;
+      wantSys.forEach(function(s){ if(!books[s])books[s]={sell:{},buy:{}}; });
+      function ing(arr){ if(!Array.isArray(arr))return; for(var a=0;a<arr.length;a++){ var o=arr[a]; var b=books[o.system_id]; if(!b)continue; if(o.is_buy_order){ var bb=b.buy[o.type_id]; if(!bb){bb=b.buy[o.type_id]={p:0,vol:0};} if(o.price>bb.p)bb.p=o.price; bb.vol+=o.volume_remain; } else { var ss=b.sell[o.type_id]; if(!ss){ss=b.sell[o.type_id]={p:Infinity,vol:0};} if(o.price<ss.p)ss.p=o.price; ss.vol+=o.volume_remain; } } }
+      var first=await fetch('https://esi.evetech.net/latest/markets/'+region+'/orders/?order_type=all&page=1');
+      var pages=parseInt(first.headers.get('x-pages')||'1',10);
+      ing(await first.json());
+      var nums=[]; for(var p=2;p<=pages;p++)nums.push(p);
+      var idx=0, dn=1;
+      async function w(){ while(idx<nums.length){ var pg=nums[idx++]; try{ var r=await fetch('https://esi.evetech.net/latest/markets/'+region+'/orders/?order_type=all&page='+pg); if(r.ok)ing(await r.json()); }catch(e){} dn++; } }
+      var ws=[]; for(var i=0;i<16;i++)ws.push(w()); await Promise.all(ws);
+    }
+
+    var nameCache={};
+    async function resolveNames(ids){ var miss=ids.filter(function(id){return !nameCache[id];}); for(var i=0;i<miss.length;i+=1000){ try{ var nm=await fetch('https://esi.evetech.net/latest/universe/names/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(miss.slice(i,i+1000))}).then(function(r){return r.json();}); if(Array.isArray(nm))nm.forEach(function(n){nameCache[n.id]=n.name;}); }catch(e){} } }
+
+    async function killsIn(sysId){ try{ var k=await fetch('https://zkillboard.com/api/systemID/'+sysId+'/').then(function(r){return r.json();}); if(!Array.isArray(k))return 0; var cut=Date.now()-86400000; return k.filter(function(x){return +new Date(x.killmail_time)>=cut;}).length; }catch(e){ return -1; } }
+
+    function riskOf(minSec, kills){ var s = minSec>=0.5?0:(minSec>0?1:2); var kk = kills<0?0:(kills>=20?2:(kills>=5?1:0)); var r=Math.max(s,kk)+(s&&kk?1:0); if(r>=3)r=2; return r; }
+    function riskLabel(r){ return r<=0?'<span class="rk-low">Low</span>':(r===1?'<span class="rk-med">Medium</span>':'<span class="rk-high">High</span>'); }
+
+    var busy=false;
+    async function plan(){
+      if(busy)return;
+      if(!SYS){ setStatus('Loading system list&hellip;'); await loadSystems(); }
+      var start=resolveSys($('pl-from').value); if(!start){ setStatus('Enter a valid start system.'); return; }
+      if(!loadMap()){ await buildMap(); if(!loadMap())return; }
+      var maxJ=Math.max(1,Number($('pl-jumps').value)||8); var minSec=Number($('pl-sec').value); if(isNaN(minSec))minSec=-1;
+      var mode=$('pl-mode').value; var minP=(Number($('pl-min').value)||0)*1e6; var tax=0.045;
+      busy=true; $('pl-go').disabled=true; $('pl-wrap').hidden=true;
+      try{
+        var m=loadMap();
+        setStatus('Mapping systems within '+maxJ+' jumps of '+start.name+'&hellip;');
+        var reach=bfs(start.id, maxJ); if(!reach){ setStatus('Map not ready.'); busy=false;$('pl-go').disabled=false; return; }
+        // in-range systems meeting security, plus start
+        var inRange=Object.keys(reach).filter(function(id){ return reach[id].minSec>=minSec-1e-9; });
+        // group by region
+        var byRegion={}; inRange.forEach(function(id){ var reg=m.sys[id]?m.sys[id][1]:0; if(!reg)return; (byRegion[reg]=byRegion[reg]||[]).push(Number(id)); });
+        var regions=Object.keys(byRegion);
+        if(regions.length>16){ setStatus('That reaches '+regions.length+' regions — lower Max jumps or raise Min security to keep it fast. Fetching first 16&hellip;'); regions=regions.slice(0,16); }
+        // ensure start region included
+        var startReg=m.sys[start.id]?m.sys[start.id][1]:0; if(startReg&&regions.indexOf(String(startReg))<0){ regions.push(String(startReg)); byRegion[startReg]=byRegion[startReg]||[start.id]; }
+        for(var ri=0; ri<regions.length; ri++){ setProg(ri+1,regions.length,'Loading region order books'); await fetchRegion(Number(regions[ri]), byRegion[regions[ri]]); }
+        hideProg();
+        // source = start sell
+        var srcBook=books[start.id]; if(!srcBook){ setStatus(start.name+' has no market data.'); busy=false;$('pl-go').disabled=false; return; }
+        var src=srcBook.sell;
+        // evaluate each in-range market system (skip start)
+        var routes=[];
+        inRange.forEach(function(idS){ var id=Number(idS); if(id===start.id)return; var b=books[id]; if(!b)return; var dst=(mode==='buy')?b.buy:b.sell; if(!Object.keys(dst).length)return;
+          var items=0, best=null, total=0;
+          Object.keys(src).forEach(function(tid){ var s=src[tid], d=dst[tid]; if(!d)return; var unit=d.p*(1-tax)-s.p; if(unit<=0)return; var units=(mode==='buy')?Math.min(s.vol,d.vol):s.vol; var tot=unit*units; items++; total+=tot; if(!best||tot>best.tot){best={id:Number(tid),tot:tot,unit:unit};} });
+          if(!items || total<minP)return;
+          routes.push({id:id, jumps:reach[id].j, minSec:reach[id].minSec, region:m.sys[id][1], name:m.sys[id][2], sec:m.sys[id][0]/10, items:items, best:best, total:total});
+        });
+        routes.sort(function(a,b){return b.total-a.total;});
+        routes=routes.slice(0,40);
+        if(!routes.length){ setStatus('No profitable routes from '+start.name+' within '+maxJ+' jumps / min-sec '+minSec+' at these settings. Try more jumps, lower min-sec, or lower Min profit.'); $('pl-body').innerHTML='<tr><td colspan="9" class="muted" style="padding:12px">No market systems in range yielded a profitable haul above your Min profit.</td></tr>'; $('pl-wrap').hidden=false; busy=false;$('pl-go').disabled=false; return; }
+        // kills for top routes
+        setStatus('Checking recent kills on '+routes.length+' routes&hellip;');
+        var ki=0; async function wk(){ while(ki<routes.length){ var r=routes[ki++]; r.kills=await killsIn(r.id); } }
+        var wks=[]; for(var q=0;q<6;q++)wks.push(wk()); await Promise.all(wks);
+        // names for best items + regions
+        var needIds=routes.map(function(r){return r.best.id;}).concat(routes.map(function(r){return r.region;}));
+        await resolveNames(needIds);
+        routes.forEach(function(r){ r.risk=riskOf(r.minSec, r.kills); });
+        renderRoutes(routes, start);
+        setStatus(routes.length+' profitable route'+(routes.length===1?'':'s')+' from '+start.name+' · &le; '+maxJ+' jumps · min-sec &ge; '+minSec+' · '+(mode==='buy'?'sell into buy orders':'relist at sell price'));
+      }catch(e){ setStatus('Planning failed: '+e.message); hideProg(); }
+      busy=false; $('pl-go').disabled=false;
+    }
+
+    function renderRoutes(routes, start){
+      $('pl-body').innerHTML=routes.map(function(r){
+        var reg=nameCache[r.region]||('#'+r.region);
+        var kills=r.kills<0?'?':r.kills;
+        return '<tr class="route" data-to="'+r.name+'" title="Open in Haul scanner">'
+          +'<td>'+r.name+' <span class="muted">'+r.sec.toFixed(1)+'</span></td>'
+          +'<td class="muted">'+reg+'</td>'
+          +'<td class="num">'+r.jumps+'</td>'
+          +'<td class="num">'+r.minSec.toFixed(1)+'</td>'
+          +'<td class="num">'+kills+'</td>'
+          +'<td>'+riskLabel(r.risk)+'</td>'
+          +'<td class="num">'+r.items+'</td>'
+          +'<td>'+(nameCache[r.best.id]||('#'+r.best.id))+'</td>'
+          +'<td class="num" style="color:var(--good);font-weight:600">'+shortISK(r.total)+'</td>'
+          +'</tr>';
+      }).join('');
+      $('pl-wrap').hidden=false;
+      window.__plStart=start.name;
+    }
+    function openHaul(destName){
+      var start=window.__plStart; if(!start)return;
+      var hf=$('hl-from'), ht=$('hl-to'), hmode=$('hl-mode'); if(hf)hf.value=start; if(ht)ht.value=destName; if(hmode&&$('pl-mode'))hmode.value=$('pl-mode').value;
+      var b=[].slice.call(document.querySelectorAll('.tab')).find(function(x){return x.dataset.tab==='haul';}); if(b)b.click();
+      var sc=$('hl-scan'); if(sc)sc.click();
+    }
+
+    $('pl-go').addEventListener('click',plan);
+    $('pl-from').value='Amarr';
+    updateMapInfo();
+  });
+})();
+</script>
 </body>
 </html>
