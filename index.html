@@ -2679,7 +2679,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     if(!window.__plDeleg){ window.__plDeleg=true;
       document.addEventListener('input',function(e){var t=e.target;if(!t||t.id!=='pl-from')return;var g=$('pl-fromsug');if(!g||!SYS)return;var q=t.value.trim().toLowerCase();if(q.length<2){g.hidden=true;return;}var m=SYS.filter(function(s){return s.lc.indexOf(q)>=0;}).slice(0,12);if(!m.length){g.hidden=true;return;}g.innerHTML=m.map(function(s){return '<li data-name="'+s.name+'">'+s.name+'</li>';}).join('');g.hidden=false;});
       document.addEventListener('mousedown',function(e){var li=e.target.closest?e.target.closest('#pl-fromsug li'):null;if(!li)return;var inp=$('pl-from');if(inp)inp.value=li.getAttribute('data-name');$('pl-fromsug').hidden=true;});
-      document.addEventListener('click',function(e){var g=$('pl-fromsug');if(g&&!e.target.closest('#pl-from')&&!e.target.closest('#pl-fromsug'))g.hidden=true; var row=e.target.closest?e.target.closest('#pl-body tr.route'):null; if(row){ showDetail(Number(row.getAttribute('data-id'))); }});
+      document.addEventListener('click',function(e){var g=$('pl-fromsug');if(g&&!e.target.closest('#pl-from')&&!e.target.closest('#pl-fromsug'))g.hidden=true; var row=e.target.closest?e.target.closest('#pl-body tr.route'):null; if(row){ showDetail(row); }});
     }
     loadSystems();
 
@@ -2836,22 +2836,31 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       $('pl-wrap').hidden=false;
       window.__plStart=start.name;
     }
-    function showDetail(destId){
+    function showDetail(row){
+      var existing=document.querySelector('#pl-body tr.pl-detailrow');
+      var toggleOff = existing && existing.previousElementSibling===row;
+      if(existing) existing.remove();
+      if(toggleOff) return;
       if(!lastStart){return;}
-      var srcB=books[lastStart.id]; var b=books[destId]; if(!srcB||!b){var e0=$('pl-detail'); if(e0)e0.innerHTML='<p class="muted small" style="padding:6px">Detail unavailable — re-run the plan.</p>'; return;}
+      var destId=Number(row.getAttribute('data-id'));
+      var tr=document.createElement('tr'); tr.className='pl-detailrow';
+      var td=document.createElement('td'); td.colSpan=9; td.style.padding='0 6px 6px';
+      tr.appendChild(td); row.parentNode.insertBefore(tr, row.nextSibling);
+      var srcB=books[lastStart.id]; var b=books[destId];
+      if(!srcB||!b){ td.innerHTML='<p class="muted small" style="padding:6px">Detail unavailable - re-run the plan.</p>'; return; }
       var src=srcB.sell; var mode=lastMode; var tax=0.045; var rows=[];
       Object.keys(src).forEach(function(tid){ var s=src[tid]; if(!s||s.p<=0||s.p===Infinity)return; var po=(mode==='buy')?b.buy[tid]:b.sell[tid]; if(!po||po.p<=0)return; var unit=po.p*(1-tax)-s.p; if(unit<=0)return; var mg=unit/s.p; if(mg>5)return; var demand=b.buy[tid]?b.buy[tid].vol:0; if(demand<=0)return; var units=Math.min(s.vol,demand); if(units<=0)return; rows.push({id:Number(tid),buy:s.p,sell:po.p,unit:unit,units:units,tot:unit*units}); });
       rows.sort(function(a,b){return b.tot-a.tot;}); rows=rows.slice(0,25);
+      td.innerHTML='<p class="muted small" style="padding:6px">Loading item detail\u2026</p>';
       resolveNames(rows.map(function(r){return r.id;})).then(function(){
         var dn=((loadMap().sys[destId]||[])[2])||('#'+destId);
-        var h='<div style="background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:8px"><div style="color:var(--accent);text-transform:uppercase;letter-spacing:1px;font-size:.72rem;margin-bottom:6px">'+lastStart.name+' \u2192 '+dn+' \u00b7 top items ('+(mode==='buy'?'into buy orders':'relist at sell price')+')</div>';
+        var h='<div style="background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin:2px 0 6px"><div style="color:var(--accent);text-transform:uppercase;letter-spacing:1px;font-size:.72rem;margin-bottom:6px">'+lastStart.name+' \u2192 '+dn+' \u00b7 top items ('+(mode==='buy'?'into buy orders':'relist at sell price')+')</div>';
         h+='<div style="overflow-x:auto"><table class="materials"><thead><tr><th>Item</th><th class="num">Buy @ '+lastStart.name+'</th><th class="num">'+(mode==='buy'?'Buy @ ':'Sell @ ')+dn+'</th><th class="num">Profit / unit</th><th class="num">Units</th><th class="num">Total</th></tr></thead><tbody>';
         h+=rows.map(function(r){ return '<tr><td>'+(nameCache[r.id]||('#'+r.id))+'</td><td class="num">'+money(r.buy)+'</td><td class="num">'+money(r.sell)+'</td><td class="num" style="color:var(--good)">'+money(r.unit)+'</td><td class="num">'+Math.round(r.units).toLocaleString()+'</td><td class="num" style="color:var(--good);font-weight:600">'+shortISK(r.tot)+'</td></tr>'; }).join('');
         h+='</tbody></table></div></div>';
-        var el=$('pl-detail'); if(el){ el.innerHTML=h; el.scrollIntoView({block:'nearest'}); }
+        td.innerHTML=h;
       });
     }
-
     $('pl-go').addEventListener('click',plan);
     $('pl-from').value='Amarr';
     updateMapInfo();
