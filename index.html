@@ -2750,7 +2750,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       // ---- render summary ----
       var slotStr=(slots.sub?slots.sub+'S/':'')+slots.hi+'H/'+slots.med+'M/'+slots.low+'L/'+slots.rig+'R';
       var days='';
-      try{ var ts=lastRaw.map(function(k){return +new Date(k.killmail_time);}).filter(Boolean); if(ts.length){ var span=Math.round((Date.now()-Math.min.apply(null,ts))/86400000); days=' · last '+span+' days'; } }catch(e){}
+      try{ var ts=lastRaw.map(function(k){return +new Date(k.killmail_time);}).filter(Boolean); if(ts.length){ var span=Math.round((Date.now()-Math.min.apply(null,ts))/86400000); days=' · last '+span+' day'+(span===1?'':'s'); } }catch(e){}
       $('sf-summary').innerHTML=
         '<div class="cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">'
         +card('Ship',chosen.name)+card('Slots',slotStr)+card('Most common fit cost',money(fitCost)+' <span class="muted">+ hull '+short(hull)+'</span>')+card('Based on',N+' losses'+days)
