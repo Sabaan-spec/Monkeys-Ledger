@@ -2834,12 +2834,13 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       +'<div class="field narrow"><label for="pl-sec">Min security</label><input id="pl-sec" type="number" min="-1" max="1" step="0.1" value="0.5" /></div>'
       +'<div class="field narrow"><label for="pl-mode">Sell method</label><select id="pl-mode"><option value="sell">Relist as sell orders</option><option value="buy">Into buy orders</option></select></div>'
       +'<div class="field narrow"><label for="pl-min">Min profit (M)</label><input id="pl-min" type="number" min="0" step="1" value="5" /></div>'
+      +'<div class="field narrow"><label for="pl-budget">Budget (M)</label><input id="pl-budget" type="number" min="0" step="100" value="1000" /></div>'
       +'<div class="field narrow"><label for="pl-go">&nbsp;</label><button id="pl-go" class="btn">Plan routes</button></div>'
       +'</section>'
       +'<div class="panel"><div id="pl-status" class="muted small" style="padding:6px 4px">Set a start system, max jumps and minimum security, then plan routes. First run builds a one-time map of New Eden into your browser (cached).</div>'
       +'<div id="pl-prog" hidden style="padding:2px 4px 6px"><div id="pl-proglbl" class="muted small"></div><div id="pl-bar"><i></i></div></div>'
       +'<div style="padding:2px 4px"><button id="pl-buildmap" class="btn" style="font-size:.72rem">Build / refresh map</button> <span id="pl-mapinfo" class="muted small"></span></div>'
-      +'<div id="pl-wrap" hidden style="overflow-x:auto;margin-top:6px"><table class="materials"><thead><tr><th>Destination</th><th>Region</th><th class="num">Jumps</th><th class="num">Route min-sec</th><th class="num">Kills 24h</th><th>Risk</th><th class="num">Items</th><th>Best item</th><th class="num">Est. profit</th></tr></thead><tbody id="pl-body"></tbody></table></div></div>'
+      +'<div id="pl-wrap" hidden style="overflow-x:auto;margin-top:6px"><table class="materials"><thead><tr><th>Destination</th><th>Region</th><th class="num">Jumps</th><th class="num">Route min-sec</th><th class="num">Kills 24h</th><th>Risk</th><th class="num">Items</th><th>Best item</th><th class="num">Profit / budget</th></tr></thead><tbody id="pl-body"></tbody></table></div></div>'
       +'<p class="muted small" style="margin-top:8px">Finds every system within your jump &amp; security limits that has a live market, prices what you can profitably haul there from your start (buy from sell orders; then relist at the local sell price or dump into buy orders), and rates <b>risk</b> from the safest route&rsquo;s lowest security plus recent <a href="https://zkillboard.com" target="_blank" rel="noopener">zKillboard</a> kills. Click a route to open it in the Haul scanner. Wide jump limits touch many regions and can take a few minutes the first time (order books are cached after).</p>';
     main.appendChild(div);
 
@@ -2945,7 +2946,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     }
 
     var nameCache={};
-    async function resolveNames(ids){ var miss=ids.filter(function(id){return !nameCache[id];}); for(var i=0;i<miss.length;i+=1000){ try{ var nm=await fetch('https://esi.evetech.net/latest/universe/names/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(miss.slice(i,i+1000))}).then(function(r){return r.json();}); if(Array.isArray(nm))nm.forEach(function(n){nameCache[n.id]=n.name;}); }catch(e){} } }
+    async function resolveNames(ids){ ids=ids.filter(function(id){return id&&!nameCache[id];}); if(!ids.length)return; async function batch(arr){ if(!arr.length)return; try{ var r=await fetch('https://esi.evetech.net/latest/universe/names/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(arr)}); if(!r.ok)throw new Error(r.status); var nm=await r.json(); if(Array.isArray(nm))nm.forEach(function(n){nameCache[n.id]=n.name;}); }catch(e){ if(arr.length>1){var mid=Math.floor(arr.length/2); await batch(arr.slice(0,mid)); await batch(arr.slice(mid));} } } for(var i=0;i<ids.length;i+=1000){ await batch(ids.slice(i,i+1000)); } }
 
     async function killsIn(sysId){ try{ var k=await fetch('https://zkillboard.com/api/systemID/'+sysId+'/').then(function(r){return r.json();}); if(!Array.isArray(k))return 0; var cut=Date.now()-86400000; return k.filter(function(x){return +new Date(x.killmail_time)>=cut;}).length; }catch(e){ return -1; } }
 
@@ -2979,12 +2980,16 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
         var srcBook=books[start.id]; if(!srcBook){ setStatus(start.name+' has no market data.'); busy=false;$('pl-go').disabled=false; return; }
         var src=srcBook.sell;
         // evaluate each in-range market system (skip start)
-        var routes=[];
+        var routes=[]; var budget0=(Number($('pl-budget').value)||1000)*1e6;
         inRange.forEach(function(idS){ var id=Number(idS); if(id===start.id)return; var b=books[id]; if(!b)return; var dst=(mode==='buy')?b.buy:b.sell; if(!Object.keys(dst).length)return;
-          var items=0, best=null, total=0;
-          Object.keys(src).forEach(function(tid){ var s=src[tid], d=dst[tid]; if(!d)return; var unit=d.p*(1-tax)-s.p; if(unit<=0)return; var units=(mode==='buy')?Math.min(s.vol,d.vol):s.vol; var tot=unit*units; items++; total+=tot; if(!best||tot>best.tot){best={id:Number(tid),tot:tot,unit:unit};} });
-          if(!items || total<minP)return;
-          routes.push({id:id, jumps:reach[id].j, minSec:reach[id].minSec, region:m.sys[id][1], name:m.sys[id][2], sec:m.sys[id][0]/10, items:items, best:best, total:total});
+          var opps=[];
+          Object.keys(src).forEach(function(tid){ var s=src[tid], d=dst[tid]; if(!d)return; var unit=d.p*(1-tax)-s.p; if(unit<=0)return; var units=(mode==='buy')?Math.min(s.vol,d.vol):s.vol; if(units<=0)return; opps.push({id:Number(tid),unit:unit,units:units,price:s.p,margin:unit/s.p}); });
+          if(!opps.length)return;
+          opps.sort(function(a,b){return b.margin-a.margin;});
+          var budget=budget0, profit=0, best=null, items=0;
+          for(var oi=0; oi<opps.length && budget>0; oi++){ var o=opps[oi]; var mu=Math.floor(budget/Math.max(1,o.price)); var u=Math.min(o.units,mu); if(u<=0)continue; var p=u*o.unit; profit+=p; budget-=u*o.price; items++; if(!best||p>best.p){best={id:o.id,p:p};} }
+          if(!items || profit<minP)return;
+          routes.push({id:id, jumps:reach[id].j, minSec:reach[id].minSec, region:m.sys[id][1], name:m.sys[id][2], sec:m.sys[id][0]/10, items:items, best:{id:best.id,tot:best.p}, total:profit});
         });
         routes.sort(function(a,b){return b.total-a.total;});
         routes=routes.slice(0,40);
@@ -2994,8 +2999,8 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
         var ki=0; async function wk(){ while(ki<routes.length){ var r=routes[ki++]; r.kills=await killsIn(r.id); } }
         var wks=[]; for(var q=0;q<6;q++)wks.push(wk()); await Promise.all(wks);
         // names for best items + regions
-        var needIds=routes.map(function(r){return r.best.id;}).concat(routes.map(function(r){return r.region;}));
-        await resolveNames(needIds);
+        await resolveNames(routes.map(function(r){return r.best.id;}));
+        await resolveNames(routes.map(function(r){return r.region;}));
         routes.forEach(function(r){ r.risk=riskOf(r.minSec, r.kills); });
         renderRoutes(routes, start);
         setStatus(routes.length+' profitable route'+(routes.length===1?'':'s')+' from '+start.name+' · &le; '+maxJ+' jumps · min-sec &ge; '+minSec+' · '+(mode==='buy'?'sell into buy orders':'relist at sell price'));
