@@ -1990,13 +1990,18 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
         await resolveNames(rows);
         renderRows(rows);
         var how=(mode==='buy')?'sell into buy orders (instant)':'relist at sell-order price';
-        var msg=rows.length+' profitable item'+(rows.length===1?'':'s')+' · '+fromSys.name+' → '+toSys.name+' · '+how+' · tax '+($('hl-tax').value||0)+'%';
         if(!rows.length){
-          if(!srcN) msg=fromSys.name+' has no items listed for sale — nothing to buy/haul from here.';
-          else if(!dstN) msg=toSys.name+' has no '+(mode==='buy'?'buy orders':'market')+' — try the other Sell method, or a hub destination.';
-          else msg='No profitable hauls '+fromSys.name+' → '+toSys.name+' at these settings'+(mode==='buy'?'. Tip: switch Sell method to “Relist as sell orders” for many more routes.':'.');
+          var reason;
+          if(!srcN&&!dstN) reason='Neither '+fromSys.name+' nor '+toSys.name+' has an active market. A route needs both systems to trade — pick a hub (Jita, Amarr, Dodixie, Rens, Hek) or a busy regional market.';
+          else if(!srcN) reason=fromSys.name+' has no items listed for sale (empty market) — nothing to buy and haul from here. Choose a start system with an active market.';
+          else if(!dstN) reason=toSys.name+' has no active market ('+(mode==='buy'?'no buy orders':'no sell orders')+') — it is not a trading system, so there are no local prices to compare against. Pick a hub or busy market as the destination'+(mode==='buy'?', or switch Sell method to Relist.':'.');
+          else reason='No hauls clear your Min profit at current prices'+(mode==='buy'?'. Tip: switch Sell method to Relist as sell orders for many more routes.':' — try lowering Min profit.');
+          $('hl-body').innerHTML='<tr><td colspan="7" class="muted" style="padding:12px;line-height:1.6">'+reason+'</td></tr>';
+          $('hl-wrap').hidden=false;
+          setStatus('0 routes · '+fromSys.name+' ('+srcN+' on market) → '+toSys.name+' ('+dstN+' '+(mode==='buy'?'buy orders':'on market')+')');
+        } else {
+          setStatus(rows.length+' profitable item'+(rows.length===1?'':'s')+' · '+fromSys.name+' → '+toSys.name+' · '+how+' · tax '+($('hl-tax').value||0)+'%');
         }
-        setStatus(msg);
       }catch(e){ setStatus('Scan failed: '+e.message); $('hl-prog').hidden=true; }
       busy=false; $('hl-scan').disabled=false;
     }
@@ -2707,13 +2712,19 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 
       // parse each kill
       function parse(k){
-        var cat={high:[],mid:[],low:[],rig:[],sub:[]}, drones={}, ammo={};
+        var cat={high:[],mid:[],low:[],rig:[],sub:[]}, drones={}, ammo={}, byFlag={};
         k.victim.items.forEach(function(it){
-          var c=catOf(it.flag); if(!c) return;
+          var c=catOf(it.flag);
           var q=(it.quantity_destroyed||0)+(it.quantity_dropped||0); if(q<=0)q=1;
           if(c==='drone'){ drones[it.item_type_id]=(drones[it.item_type_id]||0)+q; return; }
-          if(q===1){ cat[c].push(it.item_type_id); }
-          else { ammo[it.item_type_id]=(ammo[it.item_type_id]||0)+q; }
+          if(!c) return;
+          (byFlag[it.flag]=byFlag[it.flag]||[]).push({id:it.item_type_id,q:q});
+        });
+        Object.keys(byFlag).forEach(function(f){
+          var items=byFlag[f]; var c=catOf(Number(f));
+          var mod=items.slice().sort(function(a,b){ var pa=price(a.id),pb=price(b.id); if(pb!==pa)return pb-pa; return (a.q===1?0:1)-(b.q===1?0:1); })[0];
+          cat[c].push(mod.id);
+          items.forEach(function(x){ if(x!==mod){ ammo[x.id]=(ammo[x.id]||0)+x.q; } });
         });
         return {cat:cat,drones:drones,ammo:ammo};
       }
