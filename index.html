@@ -1856,6 +1856,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       +'<div class="field" style="position:relative"><label for="hl-to">To system</label><input id="hl-to" type="text" autocomplete="off" placeholder="Start typing&hellip; e.g. Amarr" /><ul id="hl-tosug" class="suggestions" hidden></ul></div>'
       +'<div class="field narrow"><label for="hl-tax">Sales tax %</label><input id="hl-tax" type="number" min="0" step="0.1" value="4.5" /></div>'
       +'<div class="field narrow"><label for="hl-min">Min profit (K)</label><input id="hl-min" type="number" min="0" step="10" value="200" /></div>'
+      +'<div class="field narrow"><label for="hl-mode">Sell method</label><select id="hl-mode"><option value="sell">Relist as sell orders</option><option value="buy">Into buy orders (instant)</option></select></div>'
       +'<div class="field narrow"><label for="hl-scan">&nbsp;</label><button id="hl-scan" class="btn">Scan hauls</button></div>'
       +'</section>'
       +'<div class="hub-pick" style="padding:2px 2px 0"><span class="muted small">Quick start:</span> <span id="hl-qfrom"></span> &nbsp;<span class="muted small">Quick end:</span> <span id="hl-qto"></span></div>'
@@ -1864,7 +1865,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       +'<div id="hl-prog" hidden style="padding:2px 4px 6px"><div id="hl-proglbl" class="muted small"></div><div id="hl-progbar"><i></i></div></div>'
       +'<div id="hl-wrap" hidden style="overflow-x:auto"><table class="materials"><thead><tr><th>Item</th><th class="num">Buy @ from</th><th class="num">Sell @ to</th><th class="num">Profit / unit</th><th class="num">Margin</th><th class="num">Units avail</th><th class="num">Total profit</th></tr></thead><tbody id="hl-body"></tbody></table></div>'
       +'</div>'
-      +'<p class="muted small" style="margin-top:8px">Model: <b>buy</b> at the start system from the lowest sell orders, <b>sell</b> at the end system into the highest buy orders (instant fill), minus sales tax. &ldquo;Units avail&rdquo; is the smaller of total sell volume at the start and total buy volume at the end &mdash; an upper bound, since not all of it is at the best price. Only systems with an active market return prices. Live order books via <a href="https://esi.evetech.net" target="_blank" rel="noopener">CCP ESI</a>; big regions (e.g. The Forge/Jita) can take up to a minute to load the first time, then it&rsquo;s cached.</p>';
+      +'<p class="muted small" style="margin-top:8px"><b>Buy</b> at the start system from the lowest sell orders, then either <b>relist as sell orders</b> at the end system&rsquo;s going price (patient) or <b>sell into buy orders</b> there (instant fill) &mdash; choose via <b>Sell method</b>. Profit is after sales tax (broker fees not included). &ldquo;Units avail&rdquo; is an upper bound. Only systems with an active market return prices. Live order books via <a href="https://esi.evetech.net" target="_blank" rel="noopener">CCP ESI</a>; big regions (e.g. The Forge/Jita) can take up to a minute to load the first time, then it&rsquo;s cached.</p>';
     main.appendChild(div);
 
     document.querySelectorAll('.tab').forEach(function(b){
@@ -1972,13 +1973,15 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
         setStatus('Fetching live order books for '+fromSys.name+' and '+toSys.name+'&hellip;');
         await fetchSystemBooks([fromSys.id,toSys.id]);
         $('hl-prog').hidden=true;
-        var src=bookCache[fromSys.id].sell, dst=bookCache[toSys.id].buy;
+        var mode=($('hl-mode')&&$('hl-mode').value)||'sell';
+        var src=bookCache[fromSys.id].sell, dst=(mode==='buy')?bookCache[toSys.id].buy:bookCache[toSys.id].sell;
+        var srcN=Object.keys(src).length, dstN=Object.keys(dst).length;
         var rows=[];
         Object.keys(src).forEach(function(tid){
           var s=src[tid], b=dst[tid]; if(!b)return;
           var buyCost=s.p, sellRev=b.p*(1-tax);
           var unit=sellRev-buyCost; if(unit<=0)return;
-          var units=Math.min(s.vol,b.vol); var tot=unit*units;
+          var units=(mode==='buy')?Math.min(s.vol,b.vol):s.vol; var tot=unit*units;
           if(tot<minP)return;
           rows.push({id:Number(tid),buy:buyCost,sell:b.p,unit:unit,margin:unit/buyCost,units:units,tot:tot});
         });
@@ -1986,7 +1989,14 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
         rows=rows.slice(0,100);
         await resolveNames(rows);
         renderRows(rows);
-        setStatus(rows.length+' profitable item'+(rows.length===1?'':'s')+' · '+fromSys.name+' → '+toSys.name+' · buy from sell orders, sell into buy orders, tax '+($('hl-tax').value||0)+'%');
+        var how=(mode==='buy')?'sell into buy orders (instant)':'relist at sell-order price';
+        var msg=rows.length+' profitable item'+(rows.length===1?'':'s')+' · '+fromSys.name+' → '+toSys.name+' · '+how+' · tax '+($('hl-tax').value||0)+'%';
+        if(!rows.length){
+          if(!srcN) msg=fromSys.name+' has no items listed for sale — nothing to buy/haul from here.';
+          else if(!dstN) msg=toSys.name+' has no '+(mode==='buy'?'buy orders':'market')+' — try the other Sell method, or a hub destination.';
+          else msg='No profitable hauls '+fromSys.name+' → '+toSys.name+' at these settings'+(mode==='buy'?'. Tip: switch Sell method to “Relist as sell orders” for many more routes.':'.');
+        }
+        setStatus(msg);
       }catch(e){ setStatus('Scan failed: '+e.message); $('hl-prog').hidden=true; }
       busy=false; $('hl-scan').disabled=false;
     }
