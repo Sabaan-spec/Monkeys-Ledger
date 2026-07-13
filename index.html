@@ -2888,13 +2888,13 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       +'<div class="field narrow"><label for="pw-signal">Signal</label><select id="pw-signal"><option value="both">Buy &amp; Sell</option><option value="buy">Buy (below avg)</option><option value="sell">Sell (above avg)</option></select></div>'
       +'<div class="field narrow"><label for="pw-minpct">Min % from avg</label><input id="pw-minpct" type="number" min="0" step="1" value="5" /></div>'
       +'<div class="field narrow"><label for="pw-minvol">Min vol/day</label><input id="pw-minvol" type="number" min="0" step="1" value="5" /></div>'
-      +'<div class="field narrow"><label for="pw-go">&nbsp;</label><button id="pw-go" class="btn">Scan category</button></div>'
+      +'<div class="field narrow"><label for="pw-go">&nbsp;</label><button id="pw-go" class="btn">Scan</button></div>'
       +'<div class="field narrow"><label for="pw-all">&nbsp;</label><button id="pw-all" class="btn">Scan all</button></div>'
       +'</section>'
       +'<div class="panel"><div id="pw-status" class="muted small" style="padding:6px 4px">Finds items priced below their 30-day average and trending up (a <b>buy</b> the dip signal), or above their 30-day average (a <b>sell</b> the spike signal). First run builds a one-time category index.</div>'
       +'<div id="pw-prog" hidden><i></i></div>'
       +'<div style="padding:2px 4px"><button id="pw-buildidx" class="btn" style="font-size:.72rem">Build / refresh index</button> <span id="pw-idxinfo" class="muted small"></span></div>'
-      +'<div id="pw-wrap" hidden style="overflow-x:auto;margin-top:6px"><table class="materials"><thead><tr><th>Item</th><th id="pw-th-cat" hidden>Category</th><th>Signal</th><th class="num">Now (Jita)</th><th class="num">30-day avg</th><th class="num">vs 30d</th><th class="num">7-day trend</th><th class="num">Vol / day</th></tr></thead><tbody id="pw-body"></tbody></table></div></div>'
+      +'<div id="pw-wrap" hidden style="overflow-x:auto;margin-top:6px"><table class="materials"><thead><tr><th>Item</th><th id="pw-th-cat" hidden>Category</th><th>Signal</th><th class="num">Now (Jita)</th><th class="num">30-day avg</th><th class="num">vs 30d</th><th class="num">7-day trend</th><th>Price (30d)</th><th class="num">Vol / day</th></tr></thead><tbody id="pw-body"></tbody></table></div></div>'
       +'<p class="muted small" style="margin-top:8px"><b>Now</b> is the current Jita mid price; <b>30-day avg</b> and <b>vol/day</b> come from CCP ESI market history. <b>Buy</b> = trading at least your % below its 30-day average and the 7-day trend is up (dip that is recovering). <b>Sell</b> = trading that % above its 30-day average. Momentum from the last 7 days vs the previous 7. Not investment advice — thin markets can stay mispriced.</p>';
 
     function money(n){try{return isk(Math.round(n));}catch(e){return Math.round(n).toLocaleString()+' ISK';}}
@@ -2932,17 +2932,16 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     $('pw-buildidx').addEventListener('click',buildIdx);
     function populateGroups(){
       var i=loadIdx(); var sel=$('pw-group'); if(!i||!sel)return;
-      var byCat={}; i.groups.forEach(function(g){ var cn=catName(g.cat); (byCat[cn]=byCat[cn]||[]).push(g); });
-      var html='<option value="">Select a category…</option>';
-      Object.keys(byCat).sort().forEach(function(cn){ html+='<optgroup label="'+cn+'">'+byCat[cn].map(function(g){return '<option value="'+g.gid+'">'+g.name+' ('+g.types.length+')</option>';}).join('')+'</optgroup>'; });
-      sel.innerHTML=html;
+      var byCat={}; i.groups.forEach(function(g){ (byCat[g.cat]=byCat[g.cat]||{}); g.types.forEach(function(t){byCat[g.cat][t]=1;}); });
+      var cats=Object.keys(byCat).map(function(c){ return {c:Number(c), name:catName(Number(c)), cnt:Object.keys(byCat[c]).length}; }).sort(function(a,b){return a.name.localeCompare(b.name);});
+      sel.innerHTML='<option value="">Select a category…</option>'+cats.map(function(x){return '<option value="'+x.c+'">'+x.name+' ('+x.cnt+')</option>';}).join('');
     }
 
     async function jitaPrices(ids){ var agg={}; for(var j=0;j<ids.length;j+=500){ try{ var part=await fuzzAgg(REFREGION, ids.slice(j,j+500)); for(var k in part)agg[k]=part[k]; }catch(e){} } return agg; }
     function midOf(o){ if(!o)return 0; var ask=o.sell&&Number(o.sell.min); var bid=o.buy&&Number(o.buy.max); if(ask>0&&bid>0)return (ask+bid)/2; return ask>0?ask:(bid>0?bid:0); }
     async function history(ids){
       var out={}; var i=0;
-      async function w(){ while(i<ids.length){ var id=ids[i++]; try{ var h=await fetch('https://esi.evetech.net/latest/markets/'+REFREGION+'/history/?type_id='+id).then(function(r){return r.json();}); if(Array.isArray(h)&&h.length>=14){ var last30=h.slice(-30); var vol=0,avg=0; last30.forEach(function(d){vol+=d.volume;avg+=d.average;}); var r7=h.slice(-7), p7=h.slice(-14,-7); var ra=0,pa=0; r7.forEach(function(d){ra+=d.average;}); p7.forEach(function(d){pa+=d.average;}); ra/=r7.length; pa/=(p7.length||1); out[id]={volDay:Math.round(vol/last30.length), avg30:avg/last30.length, trendUp:ra>pa, trendPct:pa?(ra-pa)/pa:0}; } }catch(e){} } }
+      async function w(){ while(i<ids.length){ var id=ids[i++]; try{ var h=await fetch('https://esi.evetech.net/latest/markets/'+REFREGION+'/history/?type_id='+id).then(function(r){return r.json();}); if(Array.isArray(h)&&h.length>=14){ var last30=h.slice(-30); var vol=0,avg=0; last30.forEach(function(d){vol+=d.volume;avg+=d.average;}); var r7=h.slice(-7), p7=h.slice(-14,-7); var ra=0,pa=0; r7.forEach(function(d){ra+=d.average;}); p7.forEach(function(d){pa+=d.average;}); ra/=r7.length; pa/=(p7.length||1); out[id]={volDay:Math.round(vol/last30.length), avg30:avg/last30.length, trendUp:ra>pa, trendPct:pa?(ra-pa)/pa:0, series:last30.map(function(d){return d.average;})}; } }catch(e){} } }
       var ws=[]; for(var k=0;k<24;k++)ws.push(w()); await Promise.all(ws);
       return out;
     }
@@ -2957,13 +2956,13 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       var vsMin=(Number($('pw-minpct').value)||0)/100; var minVol=Number($('pw-minvol').value)||0; var sigF=$('pw-signal').value;
       var ids, showCat=false;
       if(all){ showCat=true; catOf={}; var set={}; idx.groups.forEach(function(g){ g.types.forEach(function(t){set[t]=g.cat;}); }); ids=Object.keys(set).map(Number); catOf=set; }
-      else { var gid=$('pw-group').value; if(!gid){ setStatus('Pick a category first, or use Scan all.'); return; } var g=idx.groups.find(function(x){return String(x.gid)===String(gid);}); ids=g?g.types.slice():[]; window.__pwName=g?g.name:''; }
+      else { var cid=$('pw-group').value; if(!cid){ setStatus('Pick a category first, or use Scan all.'); return; } var set={}; idx.groups.forEach(function(g){ if(String(g.cat)===String(cid)) g.types.forEach(function(t){set[t]=1;}); }); ids=Object.keys(set).map(Number); window.__pwName=catName(Number(cid)); }
       if(!ids.length){ setStatus('No items in that category.'); return; }
       busy=true; $('pw-go').disabled=true; $('pw-all').disabled=true; $('pw-wrap').hidden=true;
       try{
         setStatus('Fetching current Jita prices for '+ids.length+' items…'); setProg(1,4);
         var prices=await jitaPrices(ids);
-        if(all){ // bound history to liquid items
+        if(ids.length>500){ // bound history to liquid items
           var vlist=ids.map(function(id){var o=prices[id]; var v=o&&o.sell&&Number(o.sell.volume)||0; return {id:id,v:v,mid:midOf(o)};}).filter(function(x){return x.mid>0;});
           vlist.sort(function(a,b){return b.v-a.v;});
           ids=vlist.slice(0,1500).map(function(x){return x.id;});
@@ -2972,7 +2971,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
         var hist=await history(ids);
         setProg(3,4);
         var rows=[];
-        ids.forEach(function(id){ var o=prices[id]; var now=midOf(o); if(!now)return; var h=hist[id]; if(!h||!h.avg30)return; if(minVol && h.volDay<minVol)return; var vs=(now-h.avg30)/h.avg30; var sig=null; if(vs<=-vsMin && h.trendUp)sig='buy'; else if(vs>=vsMin)sig='sell'; if(!sig)return; if(sigF!=='both' && sigF!==sig)return; rows.push({id:id, sig:sig, now:now, avg30:h.avg30, vs:vs, volDay:h.volDay, trendPct:h.trendPct, trendUp:h.trendUp}); });
+        ids.forEach(function(id){ var o=prices[id]; var now=midOf(o); if(!now)return; var h=hist[id]; if(!h||!h.avg30)return; if(minVol && h.volDay<minVol)return; var vs=(now-h.avg30)/h.avg30; var sig=null; if(vs<=-vsMin && h.trendUp)sig='buy'; else if(vs>=vsMin)sig='sell'; if(!sig)return; if(sigF!=='both' && sigF!==sig)return; rows.push({id:id, sig:sig, now:now, avg30:h.avg30, vs:vs, volDay:h.volDay, trendPct:h.trendPct, trendUp:h.trendUp, series:h.series}); });
         await resolveNames(rows.map(function(r){return r.id;}));
         hideProg();
         rows.sort(function(a,b){ if(a.sig!==b.sig)return a.sig==='buy'?-1:1; return a.sig==='buy'? a.vs-b.vs : b.vs-a.vs; });
@@ -2984,9 +2983,10 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       }catch(e){ setStatus('Scan failed: '+e.message); hideProg(); }
       busy=false; $('pw-go').disabled=false; $('pw-all').disabled=false;
     }
+    function sparkline(series, up){ if(!series||series.length<2)return ''; var mn=Math.min.apply(null,series), mx=Math.max.apply(null,series); var rng=(mx-mn)||1; var w=88,h=24,n=series.length; var pts=series.map(function(v,i){ var x=(i/(n-1))*w; var y=h-2-((v-mn)/rng)*(h-4); return x.toFixed(1)+','+y.toFixed(1); }).join(' '); return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" style="display:block"><polyline points="'+pts+'" fill="none" stroke="'+(up?'var(--good)':'var(--bad)')+'" stroke-width="1.5"/></svg>'; }
     function render(rows, all){
       $('pw-th-cat').hidden=!all;
-      if(!rows.length){ $('pw-body').innerHTML='<tr><td colspan="8" class="muted" style="padding:12px">No buy/sell signals at these filters — try a lower “Min % from avg”.</td></tr>'; $('pw-wrap').hidden=false; return; }
+      if(!rows.length){ $('pw-body').innerHTML='<tr><td colspan="9" class="muted" style="padding:12px">No buy/sell signals at these filters — try a lower “Min % from avg”.</td></tr>'; $('pw-wrap').hidden=false; return; }
       $('pw-body').innerHTML=rows.map(function(r){
         var tcls=r.trendPct>0.01?'up':(r.trendPct<-0.01?'down':'');
         var arrow=r.trendPct>0.01?'▲':(r.trendPct<-0.01?'▼':'▬');
@@ -2997,6 +2997,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
           +'<td class="num">'+money(r.avg30)+'</td>'
           +'<td class="num">'+(r.vs>0?'+':'')+(r.vs*100).toFixed(1)+'% <span class="spark">'+spark(r.vs)+'</span></td>'
           +'<td class="num '+tcls+'">'+arrow+' '+(r.trendPct>0?'+':'')+(r.trendPct*100).toFixed(1)+'%</td>'
+          +'<td>'+sparkline(r.series,r.trendUp)+'</td>'
           +'<td class="num">'+(r.volDay?intfn(r.volDay):'—')+'</td></tr>';
       }).join('');
       $('pw-wrap').hidden=false;
