@@ -2868,50 +2868,49 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 })();
 </script>
 <script>
-/* Categories grid v2 — actionable cross-hub arbitrage + daily volume + deals + all-category scan */
+/* Profit Watch — items below 30d avg + trending up (BUY) or above 30d avg (SELL), from Jita history */
 (function(){
   function $(id){return document.getElementById(id);}
   function ready(cb){function ok(){return typeof HUBS!=='undefined'&&typeof fuzzAgg==='function'&&document.getElementById('cat-ui');}if(ok()){cb();return;}var n=0,iv=setInterval(function(){if(ok()||n++>400){clearInterval(iv);if(ok())cb();}},100);}
   ready(function(){
     var host=$('cat-ui'); if(!host)return;
-    var HUBK=['jita','amarr','dodixie','rens','hek'];
-    var REFREGION=10000002; // The Forge (Jita) for history/liquidity
-    var tax=0.045;
+    var REFREGION=10000002; // The Forge (Jita)
+
+    var nb=[].slice.call(document.querySelectorAll('.tab')).find(function(x){return x.dataset.tab==='top';}); if(nb)nb.textContent='Profit Watch';
 
     var st=document.createElement('style');
-    st.textContent='#cx-body tr.deal-lo td.vs{color:var(--good)}#cx-body tr.deal-hi td.vs{color:var(--bad)}#cx-wrap .spark{font-family:monospace;letter-spacing:-1px}#cx-controls{align-items:end}#cx-prog{height:6px;background:var(--bg-2);border-radius:4px;overflow:hidden;margin:6px 0}#cx-prog>i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}';
+    st.textContent='#pw-body tr td.sig-buy{color:var(--good);font-weight:600}#pw-body tr td.sig-sell{color:var(--warn);font-weight:600}#pw-wrap .spark{font-family:monospace;letter-spacing:-1px}#pw-prog{height:6px;background:var(--bg-2);border-radius:4px;overflow:hidden;margin:6px 0}#pw-prog>i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}#pw-body td.up{color:var(--good)}#pw-body td.down{color:var(--bad)}';
     document.head.appendChild(st);
 
     host.innerHTML=
-      '<section class="controls panel" id="cx-controls">'
-      +'<div class="field grow"><label for="cx-group">Category</label><select id="cx-group"><option value="">Loading categories&hellip;</option></select></div>'
-      +'<div class="field narrow"><label for="cx-minprofit">Min profit/u (K)</label><input id="cx-minprofit" type="number" min="0" step="10" value="0" /></div>'
-      +'<div class="field narrow"><label for="cx-minvol">Min vol/day</label><input id="cx-minvol" type="number" min="0" step="1" value="0" /></div>'
-      +'<div class="field narrow"><label for="cx-mode">Sell method</label><select id="cx-mode"><option value="relist">Relist (sell price)</option><option value="buy">Into buy orders</option></select></div>'
-      +'<div class="field narrow"><label for="cx-go">&nbsp;</label><button id="cx-go" class="btn">Scan category</button></div>'
-      +'<div class="field narrow"><label for="cx-all">&nbsp;</label><button id="cx-all" class="btn">Scan all</button></div>'
+      '<section class="controls panel">'
+      +'<div class="field grow"><label for="pw-group">Category</label><select id="pw-group"><option value="">Loading categories&hellip;</option></select></div>'
+      +'<div class="field narrow"><label for="pw-signal">Signal</label><select id="pw-signal"><option value="both">Buy &amp; Sell</option><option value="buy">Buy (below avg)</option><option value="sell">Sell (above avg)</option></select></div>'
+      +'<div class="field narrow"><label for="pw-minpct">Min % from avg</label><input id="pw-minpct" type="number" min="0" step="1" value="5" /></div>'
+      +'<div class="field narrow"><label for="pw-minvol">Min vol/day</label><input id="pw-minvol" type="number" min="0" step="1" value="5" /></div>'
+      +'<div class="field narrow"><label for="pw-go">&nbsp;</label><button id="pw-go" class="btn">Scan category</button></div>'
+      +'<div class="field narrow"><label for="pw-all">&nbsp;</label><button id="pw-all" class="btn">Scan all</button></div>'
       +'</section>'
-      +'<div class="panel"><div id="cx-status" class="muted small" style="padding:6px 4px">Pick a category and scan for the best cross-hub flips — buy cheap in one hub, sell into buy orders in another. First run builds a one-time category index.</div>'
-      +'<div id="cx-prog" hidden><i></i></div>'
-      +'<div style="padding:2px 4px"><button id="cx-buildidx" class="btn" style="font-size:.72rem">Build / refresh index</button> <span id="cx-idxinfo" class="muted small"></span></div>'
-      +'<div id="cx-wrap" hidden style="overflow-x:auto;margin-top:6px"><table class="materials"><thead><tr><th>Item</th><th id="cx-th-cat" hidden>Category</th><th class="num">Buy @</th><th class="num">Sell @</th><th class="num">Profit / u</th><th class="num">Margin</th><th class="num">Vol / day</th><th class="num">vs 30d</th><th class="num">Profit / day</th></tr></thead><tbody id="cx-body"></tbody></table></div></div>'
-      +'<p class="muted small" style="margin-top:8px"><b>Buy @</b> is the cheapest hub’s sell price; <b>Sell @</b> is the priciest hub’s buy-order price — an instant cross-hub flip, net of '+(tax*100)+'% sales tax. <b>Vol/day</b> and <b>vs 30d</b> come from Jita market history (green = trading below its 30-day average = buy-low). <b>Profit/day</b> = profit per unit × the smaller of book depth and daily volume, so illiquid spreads don’t inflate it. Prices via Fuzzwork; history via CCP ESI.</p>';
+      +'<div class="panel"><div id="pw-status" class="muted small" style="padding:6px 4px">Finds items priced below their 30-day average and trending up (a <b>buy</b> the dip signal), or above their 30-day average (a <b>sell</b> the spike signal). First run builds a one-time category index.</div>'
+      +'<div id="pw-prog" hidden><i></i></div>'
+      +'<div style="padding:2px 4px"><button id="pw-buildidx" class="btn" style="font-size:.72rem">Build / refresh index</button> <span id="pw-idxinfo" class="muted small"></span></div>'
+      +'<div id="pw-wrap" hidden style="overflow-x:auto;margin-top:6px"><table class="materials"><thead><tr><th>Item</th><th id="pw-th-cat" hidden>Category</th><th>Signal</th><th class="num">Now (Jita)</th><th class="num">30-day avg</th><th class="num">vs 30d</th><th class="num">7-day trend</th><th class="num">Vol / day</th></tr></thead><tbody id="pw-body"></tbody></table></div></div>'
+      +'<p class="muted small" style="margin-top:8px"><b>Now</b> is the current Jita mid price; <b>30-day avg</b> and <b>vol/day</b> come from CCP ESI market history. <b>Buy</b> = trading at least your % below its 30-day average and the 7-day trend is up (dip that is recovering). <b>Sell</b> = trading that % above its 30-day average. Momentum from the last 7 days vs the previous 7. Not investment advice — thin markets can stay mispriced.</p>';
 
     function money(n){try{return isk(Math.round(n));}catch(e){return Math.round(n).toLocaleString()+' ISK';}}
     function shortISK(n){try{return iskShort(n);}catch(e){return Math.round(n).toLocaleString();}}
     function intfn(n){try{return intf(n);}catch(e){return Math.round(n).toLocaleString();}}
-    function setStatus(t){var s=$('cx-status'); if(s)s.innerHTML=t;}
-    function setProg(d,t){var p=$('cx-prog'); if(!p)return; p.hidden=false; p.firstChild.style.width=Math.round(d/Math.max(1,t)*100)+'%';}
-    function hideProg(){var p=$('cx-prog'); if(p)p.hidden=true;}
+    function setStatus(t){var s=$('pw-status'); if(s)s.innerHTML=t;}
+    function setProg(d,t){var p=$('pw-prog'); if(!p)return; p.hidden=false; p.firstChild.style.width=Math.round(d/Math.max(1,t)*100)+'%';}
+    function hideProg(){var p=$('pw-prog'); if(p)p.hidden=true;}
 
-    // ---- category index (localStorage) ----
-    var IDX=null;
     var MKTCATS={4:1,6:1,7:1,8:1,17:1,18:1,20:1,22:1,23:1,32:1,42:1,43:1,63:1,65:1,66:1,87:1};
     var CATNAMES={4:'Material',6:'Ship',7:'Module',8:'Charge',17:'Commodity',18:'Drone',20:'Implant',22:'Deployable',23:'Starbase',32:'Subsystem',42:'Planetary Resources',43:'Planetary Commodities',63:'Structures',65:'Structure',66:'Structure Module',87:'Fighter'};
     function catName(id){return CATNAMES[id]||('Category '+id);}
-    function loadIdx(){ if(IDX)return IDX; try{var s=localStorage.getItem('eveCatIdxV1'); if(s)IDX=JSON.parse(s);}catch(e){} return IDX; }
-    function idxInfo(){ var i=loadIdx(); var el=$('cx-idxinfo'); if(!el)return; el.textContent=i?('Index ready: '+i.groups.length+' categories (cached).'):'No index yet — first scan builds it (~15-30s, one time).'; }
 
+    var IDX=null;
+    function loadIdx(){ if(IDX)return IDX; try{var s=localStorage.getItem('eveCatIdxV1'); if(s)IDX=JSON.parse(s);}catch(e){} return IDX; }
+    function idxInfo(){ var i=loadIdx(); var el=$('pw-idxinfo'); if(!el)return; el.textContent=i?('Index ready: '+i.groups.length+' categories (cached).'):'No index yet — first scan builds it (~15-30s, one time).'; }
     var building=false;
     async function buildIdx(){
       if(building)return; building=true;
@@ -2919,114 +2918,93 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
         setStatus('Building category index (one-time)… fetching group list');
         var gids=[]; var p1=await fetch('https://esi.evetech.net/latest/universe/groups/?page=1'); var pages=parseInt(p1.headers.get('x-pages')||'1',10); gids=gids.concat(await p1.json());
         for(var pg=2;pg<=pages;pg++){ try{ gids=gids.concat(await fetch('https://esi.evetech.net/latest/universe/groups/?page='+pg).then(function(r){return r.json();})); }catch(e){} }
-        var cats={}; try{ var cids=await fetch('https://esi.evetech.net/latest/universe/categories/').then(function(r){return r.json();}); }catch(e){var cids=[];}
         var groups=[]; var i=0, done=0;
         async function w(){ while(i<gids.length){ var gid=gids[i++]; try{ var g=await fetch('https://esi.evetech.net/latest/universe/groups/'+gid).then(function(r){return r.json();}); if(g.published && MKTCATS[g.category_id] && g.types && g.types.length){ groups.push({gid:gid, name:g.name, cat:g.category_id, types:g.types}); } }catch(e){} done++; if(done%100===0)setProg(done,gids.length); } }
         var ws=[]; for(var k=0;k<40;k++)ws.push(w()); await Promise.all(ws);
-        // category names
-        var catNames={}; try{ for(var c=0;c<cids.length;c+=1000){ var nm=await fetch('https://esi.evetech.net/latest/universe/names/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cids.slice(c,c+1000))}).then(function(r){return r.json();}); if(Array.isArray(nm))nm.forEach(function(x){catNames[x.id]=x.name;}); } }catch(e){}
-        groups.sort(function(a,b){ var ca=(catNames[a.cat]||''), cb=(catNames[b.cat]||''); return ca===cb? a.name.localeCompare(b.name) : ca.localeCompare(cb); });
-        IDX={groups:groups, catNames:catNames};
+        groups.sort(function(a,b){ var ca=catName(a.cat), cb=catName(b.cat); return ca===cb? a.name.localeCompare(b.name) : ca.localeCompare(cb); });
+        IDX={groups:groups};
         try{ localStorage.setItem('eveCatIdxV1', JSON.stringify(IDX)); }catch(e){}
         hideProg(); populateGroups(); idxInfo();
         setStatus('Category index built: '+groups.length+' categories. Pick one and scan.');
       }catch(e){ setStatus('Index build failed: '+e.message); hideProg(); }
       building=false;
     }
-    $('cx-buildidx').addEventListener('click',buildIdx);
-
+    $('pw-buildidx').addEventListener('click',buildIdx);
     function populateGroups(){
-      var i=loadIdx(); var sel=$('cx-group'); if(!i||!sel)return;
+      var i=loadIdx(); var sel=$('pw-group'); if(!i||!sel)return;
       var byCat={}; i.groups.forEach(function(g){ var cn=catName(g.cat); (byCat[cn]=byCat[cn]||[]).push(g); });
       var html='<option value="">Select a category…</option>';
       Object.keys(byCat).sort().forEach(function(cn){ html+='<optgroup label="'+cn+'">'+byCat[cn].map(function(g){return '<option value="'+g.gid+'">'+g.name+' ('+g.types.length+')</option>';}).join('')+'</optgroup>'; });
       sel.innerHTML=html;
     }
 
-    // ---- pricing + history ----
-    async function pricesAllHubs(ids){
-      var byHub={}; for(var hi=0;hi<HUBK.length;hi++){ var reg=HUBS[HUBK[hi]].region; var agg={}; for(var j=0;j<ids.length;j+=500){ try{ var part=await fuzzAgg(reg, ids.slice(j,j+500)); for(var k in part)agg[k]=part[k]; }catch(e){} } byHub[HUBK[hi]]=agg; }
-      return byHub;
-    }
-    function bestFlip(id, byHub, mode){
-      var perHub=[];
-      HUBK.forEach(function(hk){ var o=byHub[hk][id]; if(!o)return; var ask=o.sell&&Number(o.sell.min); var bid=o.buy&&Number(o.buy.max); var pct=o.sell&&(Number(o.sell.percentile)||Number(o.sell.min)); perHub.push({hk:hk, ask:ask>0?ask:Infinity, bid:bid>0?bid:0, pct:pct>0?pct:Infinity, av:Number((o.sell&&o.sell.volume)||0), bv:Number((o.buy&&o.buy.volume)||0)}); });
-      if(!perHub.length)return null;
-      var buy=perHub.slice().sort(function(a,b){return a.ask-b.ask;})[0]; if(!(buy.ask<Infinity))return null;
-      var s, sellPrice, avail;
-      if(mode==='buy'){ s=perHub.slice().sort(function(a,b){return b.bid-a.bid;})[0]; if(!s.bid||s.hk===buy.hk)return null; sellPrice=s.bid; avail=Math.min(buy.av,s.bv); }
-      else { s=perHub.filter(function(x){return x.pct<Infinity;}).sort(function(a,b){return b.pct-a.pct;})[0]; if(!s||s.hk===buy.hk)return null; sellPrice=s.pct; avail=buy.av; }
-      var unit=sellPrice*(1-tax)-buy.ask; if(unit<=0)return null;
-      var margin=unit/buy.ask; if(margin>3)return null;
-      return {buyHub:buy.hk, sellHub:s.hk, ask:buy.ask, bid:sellPrice, unit:unit, margin:margin, bookAvail:avail};
-    }
+    async function jitaPrices(ids){ var agg={}; for(var j=0;j<ids.length;j+=500){ try{ var part=await fuzzAgg(REFREGION, ids.slice(j,j+500)); for(var k in part)agg[k]=part[k]; }catch(e){} } return agg; }
+    function midOf(o){ if(!o)return 0; var ask=o.sell&&Number(o.sell.min); var bid=o.buy&&Number(o.buy.max); if(ask>0&&bid>0)return (ask+bid)/2; return ask>0?ask:(bid>0?bid:0); }
     async function history(ids){
       var out={}; var i=0;
-      async function w(){ while(i<ids.length){ var id=ids[i++]; try{ var h=await fetch('https://esi.evetech.net/latest/markets/'+REFREGION+'/history/?type_id='+id).then(function(r){return r.json();}); if(Array.isArray(h)&&h.length){ var last=h.slice(-30); var vol=0, avg=0; last.forEach(function(d){vol+=d.volume; avg+=d.average;}); out[id]={volDay:Math.round(vol/last.length), avg30:avg/last.length}; } }catch(e){} } }
-      var ws=[]; for(var k=0;k<20;k++)ws.push(w()); await Promise.all(ws);
+      async function w(){ while(i<ids.length){ var id=ids[i++]; try{ var h=await fetch('https://esi.evetech.net/latest/markets/'+REFREGION+'/history/?type_id='+id).then(function(r){return r.json();}); if(Array.isArray(h)&&h.length>=14){ var last30=h.slice(-30); var vol=0,avg=0; last30.forEach(function(d){vol+=d.volume;avg+=d.average;}); var r7=h.slice(-7), p7=h.slice(-14,-7); var ra=0,pa=0; r7.forEach(function(d){ra+=d.average;}); p7.forEach(function(d){pa+=d.average;}); ra/=r7.length; pa/=(p7.length||1); out[id]={volDay:Math.round(vol/last30.length), avg30:avg/last30.length, trendUp:ra>pa, trendPct:pa?(ra-pa)/pa:0}; } }catch(e){} } }
+      var ws=[]; for(var k=0;k<24;k++)ws.push(w()); await Promise.all(ws);
       return out;
     }
     var nameCache={};
     async function resolveNames(ids){ ids=ids.filter(function(id){return id&&!nameCache[id];}); for(var i=0;i<ids.length;i+=1000){ try{ var nm=await fetch('https://esi.evetech.net/latest/universe/names/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(ids.slice(i,i+1000))}).then(function(r){return r.json();}); if(Array.isArray(nm))nm.forEach(function(n){nameCache[n.id]=n.name;}); }catch(e){} } }
-    function spark(now,avg){ if(!avg)return ''; var d=(now-avg)/avg; if(d<-0.15)return '▂'; if(d<-0.05)return '▃'; if(d<0.05)return '▅'; if(d<0.15)return '▆'; return '▇'; }
+    function spark(pct){ if(pct<-0.15)return '▂'; if(pct<-0.05)return '▃'; if(pct<0.05)return '▅'; if(pct<0.15)return '▆'; return '▇'; }
 
-    var busy=false;
+    var busy=false, catOf={};
     async function scan(all){
       if(busy)return;
       var idx=loadIdx(); if(!idx){ await buildIdx(); idx=loadIdx(); if(!idx)return; }
-      var minP=(Number($('cx-minprofit').value)||0)*1000; var minV=Number($('cx-minvol').value)||0;
+      var vsMin=(Number($('pw-minpct').value)||0)/100; var minVol=Number($('pw-minvol').value)||0; var sigF=$('pw-signal').value;
       var ids, showCat=false;
-      if(all){ showCat=true; var set={}; idx.groups.forEach(function(g){ g.types.forEach(function(t){set[t]=g.cat;}); }); ids=Object.keys(set).map(Number); window.__cxCatOf=set; }
-      else { var gid=$('cx-group').value; if(!gid){ setStatus('Pick a category first (or use Scan all).'); return; } var g=idx.groups.find(function(x){return String(x.gid)===String(gid);}); ids=g?g.types.slice():[]; window.__cxGroupName=g?g.name:''; }
+      if(all){ showCat=true; catOf={}; var set={}; idx.groups.forEach(function(g){ g.types.forEach(function(t){set[t]=g.cat;}); }); ids=Object.keys(set).map(Number); catOf=set; }
+      else { var gid=$('pw-group').value; if(!gid){ setStatus('Pick a category first, or use Scan all.'); return; } var g=idx.groups.find(function(x){return String(x.gid)===String(gid);}); ids=g?g.types.slice():[]; window.__pwName=g?g.name:''; }
       if(!ids.length){ setStatus('No items in that category.'); return; }
-      busy=true; $('cx-go').disabled=true; $('cx-all').disabled=true; $('cx-wrap').hidden=true;
+      busy=true; $('pw-go').disabled=true; $('pw-all').disabled=true; $('pw-wrap').hidden=true;
       try{
-        setStatus('Fetching hub prices for '+ids.length+' items…'); setProg(1,4);
-        var byHub=await pricesAllHubs(ids);
-        setProg(2,4);
-        var mode=($('cx-mode')&&$('cx-mode').value)||'relist';
+        setStatus('Fetching current Jita prices for '+ids.length+' items…'); setProg(1,4);
+        var prices=await jitaPrices(ids);
+        if(all){ // bound history to liquid items
+          var vlist=ids.map(function(id){var o=prices[id]; var v=o&&o.sell&&Number(o.sell.volume)||0; return {id:id,v:v,mid:midOf(o)};}).filter(function(x){return x.mid>0;});
+          vlist.sort(function(a,b){return b.v-a.v;});
+          ids=vlist.slice(0,1500).map(function(x){return x.id;});
+        }
+        setProg(2,4); setStatus('Loading 30-day history for '+ids.length+' items…');
+        var hist=await history(ids);
+        setProg(3,4);
         var rows=[];
-        ids.forEach(function(id){ var f=bestFlip(id, byHub, mode); if(!f)return; if(f.unit<minP)return; rows.push({id:id, f:f}); });
-        rows.sort(function(a,b){return b.f.unit*b.f.bookAvail - a.f.unit*a.f.bookAvail;});
-        if(all) rows=rows.slice(0,80); else rows=rows.slice(0,120);
-        setStatus('Loading volume & 30-day history for '+rows.length+' items…'); setProg(3,4);
-        var hist=await history(rows.map(function(r){return r.id;}));
+        ids.forEach(function(id){ var o=prices[id]; var now=midOf(o); if(!now)return; var h=hist[id]; if(!h||!h.avg30)return; if(minVol && h.volDay<minVol)return; var vs=(now-h.avg30)/h.avg30; var sig=null; if(vs<=-vsMin && h.trendUp)sig='buy'; else if(vs>=vsMin)sig='sell'; if(!sig)return; if(sigF!=='both' && sigF!==sig)return; rows.push({id:id, sig:sig, now:now, avg30:h.avg30, vs:vs, volDay:h.volDay, trendPct:h.trendPct, trendUp:h.trendUp}); });
         await resolveNames(rows.map(function(r){return r.id;}));
         hideProg();
-        // finalize with liquidity
-        var out=[];
-        rows.forEach(function(r){ var h=hist[r.id]||{volDay:0,avg30:0}; if(minV && h.volDay<minV)return; var thru=Math.min(r.f.bookAvail, h.volDay||r.f.bookAvail); var perDay=r.f.unit*thru; out.push({id:r.id, f:r.f, volDay:h.volDay, avg30:h.avg30, perDay:perDay}); });
-        out.sort(function(a,b){return b.perDay-a.perDay;});
-        render(out, all);
-        var label = all? 'all categories' : ('“'+(window.__cxGroupName||'')+'”');
-        setStatus(out.length+' profitable cross-hub flip'+(out.length===1?'':'s')+' · '+label+' · sorted by profit/day');
+        rows.sort(function(a,b){ if(a.sig!==b.sig)return a.sig==='buy'?-1:1; return a.sig==='buy'? a.vs-b.vs : b.vs-a.vs; });
+        rows=rows.slice(0, all?120:200);
+        render(rows, all);
+        var label = all? 'all categories' : ('“'+(window.__pwName||'')+'”');
+        var nb=rows.filter(function(r){return r.sig==='buy';}).length, ns=rows.length-nb;
+        setStatus(nb+' buy · '+ns+' sell signal'+(rows.length===1?'':'s')+' · '+label+' · Jita, vs 30-day average');
       }catch(e){ setStatus('Scan failed: '+e.message); hideProg(); }
-      busy=false; $('cx-go').disabled=false; $('cx-all').disabled=false;
+      busy=false; $('pw-go').disabled=false; $('pw-all').disabled=false;
     }
-    function hubName(hk){ return HUBS[hk].name; }
     function render(rows, all){
-      $('cx-th-cat').hidden=!all;
-      if(!rows.length){ $('cx-body').innerHTML='<tr><td colspan="9" class="muted" style="padding:12px">No profitable cross-hub flips at these filters.</td></tr>'; $('cx-wrap').hidden=false; return; }
-      var idx=loadIdx();
-      $('cx-body').innerHTML=rows.map(function(r){
-        var f=r.f; var vs = r.avg30? ((f.ask-r.avg30)/r.avg30*100) : null;
-        var cls = vs===null?'':(vs<-2?'deal-lo':(vs>2?'deal-hi':''));
-        var catCell = all? '<td class="muted">'+catName(window.__cxCatOf[r.id])+'</td>' : '';
-        return '<tr class="'+cls+'"><td>'+(nameCache[r.id]||('#'+r.id))+'</td>'+(all?catCell:'')
-          +'<td class="num">'+hubName(f.buyHub)+' <span class="muted">'+shortISK(f.ask)+'</span></td>'
-          +'<td class="num">'+hubName(f.sellHub)+' <span class="muted">'+shortISK(f.bid)+'</span></td>'
-          +'<td class="num" style="color:var(--good)">'+money(f.unit)+'</td>'
-          +'<td class="num">'+(f.margin*100).toFixed(0)+'%</td>'
-          +'<td class="num">'+(r.volDay?intfn(r.volDay):'—')+'</td>'
-          +'<td class="num vs">'+(vs===null?'—':((vs>0?'+':'')+vs.toFixed(0)+'% '+'<span class="spark">'+spark(f.ask,r.avg30)+'</span>'))+'</td>'
-          +'<td class="num" style="color:var(--good);font-weight:600">'+shortISK(r.perDay)+'</td></tr>';
+      $('pw-th-cat').hidden=!all;
+      if(!rows.length){ $('pw-body').innerHTML='<tr><td colspan="8" class="muted" style="padding:12px">No buy/sell signals at these filters — try a lower “Min % from avg”.</td></tr>'; $('pw-wrap').hidden=false; return; }
+      $('pw-body').innerHTML=rows.map(function(r){
+        var tcls=r.trendPct>0.01?'up':(r.trendPct<-0.01?'down':'');
+        var arrow=r.trendPct>0.01?'▲':(r.trendPct<-0.01?'▼':'▬');
+        var catCell = all? '<td class="muted">'+catName(catOf[r.id])+'</td>' : '';
+        return '<tr><td>'+(nameCache[r.id]||('#'+r.id))+'</td>'+(all?catCell:'')
+          +'<td class="sig-'+r.sig+'">'+(r.sig==='buy'?'BUY':'SELL')+'</td>'
+          +'<td class="num">'+money(r.now)+'</td>'
+          +'<td class="num">'+money(r.avg30)+'</td>'
+          +'<td class="num">'+(r.vs>0?'+':'')+(r.vs*100).toFixed(1)+'% <span class="spark">'+spark(r.vs)+'</span></td>'
+          +'<td class="num '+tcls+'">'+arrow+' '+(r.trendPct>0?'+':'')+(r.trendPct*100).toFixed(1)+'%</td>'
+          +'<td class="num">'+(r.volDay?intfn(r.volDay):'—')+'</td></tr>';
       }).join('');
-      $('cx-wrap').hidden=false;
+      $('pw-wrap').hidden=false;
     }
 
-    $('cx-go').addEventListener('click',function(){scan(false);});
-    $('cx-all').addEventListener('click',function(){scan(true);});
-    $('cx-group').addEventListener('change',function(){ if($('cx-group').value) scan(false); });
+    $('pw-go').addEventListener('click',function(){scan(false);});
+    $('pw-all').addEventListener('click',function(){scan(true);});
+    $('pw-group').addEventListener('change',function(){ if($('pw-group').value) scan(false); });
     if(loadIdx()) populateGroups();
     idxInfo();
   });
