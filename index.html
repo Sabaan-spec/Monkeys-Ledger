@@ -2976,7 +2976,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
         var hist=await history(ids);
         setProg(3,4);
         var rows=[];
-        ids.forEach(function(id){ var o=prices[id]; var h=hist[id]; if(!h||!h.avg30)return; if(minVol && h.volDay<minVol)return; var ask=askOf(o), bid=bidOf(o), avg=h.avg30; var sig=null, now=0, vs=0; if(ask>0){ var va=(ask-avg)/avg; if(va<=-vsMin && h.trendUp){ sig='buy'; now=ask; vs=va; } } if(!sig && bid>0){ var vb=(bid-avg)/avg; if(vb>=vsMin){ sig='sell'; now=bid; vs=vb; } } if(!sig)return; if(sigF!=='both' && sigF!==sig)return; rows.push({id:id, sig:sig, now:now, avg30:avg, vs:vs, volDay:h.volDay, trendPct:h.trendPct, trendUp:h.trendUp, series:h.series}); });
+        ids.forEach(function(id){ var o=prices[id]; var h=hist[id]; if(!h||!h.avg30)return; if(minVol && h.volDay<minVol)return; var ask=askOf(o), bid=bidOf(o), avg=h.avg30; var sig=null, now=0, vs=0; if(ask>0){ var va=(ask-avg)/avg; if(va<=-vsMin && h.trendUp){ sig='buy'; now=ask; vs=va; } } if(!sig && bid>0){ var vb=(bid-avg)/avg; if(vb>=vsMin){ sig='sell'; now=bid; vs=vb; } } if(!sig)return; if(Math.abs(vs)>3)return; if(sigF!=='both' && sigF!==sig)return; rows.push({id:id, sig:sig, now:now, avg30:avg, vs:vs, volDay:h.volDay, trendPct:h.trendPct, trendUp:h.trendUp, series:h.series}); });
         await resolveNames(rows.map(function(r){return r.id;}));
         hideProg();
         rows.sort(function(a,b){ if(a.sig!==b.sig)return a.sig==='buy'?-1:1; return a.sig==='buy'? a.vs-b.vs : b.vs-a.vs; });
@@ -3014,7 +3014,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       jitaPrices(lastCtx.ids).then(function(prices){
         var vsMin=(Number($('pw-minpct').value)||0)/100; var minVol=Number($('pw-minvol').value)||0; var sigF=$('pw-signal').value;
         var rows=[];
-        lastCtx.ids.forEach(function(id){ var o=prices[id]; var h=lastCtx.hist[id]; if(!h||!h.avg30)return; if(minVol&&h.volDay<minVol)return; var ask=askOf(o), bid=bidOf(o), avg=h.avg30; var sig=null, now=0, vs=0; if(ask>0){ var va=(ask-avg)/avg; if(va<=-vsMin&&h.trendUp){ sig='buy'; now=ask; vs=va; } } if(!sig&&bid>0){ var vb=(bid-avg)/avg; if(vb>=vsMin){ sig='sell'; now=bid; vs=vb; } } if(!sig)return; if(sigF!=='both'&&sigF!==sig)return; rows.push({id:id,sig:sig,now:now,avg30:avg,vs:vs,volDay:h.volDay,trendPct:h.trendPct,trendUp:h.trendUp,series:h.series}); });
+        lastCtx.ids.forEach(function(id){ var o=prices[id]; var h=lastCtx.hist[id]; if(!h||!h.avg30)return; if(minVol&&h.volDay<minVol)return; var ask=askOf(o), bid=bidOf(o), avg=h.avg30; var sig=null, now=0, vs=0; if(ask>0){ var va=(ask-avg)/avg; if(va<=-vsMin&&h.trendUp){ sig='buy'; now=ask; vs=va; } } if(!sig&&bid>0){ var vb=(bid-avg)/avg; if(vb>=vsMin){ sig='sell'; now=bid; vs=vb; } } if(!sig)return; if(Math.abs(vs)>3)return; if(sigF!=='both'&&sigF!==sig)return; rows.push({id:id,sig:sig,now:now,avg30:avg,vs:vs,volDay:h.volDay,trendPct:h.trendPct,trendUp:h.trendUp,series:h.series}); });
         rows.sort(function(a,b){ if(a.sig!==b.sig)return a.sig==='buy'?-1:1; return a.sig==='buy'?a.vs-b.vs:b.vs-a.vs; });
         rows=rows.slice(0, lastCtx.all?120:200);
         render(rows, lastCtx.all);
