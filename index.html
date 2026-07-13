@@ -2885,16 +2885,18 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     host.innerHTML=
       '<section class="controls panel">'
       +'<div class="field grow"><label for="pw-group">Category</label><select id="pw-group"><option value="">Loading categories&hellip;</option></select></div>'
+      +'<div class="field narrow"><label for="pw-hub">Hub</label><select id="pw-hub"><option value="jita">Jita</option><option value="amarr">Amarr</option><option value="dodixie">Dodixie</option><option value="rens">Rens</option><option value="hek">Hek</option></select></div>'
       +'<div class="field narrow"><label for="pw-signal">Signal</label><select id="pw-signal"><option value="both">Buy &amp; Sell</option><option value="buy">Buy (below avg)</option><option value="sell">Sell (above avg)</option></select></div>'
       +'<div class="field narrow"><label for="pw-minpct">Min % from avg</label><input id="pw-minpct" type="number" min="0" step="1" value="5" /></div>'
       +'<div class="field narrow"><label for="pw-minvol">Min vol/day</label><input id="pw-minvol" type="number" min="0" step="1" value="5" /></div>'
       +'<div class="field narrow"><label for="pw-go">&nbsp;</label><button id="pw-go" class="btn">Scan</button></div>'
       +'<div class="field narrow"><label for="pw-all">&nbsp;</label><button id="pw-all" class="btn">Scan all</button></div>'
+      +'<div class="field narrow"><label>&nbsp;</label><label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:.8rem"><input type="checkbox" id="pw-live" /> Live</label></div>'
       +'</section>'
       +'<div class="panel"><div id="pw-status" class="muted small" style="padding:6px 4px">Finds items priced below their 30-day average and trending up (a <b>buy</b> the dip signal), or above their 30-day average (a <b>sell</b> the spike signal). First run builds a one-time category index.</div>'
       +'<div id="pw-prog" hidden><i></i></div>'
       +'<div style="padding:2px 4px"><button id="pw-buildidx" class="btn" style="font-size:.72rem">Build / refresh index</button> <span id="pw-idxinfo" class="muted small"></span></div>'
-      +'<div id="pw-wrap" hidden style="overflow-x:auto;margin-top:6px"><table class="materials"><thead><tr><th>Item</th><th id="pw-th-cat" hidden>Category</th><th>Signal</th><th class="num">Now (Jita)</th><th class="num">30-day avg</th><th class="num">vs 30d</th><th class="num">7-day trend</th><th>Price (30d)</th><th class="num">Vol / day</th></tr></thead><tbody id="pw-body"></tbody></table></div></div>'
+      +'<div id="pw-wrap" hidden style="overflow-x:auto;margin-top:6px"><table class="materials"><thead><tr><th>Item</th><th id="pw-th-cat" hidden>Category</th><th>Signal</th><th class="num" id="pw-nowth">Now (Jita)</th><th class="num">30-day avg</th><th class="num">vs 30d</th><th class="num">7-day trend</th><th>Price (30d)</th><th class="num">Vol / day</th></tr></thead><tbody id="pw-body"></tbody></table></div></div>'
       +'<p class="muted small" style="margin-top:8px"><b>Now</b> is the current Jita mid price; <b>30-day avg</b> and <b>vol/day</b> come from CCP ESI market history. <b>Buy</b> = trading at least your % below its 30-day average and the 7-day trend is up (dip that is recovering). <b>Sell</b> = trading that % above its 30-day average. Momentum from the last 7 days vs the previous 7. Not investment advice — thin markets can stay mispriced.</p>';
 
     function money(n){try{return isk(Math.round(n));}catch(e){return Math.round(n).toLocaleString()+' ISK';}}
@@ -2949,11 +2951,12 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     async function resolveNames(ids){ ids=ids.filter(function(id){return id&&!nameCache[id];}); for(var i=0;i<ids.length;i+=1000){ try{ var nm=await fetch('https://esi.evetech.net/latest/universe/names/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(ids.slice(i,i+1000))}).then(function(r){return r.json();}); if(Array.isArray(nm))nm.forEach(function(n){nameCache[n.id]=n.name;}); }catch(e){} } }
     function spark(pct){ if(pct<-0.15)return '▂'; if(pct<-0.05)return '▃'; if(pct<0.05)return '▅'; if(pct<0.15)return '▆'; return '▇'; }
 
-    var busy=false, catOf={};
+    var busy=false, catOf={}, lastCtx=null, liveIv=null;
     async function scan(all){
       if(busy)return;
       var idx=loadIdx(); if(!idx){ await buildIdx(); idx=loadIdx(); if(!idx)return; }
       var vsMin=(Number($('pw-minpct').value)||0)/100; var minVol=Number($('pw-minvol').value)||0; var sigF=$('pw-signal').value;
+      var hk=($('pw-hub')&&$('pw-hub').value)||'jita'; REFREGION=HUBS[hk]?HUBS[hk].region:10000002; var hubNm=HUBS[hk]?HUBS[hk].name:'Jita'; var nowth=$('pw-nowth'); if(nowth)nowth.textContent='Now ('+hubNm+')';
       var ids, showCat=false;
       if(all){ showCat=true; catOf={}; var set={}; idx.groups.forEach(function(g){ g.types.forEach(function(t){set[t]=g.cat;}); }); ids=Object.keys(set).map(Number); catOf=set; }
       else { var cid=$('pw-group').value; if(!cid){ setStatus('Pick a category first, or use Scan all.'); return; } var set={}; idx.groups.forEach(function(g){ if(String(g.cat)===String(cid)) g.types.forEach(function(t){set[t]=1;}); }); ids=Object.keys(set).map(Number); window.__pwName=catName(Number(cid)); }
@@ -2977,9 +2980,10 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
         rows.sort(function(a,b){ if(a.sig!==b.sig)return a.sig==='buy'?-1:1; return a.sig==='buy'? a.vs-b.vs : b.vs-a.vs; });
         rows=rows.slice(0, all?120:200);
         render(rows, all);
+        lastCtx={ids:ids, hist:hist, all:all, name:(all?'all categories':('“'+(window.__pwName||'')+'”')), hubNm:hubNm}; if($('pw-live')&&$('pw-live').checked){ clearInterval(liveIv); liveIv=setInterval(refreshLive,60000); }
         var label = all? 'all categories' : ('“'+(window.__pwName||'')+'”');
         var nb=rows.filter(function(r){return r.sig==='buy';}).length, ns=rows.length-nb;
-        setStatus(nb+' buy · '+ns+' sell signal'+(rows.length===1?'':'s')+' · '+label+' · Jita, vs 30-day average');
+        setStatus(nb+' buy · '+ns+' sell signal'+(rows.length===1?'':'s')+' · '+label+' · '+hubNm+', vs 30-day average');
       }catch(e){ setStatus('Scan failed: '+e.message); hideProg(); }
       busy=false; $('pw-go').disabled=false; $('pw-all').disabled=false;
     }
@@ -3003,6 +3007,21 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       $('pw-wrap').hidden=false;
     }
 
+    function refreshLive(){
+      if(!lastCtx||busy){return;} var tt=document.getElementById('tab-top'); if(tt&&tt.hidden){return;}
+      jitaPrices(lastCtx.ids).then(function(prices){
+        var vsMin=(Number($('pw-minpct').value)||0)/100; var minVol=Number($('pw-minvol').value)||0; var sigF=$('pw-signal').value;
+        var rows=[];
+        lastCtx.ids.forEach(function(id){ var o=prices[id]; var now=midOf(o); if(!now)return; var h=lastCtx.hist[id]; if(!h||!h.avg30)return; if(minVol&&h.volDay<minVol)return; var vs=(now-h.avg30)/h.avg30; var sig=null; if(vs<=-vsMin&&h.trendUp)sig='buy'; else if(vs>=vsMin)sig='sell'; if(!sig)return; if(sigF!=='both'&&sigF!==sig)return; rows.push({id:id,sig:sig,now:now,avg30:h.avg30,vs:vs,volDay:h.volDay,trendPct:h.trendPct,trendUp:h.trendUp,series:h.series}); });
+        rows.sort(function(a,b){ if(a.sig!==b.sig)return a.sig==='buy'?-1:1; return a.sig==='buy'?a.vs-b.vs:b.vs-a.vs; });
+        rows=rows.slice(0, lastCtx.all?120:200);
+        render(rows, lastCtx.all);
+        var nb=rows.filter(function(r){return r.sig==='buy';}).length, ns=rows.length-nb;
+        setStatus(nb+' buy · '+ns+' sell · '+lastCtx.name+' · '+lastCtx.hubNm+' · <span style="color:var(--good)">● live</span> · '+new Date().toLocaleTimeString());
+      });
+    }
+    var _lv=$('pw-live'); if(_lv)_lv.addEventListener('change',function(){ clearInterval(liveIv); if(_lv.checked&&lastCtx){ liveIv=setInterval(refreshLive,60000); refreshLive(); } });
+    var _hs=$('pw-hub'); if(_hs)_hs.addEventListener('change',function(){ if(lastCtx) scan(lastCtx.all); else if($('pw-group').value) scan(false); });
     $('pw-go').addEventListener('click',function(){scan(false);});
     $('pw-all').addEventListener('click',function(){scan(true);});
     $('pw-group').addEventListener('change',function(){ if($('pw-group').value) scan(false); });
