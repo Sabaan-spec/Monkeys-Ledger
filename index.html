@@ -2887,6 +2887,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       +'<div class="field grow"><label for="cx-group">Category</label><select id="cx-group"><option value="">Loading categories&hellip;</option></select></div>'
       +'<div class="field narrow"><label for="cx-minprofit">Min profit/u (K)</label><input id="cx-minprofit" type="number" min="0" step="10" value="0" /></div>'
       +'<div class="field narrow"><label for="cx-minvol">Min vol/day</label><input id="cx-minvol" type="number" min="0" step="1" value="0" /></div>'
+      +'<div class="field narrow"><label for="cx-mode">Sell method</label><select id="cx-mode"><option value="relist">Relist (sell price)</option><option value="buy">Into buy orders</option></select></div>'
       +'<div class="field narrow"><label for="cx-go">&nbsp;</label><button id="cx-go" class="btn">Scan category</button></div>'
       +'<div class="field narrow"><label for="cx-all">&nbsp;</label><button id="cx-all" class="btn">Scan all</button></div>'
       +'</section>'
@@ -2906,6 +2907,8 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     // ---- category index (localStorage) ----
     var IDX=null;
     var MKTCATS={4:1,6:1,7:1,8:1,17:1,18:1,20:1,22:1,23:1,32:1,42:1,43:1,63:1,65:1,66:1,87:1};
+    var CATNAMES={4:'Material',6:'Ship',7:'Module',8:'Charge',17:'Commodity',18:'Drone',20:'Implant',22:'Deployable',23:'Starbase',32:'Subsystem',42:'Planetary Resources',43:'Planetary Commodities',63:'Structures',65:'Structure',66:'Structure Module',87:'Fighter'};
+    function catName(id){return CATNAMES[id]||('Category '+id);}
     function loadIdx(){ if(IDX)return IDX; try{var s=localStorage.getItem('eveCatIdxV1'); if(s)IDX=JSON.parse(s);}catch(e){} return IDX; }
     function idxInfo(){ var i=loadIdx(); var el=$('cx-idxinfo'); if(!el)return; el.textContent=i?('Index ready: '+i.groups.length+' categories (cached).'):'No index yet — first scan builds it (~15-30s, one time).'; }
 
@@ -2934,7 +2937,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 
     function populateGroups(){
       var i=loadIdx(); var sel=$('cx-group'); if(!i||!sel)return;
-      var byCat={}; i.groups.forEach(function(g){ var cn=i.catNames[g.cat]||('Cat '+g.cat); (byCat[cn]=byCat[cn]||[]).push(g); });
+      var byCat={}; i.groups.forEach(function(g){ var cn=catName(g.cat); (byCat[cn]=byCat[cn]||[]).push(g); });
       var html='<option value="">Select a category…</option>';
       Object.keys(byCat).sort().forEach(function(cn){ html+='<optgroup label="'+cn+'">'+byCat[cn].map(function(g){return '<option value="'+g.gid+'">'+g.name+' ('+g.types.length+')</option>';}).join('')+'</optgroup>'; });
       sel.innerHTML=html;
@@ -2945,12 +2948,15 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       var byHub={}; for(var hi=0;hi<HUBK.length;hi++){ var reg=HUBS[HUBK[hi]].region; var agg={}; for(var j=0;j<ids.length;j+=500){ try{ var part=await fuzzAgg(reg, ids.slice(j,j+500)); for(var k in part)agg[k]=part[k]; }catch(e){} } byHub[HUBK[hi]]=agg; }
       return byHub;
     }
-    function bestFlip(id, byHub){
-      var minAsk=Infinity, buyHub=null, askVol=0; var maxBid=0, sellHub=null, bidVol=0;
-      HUBK.forEach(function(hk){ var o=byHub[hk][id]; if(!o)return; var ask=o.sell&&Number(o.sell.min); var bid=o.buy&&Number(o.buy.max); if(ask>0&&ask<minAsk){minAsk=ask;buyHub=hk;askVol=Number((o.sell&&o.sell.volume)||0);} if(bid>0&&bid>maxBid){maxBid=bid;sellHub=hk;bidVol=Number((o.buy&&o.buy.volume)||0);} });
-      if(!buyHub||!sellHub||buyHub===sellHub)return null;
-      var unit=maxBid*(1-tax)-minAsk; if(unit<=0)return null;
-      return {buyHub:buyHub, sellHub:sellHub, ask:minAsk, bid:maxBid, unit:unit, margin:unit/minAsk, bookAvail:Math.min(askVol,bidVol)};
+    function bestFlip(id, byHub, mode){
+      var minAsk=Infinity, buyHub=null, askVol=0; var maxBid=0, bidHub=null, bidVol=0; var maxAsk=0, askHub=null;
+      HUBK.forEach(function(hk){ var o=byHub[hk][id]; if(!o)return; var ask=o.sell&&Number(o.sell.min); var bid=o.buy&&Number(o.buy.max); var av=Number((o.sell&&o.sell.volume)||0); if(ask>0&&ask<minAsk){minAsk=ask;buyHub=hk;askVol=av;} if(ask>0&&ask>maxAsk){maxAsk=ask;askHub=hk;} if(bid>0&&bid>maxBid){maxBid=bid;bidHub=hk;bidVol=Number((o.buy&&o.buy.volume)||0);} });
+      if(!buyHub)return null;
+      var sellHub, sellPrice, unit, avail;
+      if(mode==='buy'){ if(!bidHub||bidHub===buyHub)return null; sellHub=bidHub; sellPrice=maxBid; unit=maxBid*(1-tax)-minAsk; avail=Math.min(askVol,bidVol); }
+      else { if(!askHub||askHub===buyHub)return null; sellHub=askHub; sellPrice=maxAsk; unit=maxAsk*(1-tax)-minAsk; avail=askVol; }
+      if(unit<=0)return null;
+      return {buyHub:buyHub, sellHub:sellHub, ask:minAsk, bid:sellPrice, unit:unit, margin:unit/minAsk, bookAvail:avail};
     }
     async function history(ids){
       var out={}; var i=0;
@@ -2976,8 +2982,9 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
         setStatus('Fetching hub prices for '+ids.length+' items…'); setProg(1,4);
         var byHub=await pricesAllHubs(ids);
         setProg(2,4);
+        var mode=($('cx-mode')&&$('cx-mode').value)||'relist';
         var rows=[];
-        ids.forEach(function(id){ var f=bestFlip(id, byHub); if(!f)return; if(f.unit<minP)return; rows.push({id:id, f:f}); });
+        ids.forEach(function(id){ var f=bestFlip(id, byHub, mode); if(!f)return; if(f.unit<minP)return; rows.push({id:id, f:f}); });
         rows.sort(function(a,b){return b.f.unit*b.f.bookAvail - a.f.unit*a.f.bookAvail;});
         if(all) rows=rows.slice(0,80); else rows=rows.slice(0,120);
         setStatus('Loading volume & 30-day history for '+rows.length+' items…'); setProg(3,4);
@@ -3002,7 +3009,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       $('cx-body').innerHTML=rows.map(function(r){
         var f=r.f; var vs = r.avg30? ((f.ask-r.avg30)/r.avg30*100) : null;
         var cls = vs===null?'':(vs<-2?'deal-lo':(vs>2?'deal-hi':''));
-        var catCell = all? '<td class="muted">'+((idx&&idx.catNames[window.__cxCatOf[r.id]])||'')+'</td>' : '';
+        var catCell = all? '<td class="muted">'+catName(window.__cxCatOf[r.id])+'</td>' : '';
         return '<tr class="'+cls+'"><td>'+(nameCache[r.id]||('#'+r.id))+'</td>'+(all?catCell:'')
           +'<td class="num">'+hubName(f.buyHub)+' <span class="muted">'+shortISK(f.ask)+'</span></td>'
           +'<td class="num">'+hubName(f.sellHub)+' <span class="muted">'+shortISK(f.bid)+'</span></td>'
