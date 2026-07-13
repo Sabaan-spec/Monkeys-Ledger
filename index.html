@@ -2949,14 +2949,16 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       return byHub;
     }
     function bestFlip(id, byHub, mode){
-      var minAsk=Infinity, buyHub=null, askVol=0; var maxBid=0, bidHub=null, bidVol=0; var maxAsk=0, askHub=null;
-      HUBK.forEach(function(hk){ var o=byHub[hk][id]; if(!o)return; var ask=o.sell&&Number(o.sell.min); var bid=o.buy&&Number(o.buy.max); var av=Number((o.sell&&o.sell.volume)||0); if(ask>0&&ask<minAsk){minAsk=ask;buyHub=hk;askVol=av;} if(ask>0&&ask>maxAsk){maxAsk=ask;askHub=hk;} if(bid>0&&bid>maxBid){maxBid=bid;bidHub=hk;bidVol=Number((o.buy&&o.buy.volume)||0);} });
-      if(!buyHub)return null;
-      var sellHub, sellPrice, unit, avail;
-      if(mode==='buy'){ if(!bidHub||bidHub===buyHub)return null; sellHub=bidHub; sellPrice=maxBid; unit=maxBid*(1-tax)-minAsk; avail=Math.min(askVol,bidVol); }
-      else { if(!askHub||askHub===buyHub)return null; sellHub=askHub; sellPrice=maxAsk; unit=maxAsk*(1-tax)-minAsk; avail=askVol; }
-      if(unit<=0)return null;
-      return {buyHub:buyHub, sellHub:sellHub, ask:minAsk, bid:sellPrice, unit:unit, margin:unit/minAsk, bookAvail:avail};
+      var perHub=[];
+      HUBK.forEach(function(hk){ var o=byHub[hk][id]; if(!o)return; var ask=o.sell&&Number(o.sell.min); var bid=o.buy&&Number(o.buy.max); var pct=o.sell&&(Number(o.sell.percentile)||Number(o.sell.min)); perHub.push({hk:hk, ask:ask>0?ask:Infinity, bid:bid>0?bid:0, pct:pct>0?pct:Infinity, av:Number((o.sell&&o.sell.volume)||0), bv:Number((o.buy&&o.buy.volume)||0)}); });
+      if(!perHub.length)return null;
+      var buy=perHub.slice().sort(function(a,b){return a.ask-b.ask;})[0]; if(!(buy.ask<Infinity))return null;
+      var s, sellPrice, avail;
+      if(mode==='buy'){ s=perHub.slice().sort(function(a,b){return b.bid-a.bid;})[0]; if(!s.bid||s.hk===buy.hk)return null; sellPrice=s.bid; avail=Math.min(buy.av,s.bv); }
+      else { s=perHub.filter(function(x){return x.pct<Infinity;}).sort(function(a,b){return b.pct-a.pct;})[0]; if(!s||s.hk===buy.hk)return null; sellPrice=s.pct; avail=buy.av; }
+      var unit=sellPrice*(1-tax)-buy.ask; if(unit<=0)return null;
+      var margin=unit/buy.ask; if(margin>3)return null;
+      return {buyHub:buy.hk, sellHub:s.hk, ask:buy.ask, bid:sellPrice, unit:unit, margin:margin, bookAvail:avail};
     }
     async function history(ids){
       var out={}; var i=0;
