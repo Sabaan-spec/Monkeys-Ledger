@@ -3032,5 +3032,41 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   });
 })();
 </script>
+<script>
+/* Reprocess tab: tax input + live prices */
+(function(){
+  function $(id){return document.getElementById(id);}
+  function ready(cb){function ok(){return $('rp-yield')&&typeof window.renderRepro==='function';}if(ok()){cb();return;}var n=0,iv=setInterval(function(){if(ok()||n++>500){clearInterval(iv);if(ok())cb();}},100);}
+  ready(function(){
+    var yEl=$('rp-yield'); var yf=yEl.closest('.field')||yEl.parentNode;
+    if(yf && !$('rp-tax')){
+      var tf=document.createElement('div'); tf.className=yf.className||'field narrow';
+      tf.innerHTML='<label for="rp-tax">Tax %</label><input id="rp-tax" type="number" min="0" max="100" step="0.5" value="0" />';
+      yf.parentNode.insertBefore(tf, yf.nextSibling);
+    }
+    if(!window.__reproTaxWrap){
+      window.__reproTaxWrap=true;
+      var _orig=window.renderRepro; var guard=false;
+      window.renderRepro=function(){
+        if(guard || !$('rp-tax') || !$('rp-yield')) return _orig.apply(this, arguments);
+        var y2=$('rp-yield'); var tax=(Number($('rp-tax').value)||0)/100; if(tax<0)tax=0; if(tax>1)tax=1;
+        var realY=y2.value; var effY=(Number(realY)||0)*(1-tax);
+        guard=true; y2.value=String(effY);
+        var ret; try{ ret=_orig.apply(this, arguments); } finally { y2.value=realY; guard=false; }
+        return ret;
+      };
+    }
+    if($('rp-tax')){ $('rp-tax').addEventListener('input',function(){ try{window.renderRepro();}catch(e){} }); }
+    if(!$('rp-live')){
+      var lf=document.createElement('div'); lf.className='field narrow';
+      lf.innerHTML='<label>&nbsp;</label><label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:.8rem"><input type="checkbox" id="rp-live" /> Live prices</label>';
+      var host=$('rp-tax')?($('rp-tax').closest('.field')):(yEl.closest('.field'));
+      if(host)host.parentNode.insertBefore(lf, host.nextSibling);
+      var liveIv=null;
+      $('rp-live').addEventListener('change',function(){ clearInterval(liveIv); if($('rp-live').checked){ liveIv=setInterval(function(){ var tt=$('tab-repro'); if(tt&&tt.hidden)return; try{window.renderRepro();}catch(e){} },60000); } });
+    }
+  });
+})();
+</script>
 </body>
 </html>
