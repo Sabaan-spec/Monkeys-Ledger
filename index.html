@@ -3116,5 +3116,47 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   });
 })();
 </script>
+<script>
+/* Build Tree: resolve #id leaf materials to names */
+(function(){
+  var CK='eveNamesV1';var cache={};try{cache=JSON.parse(localStorage.getItem(CK)||'{}')||{};}catch(e){}
+  var MAP={};
+  function buildMap(){try{
+    if(typeof ITEMS!=='undefined'&&ITEMS)ITEMS.forEach(function(it){if(!it)return;if(it.id!=null&&it.name)MAP[it.id]=it.name;if(it.materials)it.materials.forEach(function(m){if(m&&m.id!=null&&m.name)MAP[m.id]=m.name;});});
+    if(typeof arbItems!=='undefined'&&arbItems)arbItems.forEach(function(it){if(it&&it.id!=null&&it.name)MAP[it.id]=it.name;});
+  }catch(e){}}
+  function nameOf(id){return MAP[id]||cache[id]||null;}
+  var fetching={};
+  function fetchNames(ids){
+    var fresh=ids.filter(function(id){return !fetching[id];});
+    if(!fresh.length)return Promise.resolve(0);
+    fresh.forEach(function(id){fetching[id]=1;});
+    var batches=[];for(var i=0;i<fresh.length;i+=900)batches.push(fresh.slice(i,i+900));
+    return Promise.all(batches.map(function(b){
+      return fetch('https://esi.evetech.net/latest/universe/names/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b.map(Number))})
+        .then(function(rr){return rr.ok?rr.json():[];}).catch(function(){return [];})
+        .then(function(arr){if(arr&&arr.forEach)arr.forEach(function(o){if(o&&o.id&&o.name)cache[o.id]=o.name;});});
+    })).then(function(){try{localStorage.setItem(CK,JSON.stringify(cache));}catch(e){}return fresh.length;});
+  }
+  var pend=false;function schedulePatch(){if(pend)return;pend=true;requestAnimationFrame(function(){pend=false;patch();});}
+  function patch(){
+    var t=document.getElementById('tab-tree');if(!t)return;
+    if(Object.keys(MAP).length<50)buildMap();
+    var w=document.createTreeWalker(t,NodeFilter.SHOW_TEXT,null);var node;var miss=[];
+    while(node=w.nextNode()){
+      var v=node.nodeValue;if(!v||v.indexOf('#')<0)continue;if(!/#\d{2,}/.test(v))continue;
+      var changed=v.replace(/#(\d{2,})/g,function(full,d){var nm=nameOf(d);if(nm)return nm;miss.push(d);return full;});
+      if(changed!==v)node.nodeValue=changed;
+    }
+    if(miss.length){var uniq=Array.from(new Set(miss));fetchNames(uniq).then(function(nf){if(nf>0)schedulePatch();});}
+  }
+  function start(){
+    buildMap();var t=document.getElementById('tab-tree');if(!t){setTimeout(start,300);return;}
+    try{var mo=new MutationObserver(function(){schedulePatch();});mo.observe(t,{childList:true,subtree:true,characterData:true});}catch(e){}
+    patch();setTimeout(function(){buildMap();patch();},3000);
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
+})();
+</script>
 </body>
 </html>
