@@ -794,6 +794,7 @@ function buildChart(pts,fc){
   var proj=[];try{if(fc&&fc.proj&&fc.proj.length){proj=[].slice.call(fc.proj).map(Number).filter(isFinite);}}catch(e){}
   var fh=proj.length;var bandLo=null,bandHi=null;
   try{if(fc&&Array.isArray(fc.lower)&&Array.isArray(fc.upper)){bandLo=fc.lower.map(Number);bandHi=fc.upper.map(Number);}}catch(e){}
+  var fhMax=Math.max(3,Math.round(n*0.25));if(fh>fhMax){proj=proj.slice(0,fhMax);if(bandLo)bandLo=bandLo.slice(0,fhMax);if(bandHi)bandHi=bandHi.slice(0,fhMax);fh=proj.length;}
   var lows=[],highs=[];
   P.forEach(function(p){lows.push(p.lo,p.dL);highs.push(p.hi,p.dU);});
   for(var i=0;i<fh;i++){lows.push(proj[i]);highs.push(proj[i]);if(bandLo&&isFinite(bandLo[i]))lows.push(bandLo[i]);if(bandHi&&isFinite(bandHi[i]))highs.push(bandHi[i]);}
@@ -865,9 +866,9 @@ async function renderHistory(){
   const mapePct=mc>0?(mape/mc)*100:0;
   const meanY=ys.reduce((x,y)=>x+y,0)/n;
   const volPct=meanY>0?(sigma/meanY)*100:0;
-  const h=Math.min(60,Math.max(5,Math.round(n*0.25)));
+  const h=Math.min(14,Math.max(5,Math.round(n*0.18)));
   const proj=[last],lower=[last],upper=[last];
-  for(let k=1;k<=h;k++){const pv=Math.max(0,level+trend*k);const bw=sigma*Math.sqrt(k);proj.push(pv);lower.push(Math.max(0,pv-bw));upper.push(pv+bw);}
+  for(let k=1;k<=h;k++){const pv=Math.max(0,last+trend*k);const bw=Math.min(sigma*Math.sqrt(k),pv*0.35);proj.push(pv);lower.push(Math.max(0,pv-bw));upper.push(pv+bw);}
   const predicted=proj[proj.length-1];
   const projChange=last>0?((predicted-last)/last)*100:0;
   const conf=mapePct<6?"high":mapePct<18?"moderate":"low";
