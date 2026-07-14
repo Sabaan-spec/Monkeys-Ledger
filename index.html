@@ -3153,7 +3153,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   function start(){
     buildMap();var t=document.getElementById('tab-tree');if(!t){setTimeout(start,300);return;}
     try{var mo=new MutationObserver(function(){schedulePatch();});mo.observe(t,{childList:true,subtree:true,characterData:true});}catch(e){}
-    patch();setTimeout(function(){buildMap();patch();},3000);
+    patch();setInterval(function(){var tt=document.getElementById('tab-tree');if(tt&&!tt.hidden&&tt.offsetParent!==null)patch();},800);setTimeout(function(){buildMap();patch();},3000);
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
 })();
