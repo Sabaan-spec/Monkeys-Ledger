@@ -3329,9 +3329,9 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   function locName(o){var l=o.location_id;if(NAMES[l])return NAMES[l];if(l>=100000000000)return (NAMES[o.system_id]||('Sys '+o.system_id))+' \u00b7 structure';return NAMES[o.system_id]||('#'+l);}
 
   function ordersTable(list,side,agg){
-    var cum=0;var rows=list.slice(0,100).map(function(o){cum+=o.volume_remain;var reg=agg?('<td class="muted">'+regionName(o._region)+'</td>'):'';return '<tr data-sys="'+(o.system_id||'')+'" title="Click to plan a route from '+(NAMES[o.system_id]||'this system')+'"><td style="text-align:right;color:'+(side==='sell'?'#e0868c':'#54c28a')+'">'+iskS(o.price)+'</td><td style="text-align:right">'+Number(o.volume_remain).toLocaleString()+'</td><td style="text-align:right" class="muted">'+Number(cum).toLocaleString()+'</td><td>'+locName(o)+'</td>'+reg+'<td class="muted">'+ageOf(o.issued)+'</td></tr>';}).join('');
+    var cum=0;var rows=list.slice(0,100).map(function(o){cum+=o.volume_remain;var reg=agg?('<td class="muted">'+regionName(o._region)+'</td>'):'';return '<tr data-sys="'+(o.system_id||'')+'" title="Click to plan a route from '+(NAMES[o.system_id]||'this system')+'"><td style="text-align:right;color:'+(side==='sell'?'#e0868c':'#54c28a')+'">'+iskS(o.price)+'</td><td style="text-align:right">'+Number(o.volume_remain).toLocaleString()+'</td><td>'+locName(o)+'</td>'+reg+'<td class="muted">'+ageOf(o.issued)+'</td></tr>';}).join('');
     var rh=agg?'<th style="text-align:left">Region</th>':'';
-    return '<table class="mb-ot"><thead><tr class="muted small"><th style="text-align:right">Price</th><th style="text-align:right">Qty</th><th style="text-align:right">Depth</th><th style="text-align:left">Location</th>'+rh+'<th style="text-align:left">Age</th></tr></thead><tbody>'+rows+'</tbody></table>';
+    return '<table class="mb-ot"><thead><tr class="muted small"><th style="text-align:right">Price</th><th style="text-align:right">Qty</th><th style="text-align:left">Location</th>'+rh+'<th style="text-align:left">Age</th></tr></thead><tbody>'+rows+'</tbody></table>';
   }
   function renderOrders(silent){
     var my=token;var host=$('mb-orders');var agg=(curRegion===0);
