@@ -3248,5 +3248,128 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',tryReorder);else tryReorder();
 })();
 </script>
+<script>
+/* Market Browser */
+(function(){
+  var ESI='https://esi.evetech.net/latest';
+  function $(id){return document.getElementById(id);}
+  function el(tag,attrs,html){var e=document.createElement(tag);if(attrs)for(var k in attrs)e.setAttribute(k,attrs[k]);if(html!=null)e.innerHTML=html;return e;}
+  function fmtISK(n){if(!isFinite(n))return '\u2014';return Math.round(n*100)/100 .toLocaleString?Number((Math.round(n*100)/100)).toLocaleString():(''+n);}
+  function iskS(n){try{return Number(n).toLocaleString(undefined,{maximumFractionDigits:2});}catch(e){return ''+n;}}
+  var NAMES={};try{NAMES=JSON.parse(localStorage.getItem('eveNamesV1')||'{}')||{};}catch(e){}
+  function saveNames(){try{localStorage.setItem('eveNamesV1',JSON.stringify(NAMES));}catch(e){}}
+  function resolveNames(ids){var need=ids.filter(function(id){return NAMES[id]==null&&((id>=60000000&&id<64000000)||(id>=30000000&&id<31000000));});if(!need.length)return Promise.resolve();var batches=[];for(var i=0;i<need.length;i+=900)batches.push(need.slice(i,i+900));return Promise.all(batches.map(function(b){return fetch(ESI+'/universe/names/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b.map(Number))}).then(function(r){return r.ok?r.json():[];}).catch(function(){return [];}).then(function(arr){if(arr&&arr.forEach)arr.forEach(function(o){if(o&&o.id&&o.name)NAMES[o.id]=o.name;});});})).then(saveNames);}
+
+  var cur=null,curRegion=10000002,view='orders',token=0;
+
+  function eveDrawChart(container,pts){
+    if(!container)return;
+    if(!pts||!pts.length){container.innerHTML='<div class="muted small" style="padding:12px">No price history for this item in this region.</div>';return;}
+    var W=Math.max(560,Math.round(container.clientWidth||900));var H=Math.max(320,Math.min(520,Math.round(W*0.42)));
+    var padL=66,padR=18,padT=30,padB=30;
+    var cBand='#1d2d39',cGrid='#22303a',cAxis='#7a8c99',cWick='#57697a',cGold='#e3b341',cTeal='#54c2da',cBg='#0d1a22';
+    function fmtP(v){var a=Math.abs(v);if(a>=1e9)return (v/1e9).toFixed(2)+'B';if(a>=1e6)return (v/1e6).toFixed(2)+'M';if(a>=1e3)return (v/1e3).toFixed(1)+'K';return Math.round(v)+'';}
+    var P=pts.map(function(d){var a=+d.average||0;return {date:(''+d.date).slice(0,10),avg:a,hi:(+d.highest||a),lo:(+d.lowest||a),vol:(+d.volume||0)};});
+    var n=P.length;var avgs=P.map(function(p){return p.avg;});
+    function sma(i,w){var s=0,c=0;for(var k=i-w+1;k<=i;k++){if(k>=0){s+=avgs[k];c++;}}return c?s/c:avgs[i];}
+    P.forEach(function(p,i){p.ma5=sma(i,5);p.ma20=sma(i,20);var hiN=-Infinity,loN=Infinity;for(var k=i-4;k<=i;k++){if(k>=0){if(P[k].hi>hiN)hiN=P[k].hi;if(P[k].lo<loN)loN=P[k].lo;}}p.dU=hiN;p.dL=loN;});
+    var lows=[],highs=[];P.forEach(function(p){lows.push(p.lo,p.dL);highs.push(p.hi,p.dU);});
+    var pMin=Math.min.apply(null,lows),pMax=Math.max.apply(null,highs);if(!isFinite(pMin)||pMin===pMax){pMin=(pMin||0)*0.98-1;pMax=(pMax||1)*1.02+1;}
+    var sp=pMax-pMin;pMin-=sp*0.05;pMax+=sp*0.08;
+    var innerH=H-padT-padB;var volH=Math.round(innerH*0.16);var plotTop=padT,plotBot=padT+innerH-volH-10;var volBot=H-padB;
+    var plotW=W-padL-padR;var colW=plotW/Math.max(1,n-1);
+    function xAt(i){return padL+colW*i;}function yP(v){return plotBot-(v-pMin)/(pMax-pMin)*(plotBot-plotTop);}
+    var vMax=Math.max.apply(null,P.map(function(p){return p.vol;}))||1;function yV(v){return volBot-(v/vMax)*volH;}
+    var s=[];s.push('<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" style="display:block;width:100%;height:auto">');
+    function niceTicks(lo,hi,m){var range=hi-lo;if(range<=0)return [lo];var step=Math.pow(10,Math.floor(Math.log(range/m)/Math.LN10));var err=(range/m)/step;if(err>=7.5)step*=10;else if(err>=3.5)step*=5;else if(err>=1.5)step*=2;var start=Math.ceil(lo/step)*step;var t=[];for(var v=start;v<=hi+1e-6;v+=step)t.push(v);return t;}
+    niceTicks(pMin,pMax,5).forEach(function(tv){var y=yP(tv);s.push('<line x1="'+padL+'" y1="'+y.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+y.toFixed(1)+'" stroke="'+cGrid+'"/>');s.push('<text x="'+(padL-8)+'" y="'+(y+3.5).toFixed(1)+'" fill="'+cAxis+'" font-size="10.5" text-anchor="end">'+fmtP(tv)+'</text>');});
+    var months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];var lastM=null;
+    P.forEach(function(p,i){var dt=new Date(p.date+'T00:00:00Z');var m=dt.getUTCMonth();if(m!==lastM&&!isNaN(m)){lastM=m;var x=xAt(i);s.push('<line x1="'+x.toFixed(1)+'" y1="'+plotTop+'" x2="'+x.toFixed(1)+'" y2="'+volBot+'" stroke="'+cGrid+'"/>');s.push('<text x="'+(x+4).toFixed(1)+'" y="'+(plotTop-4)+'" fill="'+cAxis+'" font-size="11">'+months[m]+'</text>');}});
+    var up=P.map(function(p,i){return (i?'L':'M')+xAt(i).toFixed(1)+' '+yP(p.dU).toFixed(1);}).join('');
+    var dn='';for(var i=n-1;i>=0;i--){dn+=' L'+xAt(i).toFixed(1)+' '+yP(P[i].dL).toFixed(1);}
+    s.push('<path d="'+up+dn+' Z" fill="'+cBand+'" fill-opacity="0.55"/>');s.push('<path d="'+up+'" fill="none" stroke="#3a4a57" stroke-opacity="0.7"/>');
+    var barW=Math.max(1,Math.min(colW*0.62,10));
+    P.forEach(function(p,i){if(p.vol<=0)return;var x=xAt(i)-barW/2;var y=yV(p.vol);s.push('<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+(volBot-y).toFixed(1)+'" fill="'+cTeal+'" fill-opacity="0.32"/>');});
+    s.push('<line x1="'+padL+'" y1="'+volBot+'" x2="'+(W-padR)+'" y2="'+volBot+'" stroke="'+cGrid+'"/>');
+    P.forEach(function(p,i){var x=xAt(i).toFixed(1);s.push('<line x1="'+x+'" y1="'+yP(p.hi).toFixed(1)+'" x2="'+x+'" y2="'+yP(p.lo).toFixed(1)+'" stroke="'+cWick+'" stroke-opacity="0.55"/>');});
+    function poly(key,color){s.push('<path d="'+P.map(function(p,i){return (i?'L':'M')+xAt(i).toFixed(1)+' '+yP(p[key]).toFixed(1);}).join('')+'" fill="none" stroke="'+color+'" stroke-width="1.6" stroke-linejoin="round"/>');}
+    poly('ma20',cGold);poly('ma5',cTeal);
+    P.forEach(function(p,i){s.push('<circle cx="'+xAt(i).toFixed(1)+'" cy="'+yP(p.avg).toFixed(1)+'" r="2.1" fill="'+cGold+'"/>');});
+    if(W>=560){var lg=[['dot',cGold,'Median'],['line',cWick,'Min/Max'],['line',cTeal,'MA 5'],['line',cGold,'MA 20'],['rect',cBand,'Donchian'],['bar',cTeal,'Volume']];var lx=padL,ly=14;lg.forEach(function(it){if(it[0]==='dot')s.push('<circle cx="'+(lx+6)+'" cy="'+(ly-3)+'" r="3" fill="'+it[1]+'"/>');else if(it[0]==='rect')s.push('<rect x="'+lx+'" y="'+(ly-8)+'" width="12" height="9" fill="'+it[1]+'" fill-opacity="0.8" stroke="#3a4a57"/>');else if(it[0]==='bar')s.push('<rect x="'+lx+'" y="'+(ly-8)+'" width="3.5" height="9" fill="'+it[1]+'" fill-opacity="0.5"/>');else s.push('<line x1="'+lx+'" y1="'+(ly-3)+'" x2="'+(lx+13)+'" y2="'+(ly-3)+'" stroke="'+it[1]+'" stroke-width="2"/>');s.push('<text x="'+(lx+16)+'" y="'+ly+'" fill="#9fb0bd" font-size="10.5">'+it[2]+'</text>');lx+=it[2].length*6.3+26;});}
+    s.push('<rect class="eve-ov" x="'+padL+'" y="'+plotTop+'" width="'+plotW.toFixed(1)+'" height="'+(volBot-plotTop).toFixed(1)+'" fill="transparent" style="cursor:crosshair"/>');
+    s.push('<g class="eve-cx" style="display:none" pointer-events="none"><line class="eve-cxl" y1="'+plotTop+'" y2="'+volBot+'" stroke="'+cAxis+'" stroke-dasharray="3 3" stroke-opacity="0.6"/><circle class="eve-cxd" r="3.5" fill="'+cGold+'" stroke="#0b141a"/><g class="eve-tipg" transform="translate(-999,-999)"><rect class="eve-tipr" rx="4" width="152" height="86" fill="'+cBg+'" stroke="#2b3b47"/><text x="8" y="15" font-size="10.5" fill="#c8d6e0"><tspan class="eve-t0" x="8" dy="0" fill="#e3b341" font-weight="700"></tspan><tspan class="eve-t1" x="8" dy="15"></tspan><tspan class="eve-t2" x="8" dy="14"></tspan><tspan class="eve-t3" x="8" dy="14"></tspan><tspan class="eve-t4" x="8" dy="14"></tspan></text></g></g>');
+    s.push('</svg>');container.innerHTML=s.join('');
+    var svg=container.querySelector('svg');var geo={padL:padL,plotTop:plotTop,plotBot:plotBot,colW:colW,n:n,W:W,pMin:pMin,pMax:pMax,S:P};
+    var ov=svg.querySelector('.eve-ov'),cx=svg.querySelector('.eve-cx');
+    ov.addEventListener('mousemove',function(ev){var rct=svg.getBoundingClientRect();if(!rct.width)return;var mx=(ev.clientX-rct.left)*(geo.W/rct.width);var i=Math.round((mx-geo.padL)/geo.colW);if(i<0)i=0;if(i>geo.n-1)i=geo.n-1;var p=geo.S[i];if(!p)return;var x=geo.padL+geo.colW*i;function yy(v){return geo.plotBot-(v-geo.pMin)/(geo.pMax-geo.pMin)*(geo.plotBot-geo.plotTop);}cx.style.display='';var l=svg.querySelector('.eve-cxl');l.setAttribute('x1',x);l.setAttribute('x2',x);var d=svg.querySelector('.eve-cxd');d.setAttribute('cx',x);d.setAttribute('cy',yy(p.avg));function f(v){return Math.round(v).toLocaleString();}var lines=[p.date,'Median  '+f(p.avg),'Hi/Lo  '+f(p.hi)+' / '+f(p.lo),'MA 5  '+f(p.ma5),'Volume  '+f(p.vol)];['eve-t0','eve-t1','eve-t2','eve-t3','eve-t4'].forEach(function(cl,k){var e=svg.querySelector('.'+cl);if(e)e.textContent=lines[k];});var tipX=x+12;if(tipX+152>geo.W-4)tipX=x-152-12;if(tipX<4)tipX=4;svg.querySelector('.eve-tipg').setAttribute('transform','translate('+tipX+','+(geo.plotTop+6)+')');});
+    ov.addEventListener('mouseleave',function(){cx.style.display='none';});
+  }
+
+  function locName(o){var l=o.location_id;if(NAMES[l])return NAMES[l];if(l>=100000000000)return (NAMES[o.system_id]||('Sys '+o.system_id))+' \u00b7 structure';return NAMES[o.system_id]||('#'+l);}
+  function ordersTable(list,side){
+    var rows=list.slice(0,80).map(function(o){return '<tr><td style="text-align:right;color:'+(side==='sell'?'#e0868c':'#54c28a')+'">'+iskS(o.price)+'</td><td style="text-align:right">'+Number(o.volume_remain).toLocaleString()+'</td><td>'+locName(o)+'</td><td class="muted">'+o.range+'</td></tr>';}).join('');
+    return '<table style="width:100%;border-collapse:collapse;font-size:.82rem"><thead><tr class="muted small"><th style="text-align:right">Price</th><th style="text-align:right">Qty</th><th style="text-align:left">Location</th><th style="text-align:left">Range</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  }
+  function renderOrders(){
+    var my=token;var host=$('mb-orders');host.innerHTML='<div class="muted small" style="padding:12px">Loading live orders\u2026</div>';
+    var all=[],page=1,pages=1;
+    (function loop(){
+      fetch(ESI+'/markets/'+curRegion+'/orders/?order_type=all&type_id='+cur.id+'&page='+page).then(function(r){if(!r.ok)throw 0;var xp=r.headers.get('x-pages');pages=xp?parseInt(xp,10):1;return r.json();}).then(function(arr){all=all.concat(arr);page++;if(page<=pages&&page<=25){loop();}else{done();}}).catch(function(){if(all.length)done();else host.innerHTML='<div class="muted small" style="padding:12px">Could not load orders.</div>';});
+    })();
+    function done(){
+      if(my!==token)return;
+      if(!all.length){host.innerHTML='<div class="muted small" style="padding:12px">No orders for this item in '+regionName(curRegion)+'.</div>';setBest(null,null);return;}
+      var sells=all.filter(function(o){return !o.is_buy_order;}).sort(function(a,b){return a.price-b.price;});
+      var buys=all.filter(function(o){return o.is_buy_order;}).sort(function(a,b){return b.price-a.price;});
+      var idset={};all.forEach(function(o){var l=o.location_id;if(l>=60000000&&l<64000000)idset[l]=1;if(o.system_id)idset[o.system_id]=1;});
+      resolveNames(Object.keys(idset).map(Number)).then(function(){
+        if(my!==token)return;
+        setBest(sells[0]?sells[0].price:null,buys[0]?buys[0].price:null);
+        host.innerHTML='<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">'+
+          '<div><div class="muted small" style="margin-bottom:4px;font-weight:700">SELL ORDERS \u00b7 '+sells.length+'</div>'+ordersTable(sells,'sell')+'</div>'+
+          '<div><div class="muted small" style="margin-bottom:4px;font-weight:700">BUY ORDERS \u00b7 '+buys.length+'</div>'+ordersTable(buys,'buy')+'</div>'+
+          '</div>';
+      });
+    }
+  }
+  function renderHistory(){
+    var my=token;var host=$('mb-history');host.innerHTML='<div class="muted small" style="padding:12px">Loading price history\u2026</div>';
+    fetch(ESI+'/markets/'+curRegion+'/history/?type_id='+cur.id).then(function(r){return r.ok?r.json():[];}).then(function(h){if(my!==token)return;host.innerHTML='<div id="mb-chart"></div>';eveDrawChart($('mb-chart'),h.slice(-120));setBest(null,null);}).catch(function(){if(my===token)host.innerHTML='<div class="muted small" style="padding:12px">Could not load history.</div>';});
+  }
+  function setBest(sell,buy){var b=$('mb-best');if(!b)return;if(sell==null&&buy==null){b.innerHTML='';return;}var spread=(sell!=null&&buy!=null)?(sell-buy):null;var sp=(spread!=null&&buy>0)?(spread/buy*100):null;b.innerHTML='Lowest sell <b style="color:#e0868c">'+(sell!=null?iskS(sell):'\u2014')+'</b> \u00b7 Highest buy <b style="color:#54c28a">'+(buy!=null?iskS(buy):'\u2014')+'</b>'+(spread!=null?(' \u00b7 Spread <b>'+iskS(spread)+'</b>'+(sp!=null?(' ('+sp.toFixed(1)+'%)'):'')):'');}
+
+  function render(){if(!cur){return;}$('mb-product').textContent=cur.name+'  \u00b7  '+regionName(curRegion);$('mb-orders').style.display=view==='orders'?'':'none';$('mb-history').style.display=view==='history'?'':'none';$('mb-view-orders').className='mb-vbtn'+(view==='orders'?' on':'');$('mb-view-history').className='mb-vbtn'+(view==='history'?' on':'');token++;if(view==='orders')renderOrders();else renderHistory();}
+
+  var REGIONS=[];function regionName(id){for(var i=0;i<REGIONS.length;i++)if(REGIONS[i].id===id)return REGIONS[i].name;return 'Region '+id;}
+  function loadRegions(){var cache=null;try{cache=JSON.parse(localStorage.getItem('eveRegionsV1')||'null');}catch(e){}if(cache&&cache.length){REGIONS=cache;fillRegions();return;}fetch(ESI+'/universe/regions/').then(function(r){return r.json();}).then(function(ids){ids=ids.filter(function(id){return id<11000000;});var names={};var batches=[];for(var i=0;i<ids.length;i+=900)batches.push(ids.slice(i,i+900));return Promise.all(batches.map(function(b){return fetch(ESI+'/universe/names/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(function(r){return r.ok?r.json():[];}).then(function(arr){arr.forEach(function(o){names[o.id]=o.name;});});})).then(function(){REGIONS=ids.map(function(id){return {id:id,name:names[id]||('Region '+id)};}).sort(function(a,b){return a.name.localeCompare(b.name);});try{localStorage.setItem('eveRegionsV1',JSON.stringify(REGIONS));}catch(e){}fillRegions();});}).catch(function(){});}
+  function fillRegions(){var sel=$('mb-region');if(!sel)return;sel.innerHTML=REGIONS.map(function(r){return '<option value="'+r.id+'"'+(r.id===curRegion?' selected':'')+'>'+r.name+'</option>';}).join('');}
+
+  function buildUI(){
+    var t=$('tab-arb');if(!t||$('mb-wrap'))return;
+    [].forEach.call(t.children,function(c){c.style.display='none';});
+    var style=document.createElement('style');style.textContent='.mb-vbtn{background:#12222c;border:1px solid #2b3b47;color:#9fb0bd;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:.8rem;font-weight:700}.mb-vbtn.on{background:#1f5468;border-color:#54c2da;color:#dff3fa}#mb-orders td,#mb-orders th{padding:3px 6px;border-bottom:1px solid rgba(120,150,170,.08)}#mb-suggestions{position:absolute;z-index:30;background:#0d1a22;border:1px solid #2b3b47;max-height:300px;overflow:auto;width:100%;margin:0;padding:0;list-style:none}#mb-suggestions li{padding:5px 10px;cursor:pointer}#mb-suggestions li:hover{background:#12333f}';document.head.appendChild(style);
+    var w=el('div',{id:'mb-wrap'});
+    w.innerHTML='<div class="panel" style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;padding:12px;margin-bottom:10px">'+
+      '<div class="field grow" style="position:relative;min-width:260px;flex:1"><label>ITEM</label><input id="mb-search" type="text" placeholder="Search any item, ore or module\u2026" autocomplete="off"><ul id="mb-suggestions" style="display:none"></ul></div>'+
+      '<div class="field"><label>REGION</label><select id="mb-region"></select></div>'+
+      '<div class="field"><label>&nbsp;</label><span style="display:inline-flex;gap:6px"><button id="mb-view-orders" class="mb-vbtn on">Market Data</button><button id="mb-view-history" class="mb-vbtn">Price History</button></span></div>'+
+      '</div>'+
+      '<div id="mb-product" style="font-weight:700;font-size:1.05rem;padding:2px 2px 2px"></div>'+
+      '<div id="mb-best" class="muted small" style="padding:0 2px 10px"></div>'+
+      '<div id="mb-orders"></div>'+
+      '<div id="mb-history" style="display:none"></div>'+
+      '<div id="mb-empty" class="muted small" style="padding:14px 2px">Search for an item and pick a region to view its live market \u2014 buy/sell order book and price history, per region, straight from CCP ESI.</div>';
+    t.appendChild(w);
+    fillRegions();loadRegions();
+    var si=$('mb-search');
+    si.addEventListener('input',function(){var q=si.value.trim().toLowerCase();var sug=$('mb-suggestions');if(q.length<2){sug.style.display='none';return;}var items=(typeof arbItems!=='undefined'?arbItems:[]).filter(function(it){return it&&it.name&&it.name.toLowerCase().indexOf(q)>=0;}).slice(0,14);if(!items.length){sug.style.display='none';return;}sug.innerHTML=items.map(function(it){return '<li data-id="'+it.id+'">'+it.name+'</li>';}).join('');sug.style.display='';[].forEach.call(sug.children,function(li){li.addEventListener('mousedown',function(ev){ev.preventDefault();var id=+li.getAttribute('data-id');var nm=li.textContent;cur={id:id,name:nm};si.value=nm;sug.style.display='none';var e=$('mb-empty');if(e)e.style.display='none';render();});});});
+    si.addEventListener('blur',function(){setTimeout(function(){$('mb-suggestions').style.display='none';},200);});
+    $('mb-region').addEventListener('change',function(){curRegion=+$('mb-region').value;if(cur)render();});
+    $('mb-view-orders').addEventListener('click',function(){view='orders';if(cur)render();});
+    $('mb-view-history').addEventListener('click',function(){view='history';if(cur)render();});
+  }
+  setInterval(function(){var t=$('tab-arb');if(t&&!t.hidden&&t.offsetParent!==null)buildUI();},800);
+})();
+</script>
 </body>
 </html>
