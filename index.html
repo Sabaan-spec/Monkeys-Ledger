@@ -3160,7 +3160,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 })();
 </script>
 <script>
-/* Ore & Gas: 24h system kills + refine/sell badges + click-to-reprocess */
+/* Ore & Gas: 24h system kills + refine/sell badges + click-to-reprocess (v2) */
 (function(){
   window.__oreEnhV2=true;
   function $(id){return document.getElementById(id);}
@@ -3182,7 +3182,20 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   }
   function yieldPct(){var y=Number(($('rp-yield')||{}).value);if(!isFinite(y)||y<=0)y=70;return y/100;}
   function refinedUnit(id,prices){try{var row=REPRO.rows[id];if(!row||!row.o)return null;var p=row.p||100;var y=yieldPct();var s=0,known=0;for(var i=0;i<row.o.length;i++){var mid=row.o[i][0],qty=row.o[i][1];var pr=prices[mid];if(pr==null)continue;known++;s+=(qty/p)*y*pr;}return known?s:null;}catch(e){return null;}}
+  function rowName(tr){var c0=tr.children[0];return (c0.getAttribute('data-name')||(c0.childNodes[0]?c0.childNodes[0].textContent:c0.textContent)||'').trim();}
   function goRepro(id,name){var tb=[].slice.call(document.querySelectorAll('[data-tab]')).find(function(x){return x.getAttribute('data-tab')==='repro';});if(tb)tb.click();setTimeout(function(){try{if($('rp-search'))$('rp-search').value=name;if(typeof window.rpSelect==='function')window.rpSelect({id:id,name:name});}catch(e){}},130);}
+  function idOf(name){if(Object.keys(N2I).length<10)buildN2I();return N2I[(name||'').toLowerCase()];}
+  /* Event delegation: reliable click-to-reprocess regardless of render timing */
+  document.addEventListener('click',function(ev){
+    var t=ev.target;if(!t||!t.closest)return;
+    var tr=t.closest('#ore-body tr');if(!tr||tr.children.length<5)return;
+    if(t.closest('a'))return;
+    var name=rowName(tr);if(!name)return;var id=idOf(name);
+    if(id&&REPRO.rows&&REPRO.rows[id])goRepro(id,name);
+  });
+  /* styles: pointer + hover highlight for clickable ore rows */
+  try{var st=document.createElement('style');st.textContent='#ore-body tr.os-click{cursor:pointer}#ore-body tr.os-click:hover td{background:rgba(84,194,138,.10)}#ore-body tr.os-click td:first-child::after{}';document.head.appendChild(st);}catch(e){}
+  function addHint(){var b=$('ore-body');if(!b)return;var tbl=b.closest('table');var host=(tbl&&tbl.parentNode)||b.parentNode;if(!host||host.querySelector('#os-reprohint'))return;var d=document.createElement('div');d.id='os-reprohint';d.className='muted small';d.style.cssText='padding:4px 6px 8px';d.innerHTML='\ud83d\udca1 Tip: click any ore row to open it in the <b>Reprocess</b> tab. Green <b>REFINE</b> / grey <b>SELL</b> shows which is more profitable.';if(tbl&&tbl.parentNode)tbl.parentNode.insertBefore(d,tbl);}
   function tagOre(){
     var b=$('ore-body');if(!b)return;
     var hub=($('ore-hub')||{}).value||'jita';var reg=HUBREG[hub]||10000002;
@@ -3191,11 +3204,11 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       [].forEach.call(rows,function(tr){
         if(tr.children.length<5)return;
         var c0=tr.children[0];
-        var nameOnly=(c0.getAttribute('data-name')||(c0.childNodes[0]?c0.childNodes[0].textContent:c0.textContent)||'').trim();
+        var nameOnly=rowName(tr);
         if(!nameOnly)return;
-        var id=N2I[nameOnly.toLowerCase()];
+        var id=idOf(nameOnly);
         var reproable=id&&REPRO.rows[id];
-        if(reproable){tr.style.cursor='pointer';if(!tr.__oreClick){tr.__oreClick=true;tr.addEventListener('click',function(ev){if(ev.target&&ev.target.closest&&ev.target.closest('a'))return;goRepro(id,nameOnly);});}}
+        if(reproable){tr.classList.add('os-click');tr.style.cursor='pointer';}
         var ru=reproable?refinedUnit(id,prices):null;
         var sellUnit=num(tr.children[2]?tr.children[2].textContent:'');
         var badge=c0.querySelector('.os-rsbadge');
@@ -3208,6 +3221,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
         badge.style.color=refine?'#54c28a':'#9fb0bd';
         badge.title=(refine?'Refining ~'+Math.round(ru).toLocaleString()+' ISK/unit beats selling ore at '+Math.round(sellUnit).toLocaleString():'Selling ore '+Math.round(sellUnit).toLocaleString()+' ISK/unit beats refining ~'+Math.round(ru).toLocaleString())+' ISK/unit ('+hub+', yield '+Math.round(yieldPct()*100)+'%). Click row to open in Reprocess.';
       });
+      addHint();
     });
   }
   var lastSysName=null,sysIdCache={};
