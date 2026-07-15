@@ -3161,6 +3161,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 <script>
 /* Ore & Gas: 24h system kills + refine/sell badges + click-to-reprocess */
 (function(){
+  window.__oreEnhV2=true;
   function $(id){return document.getElementById(id);}
   var HUBREG={jita:10000002,amarr:10000043,dodixie:10000032,rens:10000030,hek:10000042};
   var N2I={};
@@ -3174,7 +3175,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     if(priceCache[reg])return Promise.resolve(priceCache[reg]);
     if(fetchingReg[reg])return fetchingReg[reg];
     var ids=[];try{ids=Object.keys(REPRO.mats).map(Number);}catch(e){}
-    if(!ids.length||typeof fuzzAgg!=='function'){return Promise.resolve({});}
+    if(!ids.length||typeof fuzzAgg!=='function')return Promise.resolve({});
     var pr=fuzzAgg(reg,ids).then(function(fa){var m={};ids.forEach(function(id){var o=fa&&fa[id];if(o&&o.sell){var p=Number(o.sell.percentile)||Number(o.sell.min)||0;if(p>0)m[id]=p;}});priceCache[reg]=m;return m;}).catch(function(){priceCache[reg]={};return {};});
     fetchingReg[reg]=pr;return pr;
   }
@@ -3183,7 +3184,6 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   function goRepro(id,name){var tb=[].slice.call(document.querySelectorAll('[data-tab]')).find(function(x){return x.getAttribute('data-tab')==='repro';});if(tb)tb.click();setTimeout(function(){try{if($('rp-search'))$('rp-search').value=name;if(typeof window.rpSelect==='function')window.rpSelect(id);}catch(e){}},130);}
   function tagOre(){
     var b=$('ore-body');if(!b)return;
-    if(Object.keys(N2I).length<10)buildN2I();
     var hub=($('ore-hub')||{}).value||'jita';var reg=HUBREG[hub]||10000002;
     ensurePrices(reg).then(function(prices){
       var rows=b.querySelectorAll('tr');
@@ -3209,23 +3209,14 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       });
     });
   }
-  var pend=false;function schedTag(){if(pend)return;pend=true;requestAnimationFrame(function(){pend=false;tagOre();});}
   var lastSysName=null,sysIdCache={};
   function resolveSys(name){if(sysIdCache[name])return Promise.resolve(sysIdCache[name]);return fetch('https://esi.evetech.net/latest/universe/ids/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify([name])}).then(function(r){return r.ok?r.json():null;}).then(function(jj){var id=jj&&jj.systems&&jj.systems[0]?jj.systems[0].id:null;if(id)sysIdCache[name]=id;return id;}).catch(function(){return null;});}
   function killsEl(){var bar=$('os-sysbar');if(!bar)return null;var el=$('os-kills');if(!el){el=document.createElement('div');el.id='os-kills';el.style.cssText='padding:4px 6px 8px;font-size:.85rem;font-weight:700';bar.parentNode.insertBefore(el,bar.nextSibling);}return el;}
-  function updKills(){var bar=$('os-sysbar');if(!bar)return;var txt=bar.textContent||'';if(txt.indexOf('\u00b7')<0&&txt.indexOf('·')<0)return;var name=txt.split('·')[0].trim();if(!name||name===lastSysName)return;lastSysName=name;var el=killsEl();if(el){el.style.color='#7a8c99';el.textContent='\u2694 Checking recent kills\u2026';}
+  function updKills(){var bar=$('os-sysbar');if(!bar)return;var txt=bar.textContent||'';if(txt.indexOf('\u00b7')<0)return;var name=txt.split('\u00b7')[0].trim();if(!name||name===lastSysName)return;lastSysName=name;var el=killsEl();if(el){el.style.color='#7a8c99';el.textContent='\u2694 Checking recent kills\u2026';}
     resolveSys(name).then(function(id){if(!id){if(el)el.textContent='';return;}return fetch('https://zkillboard.com/api/systemID/'+id+'/pastSeconds/86400/').then(function(r){return r.ok?r.json():[];}).then(function(arr){var n=Array.isArray(arr)?arr.length:0;if(!el)return;var col=n===0?'#54c28a':(n<10?'#e3b341':'#e0555a');el.style.color=col;el.textContent='\u2694 '+n+' ship kill'+(n===1?'':'s')+' in '+name+' \u00b7 last 24h';});}).catch(function(){if(el)el.textContent='';});}
-  function start(){
-    buildN2I();
-    var b=$('ore-body');if(b){try{new MutationObserver(function(){schedTag();}).observe(b,{childList:true,subtree:true});}catch(e){}}else{return setTimeout(start,400);}
-    var bar=$('os-sysbar');if(bar){try{new MutationObserver(function(){updKills();}).observe(bar,{childList:true,characterData:true,subtree:true});}catch(e){}updKills();}
-    var oh=$('ore-hub');if(oh)oh.addEventListener('change',function(){schedTag();});
-    var ry=$('rp-yield');if(ry)ry.addEventListener('input',function(){schedTag();});
-    var go=$('os-go');if(go)go.addEventListener('click',function(){lastSysName=null;setTimeout(updKills,1500);});
-    setInterval(function(){var t=$('tab-ore');if(t&&!t.hidden&&t.offsetParent!==null)schedTag();},1500);
-    schedTag();
-  }
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
+  function tick(){try{if(Object.keys(N2I).length<10)buildN2I();var t=$('tab-ore');if(t&&!t.hidden&&t.offsetParent!==null){tagOre();updKills();}}catch(e){}}
+  setInterval(tick,1500);
+  tick();
 })();
 </script>
 </body>
