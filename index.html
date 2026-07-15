@@ -3087,7 +3087,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   function factor(){var sales=(Number(($('rp-sales')||{}).value)||0)/100,broker=(Number(($('rp-broker')||{}).value)||0)/100;var basis=($('rp-basis')||{}).value;var f=1-sales-(basis==='sell'?broker:0);if(f<0)f=0;if(f>1)f=1;return f;}
   function metaInfo(){var m=($('rp-product-meta')||{}).textContent||'';var u=(m.match(/([0-9,]+)\s*units/)||[])[1];var units=u?parseInt(u.replace(/,/g,''),10):0;var hub=(m.split('\u00b7').pop()||'jita').trim().toLowerCase();return {units:units,hub:hub};}
   var orePriceCache={},volCache={},fetchingP={},fetchingV={};
-  function getOrePrice(id,reg,basis){var key=id+'|'+reg+'|'+basis;if(orePriceCache[key]!=null)return Promise.resolve(orePriceCache[key]);if(fetchingP[key])return fetchingP[key];if(typeof fuzzAgg!=='function')return Promise.resolve(0);var pr=fuzzAgg(reg,[id]).then(function(fa){var o=fa&&fa[id];var p=0;if(o){if(basis==='buy'&&o.buy)p=Number(o.buy.percentile)||Number(o.buy.max)||0;else if(o.sell)p=Number(o.sell.percentile)||Number(o.sell.min)||0;}orePriceCache[key]=p;return p;}).catch(function(){orePriceCache[key]=0;return 0;});fetchingP[key]=pr;return pr;}
+  function getOrePrice(id,reg,basis){var key=id+'|'+reg+'|'+basis;if(orePriceCache[key]!=null)return Promise.resolve(orePriceCache[key]);if(fetchingP[key])return fetchingP[key];if(typeof fuzzAgg!=='function')return Promise.resolve(0);var pr=fuzzAgg(reg,[id]).then(function(fa){var o=fa&&fa[id];var p=0;if(o){if(basis==='buy'&&o.buy)p=Number(o.buy.max)||Number(o.buy.percentile)||0;else if(o.sell)p=Number(o.sell.min)||Number(o.sell.percentile)||0;}orePriceCache[key]=p;return p;}).catch(function(){orePriceCache[key]=0;return 0;});fetchingP[key]=pr;return pr;}
   function getVol(id){if(volCache[id]!=null)return Promise.resolve(volCache[id]);if(fetchingV[id])return fetchingV[id];var pr=fetch('https://esi.evetech.net/latest/universe/types/'+id+'/').then(function(r){return r.ok?r.json():null;}).then(function(tj){var v=tj&&tj.volume?Number(tj.volume):0;volCache[id]=v;return v;}).catch(function(){volCache[id]=0;return 0;});fetchingV[id]=pr;return pr;}
   function setSum(elid,txt){var el=$(elid);if(!el)return;if(el.textContent!==txt)el.textContent=txt;}
   function apply(){
@@ -3177,7 +3177,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     if(fetchingReg[reg])return fetchingReg[reg];
     var ids=[];try{ids=Object.keys(REPRO.mats).map(Number);}catch(e){}
     if(!ids.length||typeof fuzzAgg!=='function')return Promise.resolve({});
-    var pr=fuzzAgg(reg,ids).then(function(fa){var m={};ids.forEach(function(id){var o=fa&&fa[id];if(o&&o.sell){var p=Number(o.sell.percentile)||Number(o.sell.min)||0;if(p>0)m[id]=p;}});priceCache[reg]=m;return m;}).catch(function(){priceCache[reg]={};return {};});
+    var pr=fuzzAgg(reg,ids).then(function(fa){var m={};ids.forEach(function(id){var o=fa&&fa[id];if(o&&o.sell){var p=Number(o.sell.min)||Number(o.sell.percentile)||0;if(p>0)m[id]=p;}});priceCache[reg]=m;return m;}).catch(function(){priceCache[reg]={};return {};});
     fetchingReg[reg]=pr;return pr;
   }
   function yieldPct(){var y=Number(($('rp-yield')||{}).value);if(!isFinite(y)||y<=0)y=70;return y/100;}
