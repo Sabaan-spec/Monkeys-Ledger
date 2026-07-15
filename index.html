@@ -3403,5 +3403,35 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   (function ren(){var b=document.querySelector('[data-tab="arb"]');if(b){if(b.textContent.trim()!=='Market')b.textContent='Market';}else{setTimeout(ren,120);}})();setInterval(function(){var b2=document.querySelector('[data-tab="arb"]');if(b2&&b2.textContent.trim()!=='Market')b2.textContent='Market';var t=$('tab-arb');if(t&&!t.hidden&&t.offsetParent!==null)buildUI();},800);
 })();
 </script>
+<script>
+/* Planner live tracker */
+(function(){
+  function $(id){return document.getElementById(id);}
+  var st=document.createElement('style');st.textContent='@keyframes plpulse{0%{box-shadow:0 0 0 0 rgba(84,194,138,.55)}70%{box-shadow:0 0 0 7px rgba(84,194,138,0)}100%{box-shadow:0 0 0 0 rgba(84,194,138,0)}}.pl-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#54c28a;animation:plpulse 1.6s infinite;margin-right:6px;vertical-align:middle}.pl-liveind{font-size:.78rem;font-weight:700;color:#54c28a;letter-spacing:.03em}.pl-liveind.off{color:#7a8c99}.pl-liveind.off .pl-dot{background:#7a8c99;animation:none;box-shadow:none}';document.head.appendChild(st);
+  var lastAuto=0,built=false,mo=null;
+  function updind(){var on=$('pl-live')&&$('pl-live').checked;var ind=$('pl-liveind');if(ind)ind.className='pl-liveind'+(on?'':' off');var tx=$('pl-livetxt');if(tx)tx.textContent=on?'Live Tracker':'Paused';}
+  function markUpdated(){var u=$('pl-updated');if(u)u.textContent='\u00b7 prices updated '+new Date().toLocaleTimeString();}
+  function build(){
+    if(built)return;var go=$('pl-go');if(!go)return;
+    var wrap=document.createElement('span');wrap.style.cssText='display:inline-flex;align-items:center;gap:14px;margin-left:14px;flex-wrap:wrap';
+    wrap.innerHTML='<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:.78rem"><input type="checkbox" id="pl-live" checked> Auto-refresh</label><span id="pl-liveind" class="pl-liveind"><span class="pl-dot"></span><span id="pl-livetxt">Live Tracker</span></span><span id="pl-updated" class="muted small"></span>';
+    go.parentNode.insertBefore(wrap,go.nextSibling);
+    var lv=$('pl-live');if(lv)lv.addEventListener('change',updind);
+    updind();
+    var body=$('pl-body');if(body){mo=new MutationObserver(function(){markUpdated();});mo.observe(body,{childList:true,subtree:true});}
+    built=true;
+  }
+  function scanning(){var go=$('pl-go');if(go&&go.disabled)return true;var bar=$('pl-bar');if(bar&&bar.offsetParent!==null){var w=parseFloat((bar.style.width||'0'));if(w>0&&w<100)return true;}return false;}
+  setInterval(function(){
+    var t=$('tab-plan');if(!t||t.hidden||t.offsetParent===null)return;
+    build();
+    var body=$('pl-body');var hasResults=body&&body.querySelector('tr,.pl-route,[data-route]');
+    if(!hasResults)hasResults=body&&body.children&&body.children.length>0&&body.textContent.trim().length>20;
+    if($('pl-live')&&$('pl-live').checked&&hasResults&&!scanning()&&(Date.now()-lastAuto>115000)){
+      lastAuto=Date.now();var go=$('pl-go');if(go){go.click();markUpdated();}
+    }
+  },5000);
+})();
+</script>
 </body>
 </html>
