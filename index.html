@@ -3333,9 +3333,9 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     var rh=agg?'<th style="text-align:left">Region</th>':'';
     return '<table class="mb-ot"><thead><tr class="muted small"><th style="text-align:right">Price</th><th style="text-align:right">Qty</th><th style="text-align:right">Depth</th><th style="text-align:left">Location</th>'+rh+'<th style="text-align:left">Age</th></tr></thead><tbody>'+rows+'</tbody></table>';
   }
-  function renderOrders(){
+  function renderOrders(silent){
     var my=token;var host=$('mb-orders');var agg=(curRegion===0);
-    host.innerHTML='<div class="muted small" style="padding:12px">'+(agg?'Scanning all regions\u2026 this can take 10\u201330s.':'Loading live orders\u2026')+'</div>';
+    if(!silent||!host.querySelector('.mb-ot'))host.innerHTML='<div class="muted small" style="padding:12px">'+(agg?'Scanning all regions\u2026 this can take 10\u201330s.':'Loading live orders\u2026')+'</div>';
     if(agg){var regs=REGIONS.map(function(r){return r.id;}).filter(function(id){return id>=10000000&&id<11000000;});var tasks=regs.map(function(rg){return function(){return fetchRegionOrders(rg,cur.id,2);};});pool(tasks,12).then(function(res){if(my!==token)return;var all=[];res.forEach(function(a){if(a)all=all.concat(a);});finish(all,true,my);});}
     else{fetchRegionOrders(curRegion,cur.id,25).then(function(all){if(my!==token)return;finish(all,false,my);});}
     function finish(all,agg,my){
@@ -3347,7 +3347,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       resolveNames(Object.keys(idset).map(Number)).then(function(){
         if(my!==token)return;
         setStats({minSell:sells[0]?sells[0].price:null,maxBuy:buys[0]?buys[0].price:null,d5s:depthPrice(sells,0.05),d5b:depthPrice(buys,0.05),svol:sells.reduce(function(s,o){return s+o.volume_remain;},0),bvol:buys.reduce(function(s,o){return s+o.volume_remain;},0)});
-        host.innerHTML='<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">'+
+        var _up=$('mb-sub');if(_up)_up.textContent=regionName(curRegion)+'  \u00b7  updated '+new Date().toLocaleTimeString();host.innerHTML='<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">'+
           '<div><div class="muted small mb-oh">SELL ORDERS \u00b7 '+sells.length+'</div>'+ordersTable(sells,'sell',agg)+'</div>'+
           '<div><div class="muted small mb-oh">BUY ORDERS \u00b7 '+buys.length+'</div>'+ordersTable(buys,'buy',agg)+'</div></div>';
       });
@@ -3358,7 +3358,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 
   function goPlanner(sysName){if(!sysName)return;var tb=document.querySelector('[data-tab="plan"]');if(tb)tb.click();setTimeout(function(){var f=$('pl-from');if(f){f.value=sysName;f.dispatchEvent(new Event('input',{bubbles:true}));}var go=[].slice.call(document.querySelectorAll('#tab-plan button')).find(function(b){return /generate|route|plan|go|scan|find/i.test(b.textContent);});if(go)go.click();},250);}
 
-  function render(){if(!cur)return;var e=$('mb-empty');if(e)e.style.display='none';$('mb-product').textContent=cur.name;$('mb-sub').textContent=regionName(curRegion);$('mb-orders').style.display=view==='orders'?'':'none';$('mb-history').style.display=view==='history'?'':'none';$('mb-view-orders').className='mb-vbtn'+(view==='orders'?' on':'');$('mb-view-history').className='mb-vbtn'+(view==='history'?' on':'');updateFavBtn();token++;if(view==='orders')renderOrders();else renderHistory();}
+  function render(silent){if(!cur)return;var e=$('mb-empty');if(e)e.style.display='none';$('mb-product').textContent=cur.name;$('mb-sub').textContent=regionName(curRegion);$('mb-orders').style.display=view==='orders'?'':'none';$('mb-history').style.display=view==='history'?'':'none';$('mb-view-orders').className='mb-vbtn'+(view==='orders'?' on':'');$('mb-view-history').className='mb-vbtn'+(view==='history'?' on':'');updateFavBtn();token++;if(view==='orders')renderOrders(silent);else renderHistory();}
   function loadItem(id,name){cur={id:id,name:name};var si=$('mb-search');if(si)si.value=name;render();}
 
   function esc(s){return (''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');}
@@ -3376,7 +3376,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       '<div class="field grow" style="position:relative;min-width:220px;flex:1"><label>ITEM</label><input id="mb-search" type="text" placeholder="Search any item\u2026" autocomplete="off"><ul id="mb-suggestions" style="display:none"></ul></div>'+
       '<div class="field"><label>REGION</label><select id="mb-region"></select></div>'+
       '<div class="field"><label>&nbsp;</label><span style="display:inline-flex;gap:6px;align-items:center"><button id="mb-view-orders" class="mb-vbtn on">Market Data</button><button id="mb-view-history" class="mb-vbtn">Price History</button></span></div>'+
-      '<div class="field"><label style="display:flex;align-items:center;gap:6px;font-size:.78rem"><input type="checkbox" id="mb-live"> Live 30s</label><button id="mb-fav" class="mb-vbtn" style="margin-top:2px">\u2606 Add to Quickbar</button></div>'+
+      '<div class="field"><label style="display:flex;align-items:center;gap:6px;font-size:.78rem"><input type="checkbox" id="mb-live" checked> Live 30s</label><button id="mb-fav" class="mb-vbtn" style="margin-top:2px">\u2606 Add to Quickbar</button></div>'+
       '</div>'+
       '<div id="mb-product" style="font-weight:700;font-size:1.15rem;padding:2px 2px 0"></div>'+
       '<div id="mb-sub" class="muted small" style="padding:0 2px 4px"></div>'+
@@ -3393,7 +3393,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     $('mb-view-orders').addEventListener('click',function(){view='orders';if(cur)render();});
     $('mb-view-history').addEventListener('click',function(){view='history';if(cur)render();});
     $('mb-fav').addEventListener('click',toggleFav);
-    $('mb-live').addEventListener('change',function(){clearInterval(liveIv);if($('mb-live').checked){liveIv=setInterval(function(){var tt=$('tab-arb');if(tt&&!tt.hidden&&tt.offsetParent!==null&&cur&&view==='orders')render();},30000);}});
+    function startLive(){clearInterval(liveIv);if($('mb-live')&&$('mb-live').checked){liveIv=setInterval(function(){var tt=$('tab-arb');if(tt&&!tt.hidden&&tt.offsetParent!==null&&cur&&view==='orders'&&curRegion!==0)render(true);},30000);}}$('mb-live').addEventListener('change',startLive);startLive();
     // quickbar delegation
     $('mb-qb').addEventListener('click',function(ev){var rm=ev.target.getAttribute('data-rm');if(rm){QB=QB.filter(function(x){return x.id!==+rm;});saveQB();renderQuickbar();updateFavBtn();return;}var it=ev.target.closest('.mb-qbi');if(it){var id=+it.getAttribute('data-id');loadItem(id,it.querySelector('.mb-qbn').textContent);}});
     // tree delegation (lazy)
