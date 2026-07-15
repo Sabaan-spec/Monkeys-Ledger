@@ -3397,7 +3397,10 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     // quickbar delegation
     $('mb-qb').addEventListener('click',function(ev){var rm=ev.target.getAttribute('data-rm');if(rm){QB=QB.filter(function(x){return x.id!==+rm;});saveQB();renderQuickbar();updateFavBtn();return;}var it=ev.target.closest('.mb-qbi');if(it){var id=+it.getAttribute('data-id');loadItem(id,it.querySelector('.mb-qbn').textContent);}});
     // tree delegation (lazy)
-    $('mb-tree').addEventListener('click',function(ev){var t=ev.target;var lf=t.closest('.mb-leaf');if(lf){loadItem(+lf.getAttribute('data-id'),lf.textContent);return;}var gp=t.closest('.mb-grp');if(gp){toggleGroup(gp);return;}var ct=t.closest('.mb-cat');if(ct){toggleCat(ct);}});if(t&&!t.hidden&&t.offsetParent!==null)buildUI();},800);
+    $('mb-tree').addEventListener('click',function(ev){var t=ev.target;var lf=t.closest('.mb-leaf');if(lf){loadItem(+lf.getAttribute('data-id'),lf.textContent);return;}var gp=t.closest('.mb-grp');if(gp){toggleGroup(gp);return;}var ct=t.closest('.mb-cat');if(ct){toggleCat(ct);}});
+    ['mb-orders'].forEach(function(hid){$(hid).addEventListener('click',function(ev){var tr=ev.target.closest('tr[data-sys]');if(!tr)return;var sid=+tr.getAttribute('data-sys');if(sid&&NAMES[sid])goPlanner(NAMES[sid]);});});
+  }
+  setInterval(function(){var t=$('tab-arb');if(t&&!t.hidden&&t.offsetParent!==null)buildUI();},800);
 })();
 </script>
 </body>
