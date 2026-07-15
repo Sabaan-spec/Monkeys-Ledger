@@ -3066,54 +3066,55 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 })();
 </script>
 <script>
-/* Reprocess tab: broker + sales tax + live prices */
+/* Reprocess: sales/broker tax + summary totals + live (v3) */
 (function(){
   function $(id){return document.getElementById(id);}
-  function ready(cb){function ok(){return $('rp-yield')&&typeof window.renderRepro==='function';}if(ok()){cb();return;}var n=0,iv=setInterval(function(){if(ok()||n++>500){clearInterval(iv);if(ok())cb();}},100);}
-  ready(function(){
-    var yEl=$('rp-yield'); var yf=yEl.closest('.field')||yEl.parentNode;
-    var oldTax=$('rp-tax'); if(oldTax){ var of=oldTax.closest('.field'); if(of)of.remove(); }
-    function addField(afterEl, inner){ var d=document.createElement('div'); d.className=(afterEl&&afterEl.className)||'field narrow'; d.innerHTML=inner; afterEl.parentNode.insertBefore(d, afterEl.nextSibling); return d; }
-    var anchorF=($('rp-basis')&&$('rp-basis').closest('.field'))||yf;
-    if(!$('rp-sales')){ addField(anchorF, '<label for="rp-sales">Sales tax %</label><input id="rp-sales" type="number" min="0" step="0.1" value="4.5" />'); }
-    if(!$('rp-broker')){ addField($('rp-sales').closest('.field'), '<label for="rp-broker">Broker %</label><input id="rp-broker" type="number" min="0" step="0.1" value="2.5" />'); }
-    function iskFmt(n){ try{return isk(Math.round(n*100)/100);}catch(e){return Math.round(n).toLocaleString()+' ISK';} }
-    var lastWrote=new WeakMap();
-    function scaleEl(el,f,skipPct){
-      if(!el)return;
-      if(skipPct && el.textContent.indexOf('%')>=0)return;
-      if(lastWrote.get(el)===el.textContent)return; /* already our scaled output */
-      var m=el.textContent.replace(/,/g,'').match(/-?[0-9.]+/); if(!m)return;
-      var scaled=iskFmt(parseFloat(m[0])*f);
-      el.textContent=scaled; lastWrote.set(el,scaled);
+  var HUBREG={jita:10000002,amarr:10000043,dodixie:10000032,rens:10000030,hek:10000042};
+  var N2I={};
+  function buildN2I(){try{if(typeof arbItems!=='undefined'&&arbItems)arbItems.forEach(function(it){if(it&&it.name)N2I[it.name.toLowerCase()]=it.id;});if(typeof ITEMS!=='undefined'&&ITEMS)ITEMS.forEach(function(it){if(it&&it.name&&N2I[it.name.toLowerCase()]==null)N2I[it.name.toLowerCase()]=it.id;});}catch(e){}}
+  function num(t){if(t==null)return NaN;t=(''+t).replace(/,/g,'');var m=t.match(/(-?[0-9.]+)\s*([KMB])?/i);if(!m)return NaN;var v=parseFloat(m[1]);var s=(m[2]||'').toUpperCase();if(s==='K')v*=1e3;else if(s==='M')v*=1e6;else if(s==='B')v*=1e9;return v;}
+  function iskFmt(n){if(!isFinite(n))return '\u2014';try{return isk(Math.round(n*100)/100);}catch(e){return Math.round(n).toLocaleString()+' ISK';}}
+  function addField(afterEl,inner){var d=document.createElement('div');d.className=(afterEl&&afterEl.className)||'field narrow';d.innerHTML=inner;afterEl.parentNode.insertBefore(d,afterEl.nextSibling);return d;}
+  function ensureFields(){
+    var yEl=$('rp-yield');if(!yEl)return false;
+    var old=$('rp-tax');if(old){var of=old.closest('.field');if(of)of.remove();}
+    var anchor=($('rp-basis')&&$('rp-basis').closest('.field'))||yEl.closest('.field')||yEl.parentNode;
+    if(!$('rp-sales'))addField(anchor,'<label for="rp-sales">Sales tax %</label><input id="rp-sales" type="number" min="0" step="0.1" value="4.5" />');
+    if(!$('rp-broker'))addField($('rp-sales').closest('.field'),'<label for="rp-broker">Broker %</label><input id="rp-broker" type="number" min="0" step="0.1" value="2.5" />');
+    if(!$('rp-live'))addField($('rp-broker').closest('.field'),'<label>&nbsp;</label><label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:.8rem"><input type="checkbox" id="rp-live" /> Live prices</label>');
+    return true;
+  }
+  function factor(){var sales=(Number(($('rp-sales')||{}).value)||0)/100,broker=(Number(($('rp-broker')||{}).value)||0)/100;var basis=($('rp-basis')||{}).value;var f=1-sales-(basis==='sell'?broker:0);if(f<0)f=0;if(f>1)f=1;return f;}
+  function metaInfo(){var m=($('rp-product-meta')||{}).textContent||'';var u=(m.match(/([0-9,]+)\s*units/)||[])[1];var units=u?parseInt(u.replace(/,/g,''),10):0;var hub=(m.split('\u00b7').pop()||'jita').trim().toLowerCase();return {units:units,hub:hub};}
+  var orePriceCache={},volCache={},fetchingP={},fetchingV={};
+  function getOrePrice(id,reg,basis){var key=id+'|'+reg+'|'+basis;if(orePriceCache[key]!=null)return Promise.resolve(orePriceCache[key]);if(fetchingP[key])return fetchingP[key];if(typeof fuzzAgg!=='function')return Promise.resolve(0);var pr=fuzzAgg(reg,[id]).then(function(fa){var o=fa&&fa[id];var p=0;if(o){if(basis==='buy'&&o.buy)p=Number(o.buy.percentile)||Number(o.buy.max)||0;else if(o.sell)p=Number(o.sell.percentile)||Number(o.sell.min)||0;}orePriceCache[key]=p;return p;}).catch(function(){orePriceCache[key]=0;return 0;});fetchingP[key]=pr;return pr;}
+  function getVol(id){if(volCache[id]!=null)return Promise.resolve(volCache[id]);if(fetchingV[id])return fetchingV[id];var pr=fetch('https://esi.evetech.net/latest/universe/types/'+id+'/').then(function(r){return r.ok?r.json():null;}).then(function(tj){var v=tj&&tj.volume?Number(tj.volume):0;volCache[id]=v;return v;}).catch(function(){volCache[id]=0;return 0;});fetchingV[id]=pr;return pr;}
+  function setSum(elid,txt){var el=$(elid);if(!el)return;if(el.textContent!==txt)el.textContent=txt;}
+  function apply(){
+    var body=$('rp-body');if(!body)return;
+    var rows=body.querySelectorAll('tr');if(!rows.length)return;
+    var prod=($('rp-product-name')||{}).textContent.trim();if(!prod||prod==='\u2014')return;
+    if(Object.keys(N2I).length<10)buildN2I();
+    var id=N2I[prod.toLowerCase()];
+    var f=factor();
+    var refined=0,ok=false;
+    [].forEach.call(rows,function(tr){var c=tr.children;if(!c.length)return;var cell=c[c.length-1];
+      if(cell.getAttribute('data-raw')==null){var mm=num(cell.textContent);if(!isFinite(mm))return;cell.setAttribute('data-raw',mm);}
+      var raw=parseFloat(cell.getAttribute('data-raw'));if(!isFinite(raw))return;ok=true;var sc=raw*f;refined+=sc;var t=iskFmt(sc);if(cell.textContent!==t)cell.textContent=t;});
+    if(!ok)return;
+    setSum('rp-refined',iskFmt(refined));
+    var mi=metaInfo();var reg=HUBREG[mi.hub]||10000002;var basis=($('rp-basis')||{}).value;
+    if(id&&mi.units>0){
+      getOrePrice(id,reg,basis).then(function(op){if(op>0){var oreVal=op*mi.units*f;setSum('rp-orev',iskFmt(oreVal));var d=refined-oreVal;var el=$('rp-diff');if(el){var txt=(d>=0?'+':'\u2212')+iskFmt(Math.abs(d)).replace('-','');el.textContent=txt;el.style.color=d>=0?'#54c28a':'#e0868c';}var note=$('rp-note');if(note){note.textContent=d>=0?('Refine \u2014 worth '+iskFmt(Math.abs(d))+' more than selling raw'):('Sell raw \u2014 worth '+iskFmt(Math.abs(d))+' more than refining');}}});
+      getVol(id).then(function(v){if(v>0){setSum('rp-iskm3',iskFmt(refined/(mi.units*v)));}});
     }
-    function factor(){
-      var sales=(Number(($('rp-sales')||{}).value)||0)/100, broker=(Number(($('rp-broker')||{}).value)||0)/100;
-      var basis=($('rp-basis')||{}).value; var f=1-sales-(basis==='sell'?broker:0); if(f<0)f=0; if(f>1)f=1; return f;
-    }
-    var scaling=false;
-    function applyTax(){
-      var f=factor(); if(f>=0.999999)return;
-      scaling=true;
-      scaleEl($('rp-refined'),f); scaleEl($('rp-orev'),f); scaleEl($('rp-iskm3'),f);
-      scaleEl($('rp-diff'),f,true);
-      [].slice.call(document.querySelectorAll('#rp-body tr')).forEach(function(tr){ var c=tr.children; if(c.length) scaleEl(c[c.length-1],f); });
-      scaling=false;
-    }
-    /* Observe the reprocess panel so any renderRepro write (even late/async) gets rescaled; idempotent via lastWrote guard */
-    var root=$('rp-result')||$('tab-repro'); var pending=false;
-    if(root){
-      var mo=new MutationObserver(function(){ if(scaling)return; if(pending)return; pending=true; requestAnimationFrame(function(){ pending=false; applyTax(); }); });
-      mo.observe(root,{childList:true,subtree:true,characterData:true});
-    }
-    ['rp-sales','rp-broker'].forEach(function(id){ var e=$(id); if(e)e.addEventListener('input',function(){ try{window.renderRepro();}catch(err){} setTimeout(applyTax,50); }); });
-    if(!$('rp-live')){
-      addField($('rp-broker').closest('.field'), '<label>&nbsp;</label><label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:.8rem"><input type="checkbox" id="rp-live" /> Live prices</label>');
-      var liveIv=null;
-      $('rp-live').addEventListener('change',function(){ clearInterval(liveIv); if($('rp-live').checked){ liveIv=setInterval(function(){ var tt=$('tab-repro'); if(tt&&tt.hidden)return; try{window.renderRepro();}catch(err){} },60000); } });
-    }
-    applyTax();
-  });
+  }
+  function tick(){var t=$('tab-repro');if(!t||t.hidden||t.offsetParent===null)return;if(ensureFields())apply();}
+  var liveIv=null;
+  document.addEventListener('input',function(e){var id=e.target&&e.target.id;if(id&&/^rp-(sales|broker|yield|qty|basis|hub)$/.test(id)){setTimeout(apply,60);}if(id==='rp-live'){clearInterval(liveIv);if($('rp-live')&&$('rp-live').checked){liveIv=setInterval(function(){var t=$('tab-repro');if(t&&!t.hidden&&t.offsetParent!==null){try{if(typeof window.renderRepro==='function')window.renderRepro();}catch(x){}}},60000);}}});
+  document.addEventListener('change',function(e){var id=e.target&&e.target.id;if(id&&/^rp-(basis|hub|live)$/.test(id))setTimeout(apply,60);});
+  setInterval(tick,1000);
+  tick();
 })();
 </script>
 <script>
