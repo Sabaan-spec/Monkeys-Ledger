@@ -3231,5 +3231,22 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   tick();
 })();
 </script>
+<script>
+/* Tab order */
+(function(){
+  var ORDER=['calc','tree','ore','repro','research','invent','react','top','arb','plan','kills','fits','watch'];
+  function tryReorder(){
+    var nav=document.querySelector('nav.tabs');if(!nav)return;
+    var btns=[].slice.call(nav.querySelectorAll('[data-tab]'));
+    var byTab={};btns.forEach(function(b){byTab[b.getAttribute('data-tab')]=b;});
+    if(!ORDER.every(function(k){return byTab[k];}))return;
+    var cur=btns.map(function(b){return b.getAttribute('data-tab');}).join(',');
+    if(cur===ORDER.join(','))return;
+    ORDER.forEach(function(k){nav.appendChild(byTab[k]);});
+  }
+  var n=0,iv=setInterval(function(){tryReorder();if(n++>40)clearInterval(iv);},300);
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',tryReorder);else tryReorder();
+})();
+</script>
 </body>
 </html>
