@@ -3433,5 +3433,44 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   },5000);
 })();
 </script>
+<script>
+/* Manufacturing summary fix */
+(function(){
+  function $(id){return document.getElementById(id);}
+  var ADJ=null,adjFetching=false;
+  function loadAdj(){if(ADJ||adjFetching)return;adjFetching=true;fetch('https://esi.evetech.net/latest/markets/prices/').then(function(r){return r.ok?r.json():[];}).then(function(a){var m={};a.forEach(function(x){m[x.type_id]=x.adjusted_price;});ADJ=m;}).catch(function(){adjFetching=false;});}
+  function num(t){if(t==null)return NaN;var m=(''+t).replace(/,/g,'').match(/-?[0-9.]+/);return m?parseFloat(m[0]):NaN;}
+  function iskFmt(n){if(!isFinite(n))return '\u2014';try{return isk(Math.round(n*100)/100);}catch(e){return Math.round(n).toLocaleString()+' ISK';}}
+  function recipeOf(name){if(typeof ITEMS==='undefined'||!ITEMS)return null;for(var i=0;i<ITEMS.length;i++){if(ITEMS[i]&&ITEMS[i].name===name)return ITEMS[i];}return null;}
+  function firstOrderPrice(res,which){var tbls=res.querySelectorAll('table');for(var i=0;i<tbls.length;i++){var h=tbls[i].querySelector('tr');if(!h)continue;var ht=h.textContent.toLowerCase();if((which==='sell'&&ht.indexOf('sell price')>=0)||(which==='buy'&&ht.indexOf('buy price')>=0)){var trs=tbls[i].querySelectorAll('tr');if(trs[1]&&trs[1].children[1])return num(trs[1].children[1].textContent);}}return NaN;}
+  function materialCost(res){var tbls=res.querySelectorAll('table');for(var i=0;i<tbls.length;i++){var h=tbls[i].querySelector('tr');if(!h)continue;if(/material/i.test(h.textContent)&&/subtotal/i.test(h.textContent)){var trs=tbls[i].querySelectorAll('tr');var total=0,rows=0;for(var k=1;k<trs.length;k++){var c=trs[k].children;if(c.length<4)continue;var sub=num(c[c.length-1].textContent);if(isFinite(sub)){total+=sub;rows++;}}return {cost:total,rows:rows};}}return {cost:0,rows:0};}
+  function setEl(id,txt,cls){var e=$(id);if(!e)return;if(e.textContent!==txt)e.textContent=txt;if(cls&&e.className!==cls)e.className=cls;}
+  function apply(){
+    var res=$('result');if(!res)return;if(!$('s-matcost'))return;
+    var prod=($('product-name')||{}).textContent.trim();if(!prod||prod==='\u2014')return;
+    var mci=materialCost(res);if(!mci.rows)return;
+    var rec=recipeOf(prod);
+    var runs=Math.max(1,Number(($('runs')||{}).value)||1);
+    var sci=Number(($('f-sci')||{}).value)||0,fac=Number(($('f-facility')||{}).value)||0,scc=Number(($('f-scc')||{}).value)||0;
+    var sales=Number(($('f-sales')||{}).value)||0,broker=Number(($('f-broker')||{}).value)||0;
+    var sellstrat=($('sellstrat')||{}).value||'sell';
+    loadAdj();
+    var eiv=0,eivOk=false;if(rec&&ADJ&&rec.materials){eivOk=true;rec.materials.forEach(function(m){eiv+=m.qty*runs*(ADJ[m.id]||0);});}
+    var jobCost=eivOk?eiv*(sci+fac+scc)/100:0;
+    var totalCost=mci.cost+jobCost;
+    var outQty=(rec?(rec.productQty||1):1)*runs;
+    var pPrice=firstOrderPrice(res,sellstrat==='buy'?'buy':'sell');
+    var gross=isFinite(pPrice)?pPrice*outQty:NaN;
+    var netRev=gross*(1-sales/100-broker/100);
+    var profit=netRev-totalCost;
+    var margin=totalCost>0?(profit/totalCost*100):NaN;
+    setEl('s-matcost',iskFmt(totalCost));
+    setEl('s-revenue',iskFmt(gross));
+    setEl('s-profit',iskFmt(profit),'stat-val '+(profit>=0?'good':'bad'));
+    setEl('s-margin',isFinite(margin)?((margin>=0?'+':'')+margin.toFixed(1)+'%'):'\u2014','stat-val '+(margin>=0?'good':'bad'));
+  }
+  setInterval(function(){var t=$('tab-calc');if(t&&!t.hidden&&t.offsetParent!==null)apply();},1500);
+})();
+</script>
 </body>
 </html>
