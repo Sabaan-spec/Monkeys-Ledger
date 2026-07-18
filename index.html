@@ -843,48 +843,8 @@ function buildChart(pts,fc){
   }
   return s.join('');
 }
-async function renderHistory(){
-  if(!current) return;
-  const host=$("hist-chart"), statsEl=$("hist-stats"), note=$("forecast-note");
-  host.innerHTML='<p class="muted small">Loading price history…</p>'; statsEl.innerHTML=""; note.textContent="";
-  const hubKey=els.hub.value;
-  const days=Math.max(1,Number($("hist-period").value)||90);
-  let hist=[];
-  try{ hist=await getHistory(current.id,hubKey); }catch(e){}
-  if(!hist || !hist.length){ host.innerHTML='<p class="muted small">No market history for this item in '+HUBS[hubKey].name+"’s region.</p>"; return; }
-  const slice=hist.slice(-days);
-  const ys=slice.map(p=>p.average);
-  const n=ys.length;
-  const first=ys[0], last=ys[n-1];
-  const change=first>0?((last-first)/first)*100:0;
-  const high=Math.max(...slice.map(p=>p.highest)), low=Math.min(...slice.map(p=>p.lowest));
-  const vol=slice.reduce((a,p)=>a+(p.volume||0),0)/slice.length;
-  const {level,trend,fitted}=holt(ys,0.35,0.12);
-  let se=0,cnt=0,mape=0,mc=0;
-  for(let i=1;i<n;i++){const r=ys[i]-fitted[i];se+=r*r;cnt++;if(ys[i]>0){mape+=Math.abs(r)/ys[i];mc++;}}
-  const sigma=cnt>0?Math.sqrt(se/cnt):0;
-  const mapePct=mc>0?(mape/mc)*100:0;
-  const meanY=ys.reduce((x,y)=>x+y,0)/n;
-  const volPct=meanY>0?(sigma/meanY)*100:0;
-  const h=Math.min(14,Math.max(5,Math.round(n*0.18)));
-  const proj=[last],lower=[last],upper=[last];
-  for(let k=1;k<=h;k++){const pv=Math.max(0,last+trend*k);const bw=Math.min(sigma*Math.sqrt(k),pv*0.35);proj.push(pv);lower.push(Math.max(0,pv-bw));upper.push(pv+bw);}
-  const predicted=proj[proj.length-1];
-  const projChange=last>0?((predicted-last)/last)*100:0;
-  const conf=mapePct<6?"high":mapePct<18?"moderate":"low";
-  const dir=trend>0?"▲ rising":trend<0?"▼ falling":"▬ flat";
-  statsEl.innerHTML=`
-    <div class="hs"><span class="l">Latest avg</span><span class="v">${isk(last)}</span></div>
-    <div class="hs"><span class="l">Change (${n}d)</span><span class="v" style="color:${change>=0?'var(--good)':'var(--bad)'}">${change>=0?'+':''}${change.toFixed(1)}%</span></div>
-    <div class="hs"><span class="l">Forecast (+${h}d)</span><span class="v" style="color:var(--warn)">${isk(predicted)}</span></div>
-    <div class="hs"><span class="l">Projected</span><span class="v" style="color:${projChange>=0?'var(--good)':'var(--bad)'}">${projChange>=0?'+':''}${projChange.toFixed(1)}%</span></div>
-    <div class="hs"><span class="l">Trend</span><span class="v" style="color:var(--warn)">${dir}</span></div>
-    <div class="hs"><span class="l">Period high</span><span class="v">${isk(high)}</span></div>
-    <div class="hs"><span class="l">Period low</span><span class="v">${isk(low)}</span></div>
-    <div class="hs"><span class="l">Avg daily volume</span><span class="v">${intf(Math.round(vol))}</span></div>`;
-  host.innerHTML=buildChart(slice,{proj,lower,upper,h});
-  note.innerHTML=`<span class="lg"><i style="background:var(--accent)"></i>Actual avg</span><span class="lg"><i style="background:rgba(84,194,218,.20)"></i>Daily range</span><span class="lg"><i class="dash"></i>Forecast</span><span class="lg"><i style="background:rgba(227,179,65,.25)"></i>±1σ band</span><br>Model: Holt linear exponential smoothing (α0.35 β0.12) over ${n}d · fit error ±${mapePct.toFixed(1)}% (${conf} confidence) · volatility ${volPct.toFixed(1)}%. Indicative only — not financial advice.`;
-}
+async function renderHistory(){var my=token;var host=$('mb-history');host.innerHTML='<div class="muted small" style="padding:12px">Loading price history\u2026</div>';var reg=curRegion===0?10000002:curRegion;fetch(ESI+'/markets/'+reg+'/history/?type_id='+cur.id).then(function(r){return r.ok?r.json():[];}).then(function(h){if(my!==token)return;mbHistData=h||[];var opts=[[7,'7D'],[30,'30D'],[90,'90D'],[180,'180D'],[365,'1Y']];var bar='<div id="mb-perbar" style="display:flex;gap:6px;margin:2px 2px 10px;flex-wrap:wrap">'+opts.map(function(o){return '<button class="mb-pbtn'+(o[0]===mbPeriod?' on':'')+'" data-p="'+o[0]+'">'+o[1]+'</button>';}).join('')+'</div>';host.innerHTML=bar+'<div id="mb-chart"></div>'+(curRegion===0?'<div class="muted small" style="padding:6px 2px">History shown for The Forge (ESI has no all-region history).</div>':'');drawHist();var pb=$('mb-perbar');if(pb){[].forEach.call(pb.querySelectorAll('.mb-pbtn'),function(b){b.addEventListener('click',function(){mbPeriod=+b.getAttribute('data-p');[].forEach.call(pb.querySelectorAll('.mb-pbtn'),function(x){x.className='mb-pbtn'+(+x.getAttribute('data-p')===mbPeriod?' on':'');});drawHist();});});}setStats(null);}).catch(function(){if(my===token)host.innerHTML='<div class="muted small" style="padding:12px">Could not load history.</div>';});}
+  function drawHist(){var chart=$('mb-chart');if(!chart||!mbHistData)return;eveDrawChart(chart,mbHistData.slice(-mbPeriod));}
 
 function renderSuggestions(q){
   const query=q.trim().toLowerCase();els.suggestions.innerHTML="";activeSuggestion=-1;
@@ -3260,7 +3220,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   function resolveNames(ids){var need=ids.filter(function(id){return NAMES[id]==null&&((id>=60000000&&id<64000000)||(id>=30000000&&id<31000000)||(id>=30000000&&id<32000000));});need=Array.from(new Set(need));if(!need.length)return Promise.resolve();var b=[];for(var i=0;i<need.length;i+=900)b.push(need.slice(i,i+900));return Promise.all(b.map(function(x){return fetch(ESI+'/universe/names/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(x.map(Number))}).then(function(r){return r.ok?r.json():[];}).catch(function(){return [];}).then(function(a){if(a&&a.forEach)a.forEach(function(o){if(o&&o.id&&o.name)NAMES[o.id]=o.name;});});})).then(saveNames);}
   function resolveTypes(ids){var need=ids.filter(function(id){return NAMES[id]==null;});need=Array.from(new Set(need));if(!need.length)return Promise.resolve();var b=[];for(var i=0;i<need.length;i+=900)b.push(need.slice(i,i+900));return Promise.all(b.map(function(x){return fetch(ESI+'/universe/names/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(x.map(Number))}).then(function(r){return r.ok?r.json():[];}).catch(function(){return [];}).then(function(a){if(a&&a.forEach)a.forEach(function(o){if(o&&o.id&&o.name)NAMES[o.id]=o.name;});});})).then(saveNames);}
 
-  var cur=null,curRegion=10000002,view='orders',token=0,liveIv=null;
+  var cur=null,curRegion=10000002,view='orders',token=0,liveIv=null;var mbPeriod=90,mbHistData=null;
   var MB_ITEMS=null,ID2N=null;
   function buildIdx(){if(MB_ITEMS)return;var m={};try{if(typeof arbItems!=='undefined'&&arbItems)arbItems.forEach(function(it){if(it&&it.id!=null&&it.name)m[it.id]=it.name;});if(typeof ITEMS!=='undefined'&&ITEMS)ITEMS.forEach(function(it){if(it){if(it.id!=null&&it.name)m[it.id]=it.name;if(it.materials)it.materials.forEach(function(x){if(x&&x.id!=null&&x.name)m[x.id]=x.name;});}});}catch(e){}ID2N=m;MB_ITEMS=Object.keys(m).map(function(id){return {id:+id,name:m[id]};});}
   function typeName(id){buildIdx();return (ID2N&&ID2N[id])||NAMES[id]||('#'+id);}
@@ -3368,7 +3328,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     var t=$('tab-arb');if(!t||$('mb-wrap'))return;
     var tabBtn=document.querySelector('[data-tab="arb"]');if(tabBtn)tabBtn.textContent='Market';
     [].forEach.call(t.children,function(c){c.style.display='none';});
-    var st=document.createElement('style');st.textContent='#mb-wrap{display:flex;gap:14px;align-items:flex-start}#mb-side{width:250px;flex:0 0 250px;max-height:78vh;overflow:auto;border:1px solid #1c2b36;border-radius:6px;padding:8px;background:rgba(13,26,34,.4)}#mb-main{flex:1;min-width:0}.mb-vbtn{background:#12222c;border:1px solid #2b3b47;color:#9fb0bd;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:.8rem;font-weight:700}.mb-vbtn.on{background:#1f5468;border-color:#54c2da;color:#dff3fa}.mb-ot{width:100%;border-collapse:collapse;font-size:.8rem}.mb-ot td,.mb-ot th{padding:3px 6px;border-bottom:1px solid rgba(120,150,170,.08)}.mb-ot tbody tr{cursor:pointer}.mb-ot tbody tr:hover td{background:rgba(84,194,138,.08)}.mb-oh{margin-bottom:4px;font-weight:700}#mb-suggestions{position:absolute;z-index:30;background:#0d1a22;border:1px solid #2b3b47;max-height:300px;overflow:auto;width:100%;margin:0;padding:0;list-style:none}#mb-suggestions li{padding:5px 10px;cursor:pointer}#mb-suggestions li:hover{background:#12333f}.mb-sech{font-weight:700;font-size:.72rem;letter-spacing:.05em;color:#7a8c99;margin:6px 2px 4px}.mb-cat,.mb-grp,.mb-leaf{padding:3px 6px;cursor:pointer;border-radius:3px;font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mb-cat:hover,.mb-grp:hover,.mb-leaf:hover{background:#12333f}.mb-grp{padding-left:16px;color:#9fb0bd}.mb-leaf{padding-left:28px;color:#c8d6e0}.mb-qbi{display:flex;justify-content:space-between;align-items:center;padding:3px 6px;border-radius:3px;cursor:pointer;font-size:.82rem}.mb-qbi:hover{background:#12333f}.mb-qbx{color:#7a8c99;padding:0 4px;cursor:pointer}.mb-qbx:hover{color:#e0555a}@keyframes mbpulse{0%{box-shadow:0 0 0 0 rgba(84,194,138,.55)}70%{box-shadow:0 0 0 7px rgba(84,194,138,0)}100%{box-shadow:0 0 0 0 rgba(84,194,138,0)}}.mb-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#54c28a;animation:mbpulse 1.6s infinite;margin-right:6px;vertical-align:middle}.mb-liveind{font-size:.78rem;font-weight:700;color:#54c28a;letter-spacing:.03em}.mb-liveind.off{color:#7a8c99}.mb-liveind.off .mb-dot{background:#7a8c99;animation:none;box-shadow:none}';document.head.appendChild(st);
+    var st=document.createElement('style');st.textContent='#mb-wrap{display:flex;gap:14px;align-items:flex-start}#mb-side{width:250px;flex:0 0 250px;max-height:78vh;overflow:auto;border:1px solid #1c2b36;border-radius:6px;padding:8px;background:rgba(13,26,34,.4)}#mb-main{flex:1;min-width:0}.mb-vbtn{background:#12222c;border:1px solid #2b3b47;color:#9fb0bd;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:.8rem;font-weight:700}.mb-vbtn.on{background:#1f5468;border-color:#54c2da;color:#dff3fa}.mb-ot{width:100%;border-collapse:collapse;font-size:.8rem}.mb-ot td,.mb-ot th{padding:3px 6px;border-bottom:1px solid rgba(120,150,170,.08)}.mb-ot tbody tr{cursor:pointer}.mb-ot tbody tr:hover td{background:rgba(84,194,138,.08)}.mb-oh{margin-bottom:4px;font-weight:700}#mb-suggestions{position:absolute;z-index:30;background:#0d1a22;border:1px solid #2b3b47;max-height:300px;overflow:auto;width:100%;margin:0;padding:0;list-style:none}#mb-suggestions li{padding:5px 10px;cursor:pointer}#mb-suggestions li:hover{background:#12333f}.mb-sech{font-weight:700;font-size:.72rem;letter-spacing:.05em;color:#7a8c99;margin:6px 2px 4px}.mb-cat,.mb-grp,.mb-leaf{padding:3px 6px;cursor:pointer;border-radius:3px;font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mb-cat:hover,.mb-grp:hover,.mb-leaf:hover{background:#12333f}.mb-grp{padding-left:16px;color:#9fb0bd}.mb-leaf{padding-left:28px;color:#c8d6e0}.mb-qbi{display:flex;justify-content:space-between;align-items:center;padding:3px 6px;border-radius:3px;cursor:pointer;font-size:.82rem}.mb-qbi:hover{background:#12333f}.mb-qbx{color:#7a8c99;padding:0 4px;cursor:pointer}.mb-qbx:hover{color:#e0555a}@keyframes mbpulse{0%{box-shadow:0 0 0 0 rgba(84,194,138,.55)}70%{box-shadow:0 0 0 7px rgba(84,194,138,0)}100%{box-shadow:0 0 0 0 rgba(84,194,138,0)}}.mb-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#54c28a;animation:mbpulse 1.6s infinite;margin-right:6px;vertical-align:middle}.mb-liveind{font-size:.78rem;font-weight:700;color:#54c28a;letter-spacing:.03em}.mb-liveind.off{color:#7a8c99}.mb-liveind.off .mb-dot{background:#7a8c99;animation:none;box-shadow:none}.mb-pbtn{background:#12222c;border:1px solid #2b3b47;color:#9fb0bd;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:.75rem;font-weight:700}.mb-pbtn.on{background:#1f5468;border-color:#54c2da;color:#dff3fa}';document.head.appendChild(st);
     var w=document.createElement('div');w.id='mb-wrap';
     w.innerHTML='<div id="mb-side"><div class="mb-sech">QUICKBAR</div><div id="mb-qb"></div><div class="mb-sech" style="margin-top:10px">BROWSE</div><div id="mb-tree"></div></div>'+
       '<div id="mb-main">'+
