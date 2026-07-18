@@ -843,8 +843,48 @@ function buildChart(pts,fc){
   }
   return s.join('');
 }
-async function renderHistory(){var my=token;var host=$('mb-history');host.innerHTML='<div class="muted small" style="padding:12px">Loading price history\u2026</div>';var reg=curRegion===0?10000002:curRegion;fetch(ESI+'/markets/'+reg+'/history/?type_id='+cur.id).then(function(r){return r.ok?r.json():[];}).then(function(h){if(my!==token)return;mbHistData=h||[];var opts=[[7,'7D'],[30,'30D'],[90,'90D'],[180,'180D'],[365,'1Y']];var bar='<div id="mb-perbar" style="display:flex;gap:6px;margin:2px 2px 10px;flex-wrap:wrap">'+opts.map(function(o){return '<button class="mb-pbtn'+(o[0]===mbPeriod?' on':'')+'" data-p="'+o[0]+'">'+o[1]+'</button>';}).join('')+'</div>';host.innerHTML=bar+'<div id="mb-chart"></div>'+(curRegion===0?'<div class="muted small" style="padding:6px 2px">History shown for The Forge (ESI has no all-region history).</div>':'');drawHist();var pb=$('mb-perbar');if(pb){[].forEach.call(pb.querySelectorAll('.mb-pbtn'),function(b){b.addEventListener('click',function(){mbPeriod=+b.getAttribute('data-p');[].forEach.call(pb.querySelectorAll('.mb-pbtn'),function(x){x.className='mb-pbtn'+(+x.getAttribute('data-p')===mbPeriod?' on':'');});drawHist();});});}setStats(null);}).catch(function(){if(my===token)host.innerHTML='<div class="muted small" style="padding:12px">Could not load history.</div>';});}
-  function drawHist(){var chart=$('mb-chart');if(!chart||!mbHistData)return;eveDrawChart(chart,mbHistData.slice(-mbPeriod));}
+async function renderHistory(){
+  if(!current) return;
+  const host=$("hist-chart"), statsEl=$("hist-stats"), note=$("forecast-note");
+  host.innerHTML='<p class="muted small">Loading price history…</p>'; statsEl.innerHTML=""; note.textContent="";
+  const hubKey=els.hub.value;
+  const days=Math.max(1,Number($("hist-period").value)||90);
+  let hist=[];
+  try{ hist=await getHistory(current.id,hubKey); }catch(e){}
+  if(!hist || !hist.length){ host.innerHTML='<p class="muted small">No market history for this item in '+HUBS[hubKey].name+"’s region.</p>"; return; }
+  const slice=hist.slice(-days);
+  const ys=slice.map(p=>p.average);
+  const n=ys.length;
+  const first=ys[0], last=ys[n-1];
+  const change=first>0?((last-first)/first)*100:0;
+  const high=Math.max(...slice.map(p=>p.highest)), low=Math.min(...slice.map(p=>p.lowest));
+  const vol=slice.reduce((a,p)=>a+(p.volume||0),0)/slice.length;
+  const {level,trend,fitted}=holt(ys,0.35,0.12);
+  let se=0,cnt=0,mape=0,mc=0;
+  for(let i=1;i<n;i++){const r=ys[i]-fitted[i];se+=r*r;cnt++;if(ys[i]>0){mape+=Math.abs(r)/ys[i];mc++;}}
+  const sigma=cnt>0?Math.sqrt(se/cnt):0;
+  const mapePct=mc>0?(mape/mc)*100:0;
+  const meanY=ys.reduce((x,y)=>x+y,0)/n;
+  const volPct=meanY>0?(sigma/meanY)*100:0;
+  const h=Math.min(14,Math.max(5,Math.round(n*0.18)));
+  const proj=[last],lower=[last],upper=[last];
+  for(let k=1;k<=h;k++){const pv=Math.max(0,last+trend*k);const bw=Math.min(sigma*Math.sqrt(k),pv*0.35);proj.push(pv);lower.push(Math.max(0,pv-bw));upper.push(pv+bw);}
+  const predicted=proj[proj.length-1];
+  const projChange=last>0?((predicted-last)/last)*100:0;
+  const conf=mapePct<6?"high":mapePct<18?"moderate":"low";
+  const dir=trend>0?"▲ rising":trend<0?"▼ falling":"▬ flat";
+  statsEl.innerHTML=`
+    <div class="hs"><span class="l">Latest avg</span><span class="v">${isk(last)}</span></div>
+    <div class="hs"><span class="l">Change (${n}d)</span><span class="v" style="color:${change>=0?'var(--good)':'var(--bad)'}">${change>=0?'+':''}${change.toFixed(1)}%</span></div>
+    <div class="hs"><span class="l">Forecast (+${h}d)</span><span class="v" style="color:var(--warn)">${isk(predicted)}</span></div>
+    <div class="hs"><span class="l">Projected</span><span class="v" style="color:${projChange>=0?'var(--good)':'var(--bad)'}">${projChange>=0?'+':''}${projChange.toFixed(1)}%</span></div>
+    <div class="hs"><span class="l">Trend</span><span class="v" style="color:var(--warn)">${dir}</span></div>
+    <div class="hs"><span class="l">Period high</span><span class="v">${isk(high)}</span></div>
+    <div class="hs"><span class="l">Period low</span><span class="v">${isk(low)}</span></div>
+    <div class="hs"><span class="l">Avg daily volume</span><span class="v">${intf(Math.round(vol))}</span></div>`;
+  host.innerHTML=buildChart(slice,{proj,lower,upper,h});
+  note.innerHTML=`<span class="lg"><i style="background:var(--accent)"></i>Actual avg</span><span class="lg"><i style="background:rgba(84,194,218,.20)"></i>Daily range</span><span class="lg"><i class="dash"></i>Forecast</span><span class="lg"><i style="background:rgba(227,179,65,.25)"></i>±1σ band</span><br>Model: Holt linear exponential smoothing (α0.35 β0.12) over ${n}d · fit error ±${mapePct.toFixed(1)}% (${conf} confidence) · volatility ${volPct.toFixed(1)}%. Indicative only — not financial advice.`;
+}
 
 function renderSuggestions(q){
   const query=q.trim().toLowerCase();els.suggestions.innerHTML="";activeSuggestion=-1;
@@ -3313,7 +3353,8 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       });
     }
   }
-  function renderHistory(){var my=token;var host=$('mb-history');host.innerHTML='<div class="muted small" style="padding:12px">Loading price history\u2026</div>';var reg=curRegion===0?10000002:curRegion;fetch(ESI+'/markets/'+reg+'/history/?type_id='+cur.id).then(function(r){return r.ok?r.json():[];}).then(function(h){if(my!==token)return;host.innerHTML='<div id="mb-chart"></div>'+(curRegion===0?'<div class="muted small" style="padding:6px 2px">History shown for The Forge (ESI has no all-region history).</div>':'');eveDrawChart($('mb-chart'),h.slice(-120));setStats(null);}).catch(function(){if(my===token)host.innerHTML='<div class="muted small" style="padding:12px">Could not load history.</div>';});}
+  function renderHistory(){var my=token;var host=$('mb-history');host.innerHTML='<div class="muted small" style="padding:12px">Loading price history\u2026</div>';var reg=curRegion===0?10000002:curRegion;fetch(ESI+'/markets/'+reg+'/history/?type_id='+cur.id).then(function(r){return r.ok?r.json():[];}).then(function(h){if(my!==token)return;mbHistData=h||[];var opts=[[7,'7D'],[30,'30D'],[90,'90D'],[180,'180D'],[365,'1Y']];var bar='<div id="mb-perbar" style="display:flex;gap:6px;margin:2px 2px 10px;flex-wrap:wrap">'+opts.map(function(o){return '<button class="mb-pbtn'+(o[0]===mbPeriod?' on':'')+'" data-p="'+o[0]+'">'+o[1]+'</button>';}).join('')+'</div>';host.innerHTML=bar+'<div id="mb-chart"></div>'+(curRegion===0?'<div class="muted small" style="padding:6px 2px">History shown for The Forge (ESI has no all-region history).</div>':'');drawHist();var pb=$('mb-perbar');if(pb){[].forEach.call(pb.querySelectorAll('.mb-pbtn'),function(b){b.addEventListener('click',function(){mbPeriod=+b.getAttribute('data-p');[].forEach.call(pb.querySelectorAll('.mb-pbtn'),function(x){x.className='mb-pbtn'+(+x.getAttribute('data-p')===mbPeriod?' on':'');});drawHist();});});}setStats(null);}).catch(function(){if(my===token)host.innerHTML='<div class="muted small" style="padding:12px">Could not load history.</div>';});}
+  function drawHist(){var chart=$('mb-chart');if(!chart||!mbHistData)return;eveDrawChart(chart,mbHistData.slice(-mbPeriod));}
   function setStats(o){var b=$('mb-best');if(!b)return;if(!o){b.innerHTML='';return;}var spread=(o.minSell!=null&&o.maxBuy!=null)?(o.minSell-o.maxBuy):null;var sp=(spread!=null&&o.maxBuy>0)?(spread/o.maxBuy*100):null;b.innerHTML='Sell <b style="color:#e0868c">'+(o.minSell!=null?iskS(o.minSell):'\u2014')+'</b> \u00b7 Buy <b style="color:#54c28a">'+(o.maxBuy!=null?iskS(o.maxBuy):'\u2014')+'</b>'+(spread!=null?(' \u00b7 Spread <b>'+iskS(spread)+'</b>'+(sp!=null?(' ('+sp.toFixed(1)+'%)'):'')):'')+'<br><span class="muted small">5% depth \u2014 sell '+(o.d5s!=null?iskS(o.d5s):'\u2014')+' \u00b7 buy '+(o.d5b!=null?iskS(o.d5b):'\u2014')+' \u00b7 vol on market: '+Number(o.svol||0).toLocaleString()+' sell / '+Number(o.bvol||0).toLocaleString()+' buy</span>';}
 
   function goPlanner(sysName){if(!sysName)return;var tb=document.querySelector('[data-tab="plan"]');if(tb)tb.click();setTimeout(function(){var f=$('pl-from');if(f){f.value=sysName;f.dispatchEvent(new Event('input',{bubbles:true}));}var go=[].slice.call(document.querySelectorAll('#tab-plan button')).find(function(b){return /generate|route|plan|go|scan|find/i.test(b.textContent);});if(go)go.click();},250);}
