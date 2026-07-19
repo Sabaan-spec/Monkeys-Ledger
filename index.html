@@ -3476,5 +3476,86 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   setInterval(function(){var t=$('tab-calc');if(t&&!t.hidden&&t.offsetParent!==null)apply();},1500);
 })();
 </script>
+<script>
+/* Reprocess haul paste */
+(function(){
+  function $(id){return document.getElementById(id);}
+  var HUBREG={jita:10000002,amarr:10000043,dodixie:10000032,rens:10000030,hek:10000042};
+  var N2I=null;
+  function n2i(){if(N2I)return N2I;var m={};try{if(typeof arbItems!=='undefined'&&arbItems)arbItems.forEach(function(it){if(it&&it.name)m[it.name.toLowerCase()]=it.id;});if(typeof ITEMS!=='undefined'&&ITEMS)ITEMS.forEach(function(it){if(it&&it.name&&m[it.name.toLowerCase()]==null)m[it.name.toLowerCase()]=it.id;});}catch(e){}N2I=m;return m;}
+  function iskF(n){if(!isFinite(n))return '\u2014';try{return isk(Math.round(n*100)/100);}catch(e){return Math.round(n).toLocaleString()+' ISK';}}
+  function parseHaul(text){
+    var lines=(text||'').split(/\r?\n/);var items=[],unknown=[];var map=n2i();
+    lines.forEach(function(L){
+      L=L.trim();if(!L)return;
+      var name=null,qty=NaN;
+      var parts=L.split('\t');
+      if(parts.length>=2){name=parts[0].trim();qty=parseFloat((parts[1]||'').replace(/[, ]/g,''));if(!isFinite(qty)){for(var k=2;k<parts.length;k++){var q2=parseFloat((parts[k]||'').replace(/[, ]/g,''));if(isFinite(q2)){qty=q2;break;}}}}
+      else{var m=L.match(/^(.*?)[\s]*[x\u00d7]?\s*([0-9][0-9,\.]*)$/i);if(m){name=m[1].replace(/[x\u00d7]\s*$/i,'').trim();qty=parseFloat(m[2].replace(/,/g,''));}else{name=L;qty=1;}}
+      if(!name)return;
+      var id=map[name.toLowerCase()];
+      if(id&&typeof REPRO!=='undefined'&&REPRO.rows&&REPRO.rows[id]){items.push({id:id,name:name,qty:isFinite(qty)?qty:1});}
+      else unknown.push(name);
+    });
+    // merge duplicates
+    var by={};items.forEach(function(it){if(by[it.id])by[it.id].qty+=it.qty;else by[it.id]=it;});
+    return {items:Object.keys(by).map(function(k){return by[k];}),unknown:unknown};
+  }
+  function yieldPct(){var y=Number(($('rp-yield')||{}).value);if(!isFinite(y)||y<=0)y=70;return y/100;}
+  function taxFactor(){var s=(Number(($('rp-sales')||{}).value)||0)/100,b=(Number(($('rp-broker')||{}).value)||0)/100;var basis=($('rp-basis')||{}).value;var f=1-s-(basis==='sell'?b:0);return Math.max(0,Math.min(1,f));}
+  function build(){
+    var t=$('tab-repro');if(!t||$('rp-haul-panel'))return;
+    var controls=t.querySelector('.controls.panel');if(!controls)return;
+    var p=document.createElement('div');p.id='rp-haul-panel';p.className='panel';p.style.cssText='margin-top:10px;padding:12px';
+    p.innerHTML='<div style="font-weight:700;margin-bottom:6px">\ud83d\udccb Paste your haul</div>'+
+      '<div class="muted small" style="margin-bottom:8px">In game: select the ore in your inventory \u2192 right-click \u2192 <b>Copy</b> (or Ctrl+A, Ctrl+C) \u2192 paste here. One ore per line, e.g. \u201cVeldspar&nbsp;&nbsp;12,500\u201d.</div>'+
+      '<textarea id="rp-haul-in" rows="5" style="width:100%;background:#0d1a22;border:1px solid #2b3b47;color:#c8d6e0;border-radius:4px;padding:8px;font-family:inherit;font-size:.85rem" placeholder="Veldspar\t12,500\nScordite\t8,200\nPlagioclase\t3,000"></textarea>'+
+      '<div style="margin-top:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button id="rp-haul-go" class="btn">Analyze haul</button><span id="rp-haul-status" class="muted small"></span></div>'+
+      '<div id="rp-haul-out" style="margin-top:10px"></div>';
+    controls.parentNode.insertBefore(p,controls.nextSibling);
+    $('rp-haul-go').addEventListener('click',analyze);
+  }
+  function analyze(){
+    var st=$('rp-haul-status'),host=$('rp-haul-out');
+    var parsed=parseHaul(($('rp-haul-in')||{}).value);
+    if(!parsed.items.length){st.textContent=parsed.unknown.length?('No reprocessable ores recognized ('+parsed.unknown.slice(0,3).join(', ')+'\u2026)'):'Paste your ore list first.';host.innerHTML='';return;}
+    st.textContent='Pricing '+parsed.items.length+' ore type(s)\u2026';
+    var hub=($('rp-hub')||{}).value||'jita';var reg=HUBREG[hub]||10000002;
+    var basis=($('rp-basis')||{}).value||'sell';
+    var oreIds=parsed.items.map(function(it){return it.id;});
+    var matIds={};parsed.items.forEach(function(it){REPRO.rows[it.id].o.forEach(function(p){matIds[p[0]]=1;});});
+    var allIds=oreIds.concat(Object.keys(matIds).map(Number));
+    fuzzAgg(reg,allIds).then(function(fa){
+      function px(id){var o=fa&&fa[id];if(!o)return 0;if(basis==='buy'&&o.buy)return Number(o.buy.max)||Number(o.buy.percentile)||0;if(o.sell)return Number(o.sell.min)||Number(o.sell.percentile)||0;return 0;}
+      var y=yieldPct(),f=taxFactor();
+      var rows=[],tSell=0,tRef=0;
+      parsed.items.forEach(function(it){
+        var rec=REPRO.rows[it.id];var per=rec.p||100;
+        var refUnit=0;rec.o.forEach(function(pr){refUnit+=(pr[1]/per)*y*px(pr[0]);});
+        var sellVal=it.qty*px(it.id)*f;
+        var refVal=it.qty*refUnit*f;
+        tSell+=sellVal;tRef+=refVal;
+        rows.push({name:it.name,qty:it.qty,sell:sellVal,ref:refVal});
+      });
+      rows.sort(function(a,b){return Math.max(b.sell,b.ref)-Math.max(a.sell,a.ref);});
+      var best=Math.max(tSell,tRef);var verdict=tRef>tSell?'REFINE':'SELL RAW';var diff=Math.abs(tRef-tSell);
+      var htmlS='<table style="width:100%;border-collapse:collapse;font-size:.82rem"><thead><tr class="muted small"><th style="text-align:left;padding:3px 6px">Ore</th><th style="text-align:right;padding:3px 6px">Qty</th><th style="text-align:right;padding:3px 6px">Sell raw</th><th style="text-align:right;padding:3px 6px">Refine</th><th style="text-align:left;padding:3px 6px">Best</th></tr></thead><tbody>';
+      rows.forEach(function(rw){var refBetter=rw.ref>rw.sell;var pct=refBetter?(rw.sell>0?Math.round((rw.ref-rw.sell)/rw.sell*100):0):(rw.ref>0?Math.round((rw.sell-rw.ref)/rw.ref*100):0);
+        htmlS+='<tr style="border-bottom:1px solid rgba(120,150,170,.08)"><td style="padding:3px 6px">'+rw.name+'</td><td style="text-align:right;padding:3px 6px">'+rw.qty.toLocaleString()+'</td><td style="text-align:right;padding:3px 6px;'+(!refBetter?'color:#54c28a;font-weight:700':'')+'">'+iskF(rw.sell)+'</td><td style="text-align:right;padding:3px 6px;'+(refBetter?'color:#54c28a;font-weight:700':'')+'">'+iskF(rw.ref)+'</td><td style="padding:3px 6px;font-weight:700;color:'+(refBetter?'#54c28a':'#9fb0bd')+'">'+(refBetter?'REFINE +'+pct+'%':'SELL +'+pct+'%')+'</td></tr>';});
+      htmlS+='</tbody></table>';
+      htmlS+='<div style="margin-top:10px;padding:10px;border:1px solid #2b3b47;border-radius:6px;background:rgba(13,26,34,.5)">'+
+        '<div style="display:flex;gap:26px;flex-wrap:wrap;font-size:.9rem">'+
+        '<span>Total sell raw: <b>'+iskF(tSell)+'</b></span>'+
+        '<span>Total refined: <b>'+iskF(tRef)+'</b></span>'+
+        '<span>Best: <b style="color:#54c28a">'+verdict+'</b> \u2014 worth <b>'+iskF(diff)+'</b> more ('+iskF(best)+' total)</span>'+
+        '</div><div class="muted small" style="margin-top:4px">'+hub.charAt(0).toUpperCase()+hub.slice(1)+' \u00b7 '+Math.round(yieldPct()*100)+'% yield \u00b7 '+( ($('rp-basis')||{}).value==='buy'?'instant to buy orders':'sell orders')+' \u00b7 after taxes. Mixed hauls: follow the per-ore \u201cBest\u201d column for maximum ISK.</div></div>';
+      if(parsed.unknown.length)htmlS+='<div class="muted small" style="margin-top:6px;color:#e3b341">Not recognized as reprocessable: '+parsed.unknown.slice(0,6).join(', ')+(parsed.unknown.length>6?' +'+(parsed.unknown.length-6)+' more':'')+'</div>';
+      $('rp-haul-status').textContent='';
+      $('rp-haul-out').innerHTML=htmlS;
+    }).catch(function(){$('rp-haul-status').textContent='Price fetch failed \u2014 try again.';});
+  }
+  setInterval(function(){var t=$('tab-repro');if(t&&!t.hidden&&t.offsetParent!==null)build();},900);
+})();
+</script>
 </body>
 </html>
