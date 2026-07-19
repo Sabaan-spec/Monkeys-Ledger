@@ -3562,7 +3562,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 (function(){
   function $(id){return document.getElementById(id);}
   var done=false;
-  function updInd(){var on=$('rp-live')&&$('rp-live').checked;var ind=$('rp-liveind');if(ind)ind.className='pl-liveind'+(on?'':' off');var tx=$('rp-livetxt');if(tx)tx.textContent=on?'Live Pricing':'Live Paused';}
+  var defaulted=false;function updInd(){var lv=$('rp-live');if(lv&&!defaulted){defaulted=true;if(!lv.checked){lv.checked=true;lv.dispatchEvent(new Event('input',{bubbles:true}));lv.dispatchEvent(new Event('change',{bubbles:true}));}lv.addEventListener('change',updInd);}var on=lv&&lv.checked;var ind=$('rp-liveind');if(ind)ind.className='pl-liveind'+(on?'':' off');var tx=$('rp-livetxt');if(tx)tx.textContent=on?'Live Pricing':'Live Paused';}
   function arrange(){
     if(done)return;
     var t=$('tab-repro');if(!t)return;
