@@ -3557,5 +3557,35 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   setInterval(function(){var t=$('tab-repro');if(t&&!t.hidden&&t.offsetParent!==null)build();},900);
 })();
 </script>
+<script>
+/* Reprocess layout v2 */
+(function(){
+  function $(id){return document.getElementById(id);}
+  var done=false;
+  function updInd(){var on=$('rp-live')&&$('rp-live').checked;var ind=$('rp-liveind');if(ind)ind.className='pl-liveind'+(on?'':' off');var tx=$('rp-livetxt');if(tx)tx.textContent=on?'Live Pricing':'Live Paused';}
+  function arrange(){
+    if(done)return;
+    var t=$('tab-repro');if(!t)return;
+    var haul=$('rp-haul-panel');var controls=t.querySelector('.controls.panel');var res=$('rp-result');
+    if(!haul||!controls||!res)return;
+    t.insertBefore(haul,t.firstElementChild);
+    if(!$('rp-manual-label')){var lbl=document.createElement('div');lbl.id='rp-manual-label';lbl.style.cssText='font-weight:700;margin:16px 2px 6px';lbl.textContent='\ud83d\udd0d Single ore lookup \u2014 pick an ore for the detailed breakdown below';t.insertBefore(lbl,res);}
+    t.insertBefore(controls,res);
+    var lbl2=$('rp-manual-label');if(lbl2)t.insertBefore(lbl2,controls);
+    var hdr=haul.querySelector('div');
+    if(hdr&&!$('rp-liveind')){
+      hdr.style.cssText+=';display:flex;align-items:center;gap:14px;justify-content:space-between;flex-wrap:wrap';
+      var sp=document.createElement('span');sp.id='rp-liveind';sp.className='pl-liveind';sp.innerHTML='<span class="pl-dot"></span><span id="rp-livetxt">Live Pricing</span>';
+      hdr.appendChild(sp);
+    }
+    var lv=$('rp-live');
+    if(lv&&!lv.checked){lv.checked=true;lv.dispatchEvent(new Event('input',{bubbles:true}));lv.dispatchEvent(new Event('change',{bubbles:true}));}
+    if(lv)lv.addEventListener('change',updInd);
+    updInd();
+    done=true;
+  }
+  setInterval(function(){var t=$('tab-repro');if(t&&!t.hidden&&t.offsetParent!==null){arrange();updInd();}},700);
+})();
+</script>
 </body>
 </html>
