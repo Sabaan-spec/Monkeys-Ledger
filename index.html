@@ -3977,7 +3977,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     if(!CTX.ready)return;
     var pn=$('product-name'); if(pn&&firstText(pn)&&firstText(pn)!=='\u2014')addBadge(pn);
     var ap=$('ab-product-name'); if(ap&&firstText(ap)&&firstText(ap)!=='\u2014')addBadge(ap);
-    ['mat-body','rp-body','os-results','ore-body'].forEach(function(id){var t=$(id);if(t){[].forEach.call(t.querySelectorAll('tr'),function(tr){var c=tr.querySelector('td');if(c)addBadge(c);});}});
+    ['mat-body','rp-body','os-results','ore-body','tab-tree','tab-top'].forEach(function(id){var t=$(id);if(t){[].forEach.call(t.querySelectorAll('tr'),function(tr){var c=tr.querySelector('td');if(c)addBadge(c);});}});
   }
   function num(s){return parseFloat((s||'').replace(/[^0-9.\-]/g,''))||0;}
   function netCost(){
@@ -3988,7 +3988,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     });
     var host=$('mf-netcost');
     if(!host){var sm=$('s-matcost');var panel=sm?sm.closest('section'):null;host=document.createElement('div');host.id='mf-netcost';host.style.cssText='margin-top:8px;padding:8px 12px;border:1px solid rgba(84,194,138,.35);border-radius:6px;background:rgba(84,194,138,.06);font-size:.85rem';(panel||$('result')||document.body).appendChild(host);}
-    if(net<gross-0.5){host.style.display='';host.innerHTML='<b style="color:#54c28a">Inventory-adjusted:</b> you already hold materials for '+haveN+'/'+total+' lines. Net buy cost <b>'+isk(net)+' ISK</b> vs gross '+isk(gross)+' ISK \u2014 saving '+isk(gross-net)+'.';}else{host.style.display='none';}
+    if(net<gross-0.5){host.style.display='';host.innerHTML='<b style="color:#54c28a">Inventory-adjusted:</b> you already hold materials for '+haveN+'/'+total+' lines. Net buy cost <b>'+isk(net)+' ISK</b> vs gross '+isk(gross)+' ISK \u2014 saving '+isk(gross-net)+'. <button id="mf-shoplist" class="btn" style="margin-left:8px;font-size:.75rem;padding:2px 8px;cursor:pointer">Copy shopping list</button>';}else{host.style.display='none';}
   }
   async function ordersPanel(){
     var arb=$('tab-arb'); if(!arb)return;
@@ -4055,6 +4055,22 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   setInterval(function(){var t=$('tab-arb');if(t&&!t.hidden&&t.offsetParent!==null){var _pn=$('ab-product-name');if(_pn&&(_pn.textContent||'').trim().length>1){var _rr=$('ab-result');if(_rr&&_rr.style.display==='none')_rr.style.display='';var _ee=$('ab-empty');if(_ee)_ee.style.display='none';}render();fillSummary();}},2000);
   setInterval(function(){lastFetch=0;},45000);
   document.addEventListener('click',function(ev){if(!ev.target.closest)return;if(ev.target.closest('#ab-refresh')){lastFetch=0;setTimeout(render,150);}});
+})();
+</script>
+<script>
+/* Shopping list export */
+(function(){
+  function num(s){return parseFloat((s||'').replace(/[^0-9.\-]/g,''))||0;}
+  function firstText(el){var n=el&&el.childNodes[0];return ((n&&n.textContent)||(el&&el.textContent)||'').trim();}
+  function toast(msg){var t=document.getElementById('mf-toast');if(!t){t=document.createElement('div');t.id='mf-toast';t.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#132b22;color:#8ff0c0;border:1px solid #2f5c48;padding:8px 14px;border-radius:6px;font-size:.85rem;z-index:9999;opacity:0;transition:opacity .2s';document.body.appendChild(t);}t.textContent=msg;t.style.opacity='1';clearTimeout(t._to);t._to=setTimeout(function(){t.style.opacity='0';},2800);}
+  document.addEventListener('click',function(ev){if(!ev.target.closest)return;var b=ev.target.closest('#mf-shoplist');if(!b)return;
+    var mb=document.getElementById('mat-body');if(!mb)return;var acc=(window.EVEACC&&EVEACC.byName)||{};var lines=[];
+    [].forEach.call(mb.querySelectorAll('tr'),function(tr){var td=tr.querySelectorAll('td');if(td.length<2)return;var name=firstText(td[0]);var qty=Math.round(num(firstText(td[1])));if(!name||!qty)return;var own=acc[name.toLowerCase()]||0;var need=Math.max(0,qty-own);if(need>0)lines.push(name+' '+need);});
+    if(!lines.length){toast('Nothing to buy \u2014 you already own it all');return;}
+    var text=lines.join('\n');
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(function(){toast('Copied '+lines.length+' items \u2014 paste into EVE Multibuy');},function(){toast('Copy failed');});}
+    else{var ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');toast('Copied \u2014 paste into EVE Multibuy');}catch(e){toast('Copy failed');}ta.remove();}
+  });
 })();
 </script>
 </body>
