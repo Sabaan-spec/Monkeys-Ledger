@@ -3898,6 +3898,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     if(localStorage.getItem('eveSsoRefresh'))loadDash();else showLogin();
     setInterval(addBtn,1500);
   }
+  window.EVEAPI={esi:esi,getAccess:getAccess,getChar:getChar,names:names,loggedIn:function(){return !!localStorage.getItem('eveSsoRefresh');}};
   function init(){buildTab();handleCb().then(function(ok){if(ok){var sb=document.querySelector('.tab[data-tab=\"sso\"]');if(sb)sb.click();}});}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
@@ -3943,6 +3944,81 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     p.setAttribute('data-collapsible','1');
   }
   setInterval(function(){var t=$('tab-calc');if(t&&!t.hidden&&t.offsetParent!==null)enh();},900);
+})();
+</script>
+<script>
+/* Account context v1 */
+(function(){
+  function $(id){return document.getElementById(id);}
+  function firstText(el){var n=el&&el.childNodes[0];return ((n&&n.textContent)||(el&&el.textContent)||'').trim();}
+  function isk(n){if(n==null||isNaN(n))return '\u2014';var a=Math.abs(n);if(a>=1e9)return (n/1e9).toFixed(2)+'B';if(a>=1e6)return (n/1e6).toFixed(2)+'M';if(a>=1e3)return (n/1e3).toFixed(1)+'K';return Math.round(n).toString();}
+  function ownFmt(n){if(n>=1e6)return (n/1e6).toFixed(1)+'M';if(n>=1e3)return (n/1e3).toFixed(1)+'K';return n.toString();}
+  var CTX={byId:{},byName:{},orders:[],NM:{},ready:false,ts:0};
+  window.EVEACC=CTX;
+  function esiPub(path){return fetch('https://esi.evetech.net/latest'+path).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
+  async function loadCtx(){
+    if(!window.EVEAPI||!EVEAPI.loggedIn())return;
+    var ch=EVEAPI.getChar(); if(!ch)return; var cid=ch.id;
+    var byId={};
+    var r=await EVEAPI.esi('/characters/'+cid+'/assets/');
+    if(r&&Array.isArray(r.data)){var all=r.data;var pg=Math.min(r.pages||1,12);for(var p=2;p<=pg;p++){var rp=await EVEAPI.esi('/characters/'+cid+'/assets/?page='+p);if(rp&&Array.isArray(rp.data))all=all.concat(rp.data);}all.forEach(function(a){byId[a.type_id]=(byId[a.type_id]||0)+(a.quantity||1);});}
+    var oR=await EVEAPI.esi('/characters/'+cid+'/orders/'); var orders=(oR&&Array.isArray(oR.data))?oR.data:[];
+    var ids=Object.keys(byId).map(Number); orders.forEach(function(o){ids.push(o.type_id);});
+    var NM=await EVEAPI.names(ids);
+    var byName={}; Object.keys(byId).forEach(function(id){var nm=NM[id];if(nm)byName[nm.toLowerCase()]=byId[id];});
+    CTX.byId=byId; CTX.byName=byName; CTX.orders=orders; CTX.NM=NM; CTX.ready=true; CTX.ts=Date.now();
+    document.dispatchEvent(new CustomEvent('eveacc'));
+    paintBadges(); netCost(); ordersPanel();
+  }
+  window.eveAccReload=loadCtx;
+  function badgeFor(name){var q=CTX.byName[(name||'').trim().toLowerCase()];return q||0;}
+  function addBadge(el){if(!el||el.querySelector('.own-badge'))return;var name=firstText(el);var q=badgeFor(name);if(!q)return;var s=document.createElement('span');s.className='own-badge';s.textContent='\u2713 '+ownFmt(q);s.title='You own '+q.toLocaleString()+' in assets';s.style.cssText='margin-left:6px;font-size:.72rem;font-weight:700;color:#54c28a;background:rgba(84,194,138,.12);border:1px solid rgba(84,194,138,.4);border-radius:4px;padding:1px 5px;white-space:nowrap';el.appendChild(s);}
+  function paintBadges(){
+    if(!CTX.ready)return;
+    var pn=$('product-name'); if(pn&&firstText(pn)&&firstText(pn)!=='\u2014')addBadge(pn);
+    var ap=$('ab-product-name'); if(ap&&firstText(ap)&&firstText(ap)!=='\u2014')addBadge(ap);
+    ['mat-body','rp-body','os-results','ore-body'].forEach(function(id){var t=$(id);if(t){[].forEach.call(t.querySelectorAll('tr'),function(tr){var c=tr.querySelector('td');if(c)addBadge(c);});}});
+  }
+  function num(s){return parseFloat((s||'').replace(/[^0-9.\-]/g,''))||0;}
+  function netCost(){
+    if(!CTX.ready)return; var mb=$('mat-body'); if(!mb||!mb.querySelector('tr'))return;
+    var gross=0,net=0,haveN=0,total=0;
+    [].forEach.call(mb.querySelectorAll('tr'),function(tr){var td=tr.querySelectorAll('td');if(td.length<4)return;var name=firstText(td[0]);var qty=num(firstText(td[1]));var unit=num(td[2].textContent);var own=badgeFor(name);var need=Math.max(0,qty-own);gross+=qty*unit;net+=need*unit;total++;if(own>0)haveN++;
+      if(!td[1].querySelector('.need-tag')&&own>0){var s=document.createElement('span');s.className='need-tag';s.style.cssText='display:block;font-size:.7rem;color:'+(need>0?'#e3b341':'#54c28a');s.textContent=need>0?('need '+need.toLocaleString()):'covered';td[1].appendChild(s);}
+    });
+    var host=$('mf-netcost');
+    if(!host){var sm=$('s-matcost');var panel=sm?sm.closest('section'):null;host=document.createElement('div');host.id='mf-netcost';host.style.cssText='margin-top:8px;padding:8px 12px;border:1px solid rgba(84,194,138,.35);border-radius:6px;background:rgba(84,194,138,.06);font-size:.85rem';(panel||$('result')||document.body).appendChild(host);}
+    if(net<gross-0.5){host.style.display='';host.innerHTML='<b style="color:#54c28a">Inventory-adjusted:</b> you already hold materials for '+haveN+'/'+total+' lines. Net buy cost <b>'+isk(net)+' ISK</b> vs gross '+isk(gross)+' ISK \u2014 saving '+isk(gross-net)+'.';}else{host.style.display='none';}
+  }
+  async function ordersPanel(){
+    var arb=$('tab-arb'); if(!arb)return;
+    var host=$('ab-myorders');
+    if(!host){host=document.createElement('section');host.id='ab-myorders';host.className='panel';host.style.cssText='padding:14px;margin-bottom:12px';arb.insertBefore(host,arb.firstChild);}
+    if(!window.EVEAPI||!EVEAPI.loggedIn()){host.innerHTML='<div style="font-weight:700;margin-bottom:4px">\u2694\ufe0f Your Orders</div><div class="muted small">Log in on the Account tab to watch your orders for undercutting here.</div>';return;}
+    host.innerHTML='<div style="font-weight:700;margin-bottom:6px">\u2694\ufe0f Your Orders \u2014 undercut watch <span id="ab-mo-refresh" style="float:right;cursor:pointer;font-weight:400;font-size:.8rem;color:#7fb0c8">\u21bb refresh</span></div><div id="ab-mo-body" class="muted small">Checking live prices\u2026</div>';
+    var rf=$('ab-mo-refresh'); if(rf)rf.addEventListener('click',ordersPanel);
+    var orders=CTX.orders||[]; var NM=CTX.NM||{};
+    if(!orders.length){$('ab-mo-body').innerHTML='<div class="muted small">No open market orders.</div>';return;}
+    var rows=[];
+    for(var i=0;i<orders.length;i++){var o=orders[i];var mk=await esiPub('/markets/'+o.region_id+'/orders/?order_type=all&type_id='+o.type_id);var best=null,status='',gap=0;
+      if(Array.isArray(mk)){if(o.is_buy_order){var buys=mk.filter(function(x){return x.is_buy_order;}).map(function(x){return x.price;});var top=buys.length?Math.max.apply(null,buys):o.price;best=top;if(top>o.price+1e-6){status='outbid';gap=top-o.price;}else{status='top';}}else{var sells=mk.filter(function(x){return !x.is_buy_order;}).map(function(x){return x.price;});var low=sells.length?Math.min.apply(null,sells):o.price;best=low;if(low<o.price-1e-6){status='undercut';gap=o.price-low;}else{status='best';}}}
+      rows.push({o:o,name:NM[o.type_id]||('#'+o.type_id),best:best,status:status,gap:gap});
+    }
+    var col={undercut:'#e0555a',outbid:'#e0555a',best:'#54c28a',top:'#54c28a'};
+    var lbl={undercut:'UNDERCUT',outbid:'OUTBID',best:'BEST',top:'BEST'};
+    var ord={undercut:0,outbid:0};
+    rows.sort(function(a,b){return (ord[a.status]==null?1:0)-(ord[b.status]==null?1:0);});
+    var nBad=rows.filter(function(x){return x.status==='undercut'||x.status==='outbid';}).length;
+    var h='<div class="muted small" style="margin-bottom:6px">'+orders.length+' open \u00b7 <b style="color:'+(nBad?'#e0555a':'#54c28a')+'">'+(nBad?nBad+' need attention':'all competitive')+'</b></div>';
+    h+='<table style="width:100%;border-collapse:collapse;font-size:.82rem"><thead><tr class="muted small"><th style="text-align:left;padding:3px 6px">Side</th><th style="text-align:left;padding:3px 6px">Item</th><th style="text-align:right;padding:3px 6px">Your price</th><th style="text-align:right;padding:3px 6px">Market best</th><th style="text-align:right;padding:3px 6px">Remain</th><th style="text-align:left;padding:3px 6px">Status</th></tr></thead><tbody>';
+    rows.forEach(function(x){h+='<tr style="border-bottom:1px solid rgba(120,150,170,.08)"><td style="padding:3px 6px;color:'+(x.o.is_buy_order?'#e3b341':'#54c28a')+'">'+(x.o.is_buy_order?'BUY':'SELL')+'</td><td style="padding:3px 6px">'+x.name+'</td><td style="text-align:right;padding:3px 6px">'+isk(x.o.price)+'</td><td style="text-align:right;padding:3px 6px">'+isk(x.best)+'</td><td style="text-align:right;padding:3px 6px">'+x.o.volume_remain+'/'+x.o.volume_total+'</td><td style="padding:3px 6px;color:'+(col[x.status]||'#9fb2c0')+';font-weight:700">'+(lbl[x.status]||'')+(x.gap?(' <span class="muted" style="font-weight:400">by '+isk(x.gap)+'</span>'):'')+'</td></tr>';});
+    h+='</tbody></table>';
+    $('ab-mo-body').innerHTML=h;
+  }
+  var started=false;
+  function boot(){ if(!window.EVEAPI)return; if(!started){started=true;loadCtx();ordersPanel();setInterval(loadCtx,300000);} }
+  setInterval(function(){boot();paintBadges();netCost();},1200);
+  document.addEventListener('click',function(ev){if(!ev.target.closest)return;var t=ev.target.closest('.tab[data-tab="arb"]');if(t)setTimeout(ordersPanel,200);});
 })();
 </script>
 </body>
