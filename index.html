@@ -3607,5 +3607,176 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   setInterval(function(){var t=$('tab-repro');if(t&&!t.hidden&&t.offsetParent!==null){arrange();updInd();}},700);
 })();
 </script>
+<script>
+/* Planetary Industry */
+(function(){
+  function $(id){return document.getElementById(id);}
+  function ld(k,d){try{var v=JSON.parse(localStorage.getItem(k)||'null');return v==null?d:v;}catch(e){return d;}}
+  function sv(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+  var HUBREG={jita:10000002,amarr:10000043,dodixie:10000032,rens:10000030,hek:10000042};
+  var SCH=ld('evePiSchemV2',null),byProd={},N={},VOL=ld('evePiVolV1',{}),PX={},tierC={};
+  var P0BY={Barren:['Aqueous Liquids','Base Metals','Carbon Compounds','Micro Organisms','Noble Metals'],
+    Gas:['Aqueous Liquids','Base Metals','Ionic Solutions','Noble Gas','Reactive Gas'],
+    Ice:['Aqueous Liquids','Heavy Metals','Micro Organisms','Noble Gas','Planktic Colonies'],
+    Lava:['Base Metals','Felsic Magma','Heavy Metals','Non-CS Crystals','Suspended Plasma'],
+    Oceanic:['Aqueous Liquids','Carbon Compounds','Complex Organisms','Micro Organisms','Planktic Colonies'],
+    Plasma:['Base Metals','Heavy Metals','Noble Metals','Non-CS Crystals','Suspended Plasma'],
+    Storm:['Aqueous Liquids','Base Metals','Ionic Solutions','Noble Gas','Suspended Plasma'],
+    Temperate:['Aqueous Liquids','Autotrophs','Carbon Compounds','Complex Organisms','Micro Organisms']};
+  function nameMap(){if(Object.keys(N).length)return N;try{if(typeof arbItems!=='undefined'&&arbItems)arbItems.forEach(function(it){if(it&&it.id!=null&&it.name)N[it.id]=it.name;});if(typeof ITEMS!=='undefined'&&ITEMS)ITEMS.forEach(function(it){if(it){if(it.id!=null&&it.name&&!N[it.id])N[it.id]=it.name;if(it.materials)it.materials.forEach(function(m){if(m&&m.id!=null&&m.name&&!N[m.id])N[m.id]=m.name;});}});}catch(e){}return N;}
+  function nm(id){nameMap();return N[id]||('#'+id);}
+  function iskF(n){if(!isFinite(n))return '\u2014';try{return isk(Math.round(n*100)/100);}catch(e){return Math.round(n).toLocaleString()+' ISK';}}
+  function resolveNames(ids){var need=ids.filter(function(i){return !N[i];});if(!need.length)return Promise.resolve();var b=[];for(var i=0;i<need.length;i+=900)b.push(need.slice(i,i+900));return Promise.all(b.map(function(x){return fetch('https://esi.evetech.net/latest/universe/names/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(x)}).then(function(r){return r.ok?r.json():[];}).then(function(a){(a||[]).forEach(function(o){if(o&&o.id&&o.name)N[o.id]=o.name;});}).catch(function(){});}));}
+  function loadSchem(){
+    if(SCH){index();return Promise.resolve();}
+    var st=$('pi-status');if(st)st.textContent='Loading PI schematics (one-time)\u2026';
+    return fetch('https://ref-data.everef.net/schematics').then(function(r){return r.json();}).then(function(ids){
+      var out=[],i=0;
+      function next(){var batch=ids.slice(i,i+12);i+=12;if(!batch.length)return Promise.resolve();
+        return Promise.all(batch.map(function(id){return fetch('https://ref-data.everef.net/schematics/'+id).then(function(r){return r.ok?r.json():null;}).then(function(s){if(s&&s.products&&s.materials)out.push({id:s.schematic_id,name:(s.name&&s.name.en)||('Schematic '+s.schematic_id),ct:s.cycle_time,m:s.materials,p:s.products});}).catch(function(){});})).then(next);}
+      return next().then(function(){SCH=out;sv('evePiSchemV2',SCH);index();});
+    });
+  }
+  function index(){byProd={};(SCH||[]).forEach(function(s){Object.keys(s.p).forEach(function(k){byProd[k]=s;});});}
+  function tierOf(id){if(tierC[id]!=null)return tierC[id];var s=byProd[id];if(!s){tierC[id]=0;return 0;}tierC[id]=1;var mx=0;Object.keys(s.m).forEach(function(k){var t=tierOf(+k);if(t>mx)mx=t;});tierC[id]=mx+1;return tierC[id];}
+  function outQty(s){var k=Object.keys(s.p)[0];return s.p[k].quantity;}
+  function outId(s){return +Object.keys(s.p)[0];}
+  function collect(id,qty,depth,set){set[id]=1;var s=byProd[id];if(!s||depth>4)return;var runs=Math.ceil(qty/outQty(s));Object.keys(s.m).forEach(function(k){collect(+k,s.m[k].quantity*runs,depth+1,set);});}
+  function px(id){return PX[id]||0;}
+  function chain(id,qty,depth,rows){
+    var s=byProd[id];var buy=qty*px(id);
+    if(!s||depth>4){rows.push({d:depth,id:id,qty:qty,buy:buy,make:null,best:'buy'});return buy;}
+    var runs=Math.ceil(qty/outQty(s));var node={d:depth,id:id,qty:qty,buy:buy,make:0,best:'buy',runs:runs};rows.push(node);
+    var mk=0;Object.keys(s.m).forEach(function(k){mk+=chain(+k,s.m[k].quantity*runs,depth+1,rows);});
+    node.make=mk;node.best=(buy>0&&buy<mk)?'buy':'make';
+    return Math.min(mk,buy>0?buy:mk);
+  }
+  function getVols(ids){var need=ids.filter(function(i){return VOL[i]==null;});if(!need.length)return Promise.resolve();return Promise.all(need.slice(0,60).map(function(id){return fetch('https://esi.evetech.net/latest/universe/types/'+id+'/').then(function(r){return r.ok?r.json():null;}).then(function(t){if(t&&t.volume!=null)VOL[id]=t.volume;}).catch(function(){});})).then(function(){sv('evePiVolV1',VOL);});}
+  function reg(){var h=($('pi-hub')||{}).value||'jita';return HUBREG[h]||10000002;}
+  function taxes(){return {imp:(Number(($('pi-imp')||{}).value)||0)/100,exp:(Number(($('pi-exp')||{}).value)||0)/100,sales:(Number(($('pi-sales')||{}).value)||0)/100};}
+
+  function runChain(){
+    var sel=$('pi-item');var id=+sel.value;if(!id)return;
+    var st=$('pi-status');st.textContent='Pricing chain\u2026';
+    var s=byProd[id];if(!s){st.textContent='That item has no PI schematic (it is a raw P0).';return;}
+    var runs=Math.max(1,Number(($('pi-runs')||{}).value)||1);
+    var qty=outQty(s)*runs;
+    var set={};collect(id,qty,0,set);var ids=Object.keys(set).map(Number);
+    fuzzAgg(reg(),ids).then(function(fa){
+      PX={};ids.forEach(function(i){var o=fa&&fa[i];PX[i]=o&&o.sell?(Number(o.sell.min)||Number(o.sell.percentile)||0):0;});
+      return resolveNames(ids).then(function(){return getVols([id]);}).then(function(){
+        var rows=[];chain(id,qty,0,rows);
+        var t=taxes();
+        var top=rows[0];
+        var makeCost=top.make*(1+t.imp);
+        var sellVal=qty*px(id)*(1-t.sales-t.exp);
+        var profit=sellVal-makeCost;
+        var margin=makeCost>0?(profit/makeCost*100):0;
+        var vol=(VOL[id]||0)*qty;
+        var h='<table style="width:100%;border-collapse:collapse;font-size:.82rem"><thead><tr class="muted small"><th style="text-align:left;padding:3px 6px">Component</th><th style="text-align:right;padding:3px 6px">Qty</th><th style="text-align:right;padding:3px 6px">Buy</th><th style="text-align:right;padding:3px 6px">Make</th><th style="text-align:left;padding:3px 6px">Cheaper</th></tr></thead><tbody>';
+        rows.forEach(function(rw){var tierLbl='P'+tierOf(rw.id);
+          h+='<tr style="border-bottom:1px solid rgba(120,150,170,.08)"><td style="padding:3px 6px;padding-left:'+(6+rw.d*18)+'px">'+(rw.d?'\u2514 ':'')+nm(rw.id)+' <span class="muted" style="font-size:.7rem">'+tierLbl+'</span></td><td style="text-align:right;padding:3px 6px">'+Math.round(rw.qty).toLocaleString()+'</td><td style="text-align:right;padding:3px 6px">'+(rw.buy>0?iskF(rw.buy):'\u2014')+'</td><td style="text-align:right;padding:3px 6px">'+(rw.make!=null?iskF(rw.make):'\u2014')+'</td><td style="padding:3px 6px;font-weight:700;color:'+(rw.best==='make'?'#54c28a':'#9fb0bd')+'">'+(rw.make==null?'buy':rw.best.toUpperCase())+'</td></tr>';});
+        h+='</tbody></table>';
+        h+='<div style="margin-top:10px;padding:10px;border:1px solid #2b3b47;border-radius:6px;background:rgba(13,26,34,.5);font-size:.9rem">'+
+          '<div style="display:flex;gap:24px;flex-wrap:wrap"><span>Produce cost: <b>'+iskF(makeCost)+'</b></span><span>Sell value: <b>'+iskF(sellVal)+'</b></span><span>Profit: <b style="color:'+(profit>=0?'#54c28a':'#e0868c')+'">'+iskF(profit)+'</b></span><span>Margin: <b style="color:'+(margin>=0?'#54c28a':'#e0868c')+'">'+margin.toFixed(1)+'%</b></span></div>'+
+          '<div class="muted small" style="margin-top:4px">'+runs+' run(s) \u2192 '+qty.toLocaleString()+' \u00d7 '+nm(id)+' \u00b7 '+(vol?vol.toLocaleString()+' m\u00b3 to haul':'volume n/a')+' \u00b7 incl. '+Math.round(t.imp*100)+'% import / '+Math.round(t.exp*100)+'% export POCO tax + '+Math.round(t.sales*100)+'% sales tax.</div></div>';
+        $('pi-chain').innerHTML=h;st.textContent='';
+      });
+    }).catch(function(){st.textContent='Price fetch failed.';});
+  }
+
+  function runRank(){
+    var st=$('pi-status');st.textContent='Ranking all PI schematics\u2026';
+    var set={};(SCH||[]).forEach(function(s){set[outId(s)]=1;Object.keys(s.m).forEach(function(k){set[+k]=1;});});
+    var ids=Object.keys(set).map(Number);
+    fuzzAgg(reg(),ids).then(function(fa){
+      PX={};ids.forEach(function(i){var o=fa&&fa[i];PX[i]=o&&o.sell?(Number(o.sell.min)||Number(o.sell.percentile)||0):0;});
+      return resolveNames(ids).then(function(){
+        var t=taxes();var rows=[];
+        (SCH||[]).forEach(function(s){
+          var oid=outId(s),oq=outQty(s);
+          var cost=0,ok=true;Object.keys(s.m).forEach(function(k){var p=px(+k);if(!p)ok=false;cost+=s.m[k].quantity*p;});
+          var val=oq*px(oid);if(!ok||!val||!cost)return;
+          cost=cost*(1+t.imp);val=val*(1-t.sales-t.exp);
+          rows.push({id:oid,name:nm(oid),tier:tierOf(oid),cost:cost,val:val,profit:val-cost,margin:(val-cost)/cost*100});
+        });
+        rows.sort(function(a,b){return b.margin-a.margin;});
+        var h='<table style="width:100%;border-collapse:collapse;font-size:.82rem"><thead><tr class="muted small"><th style="text-align:left;padding:3px 6px">Product</th><th style="text-align:left;padding:3px 6px">Tier</th><th style="text-align:right;padding:3px 6px">Input cost</th><th style="text-align:right;padding:3px 6px">Output value</th><th style="text-align:right;padding:3px 6px">Profit/run</th><th style="text-align:right;padding:3px 6px">Margin</th></tr></thead><tbody>';
+        rows.slice(0,60).forEach(function(r){h+='<tr style="border-bottom:1px solid rgba(120,150,170,.08)"><td style="padding:3px 6px">'+r.name+'</td><td style="padding:3px 6px" class="muted">P'+r.tier+'</td><td style="text-align:right;padding:3px 6px">'+iskF(r.cost)+'</td><td style="text-align:right;padding:3px 6px">'+iskF(r.val)+'</td><td style="text-align:right;padding:3px 6px;color:'+(r.profit>=0?'#54c28a':'#e0868c')+'">'+iskF(r.profit)+'</td><td style="text-align:right;padding:3px 6px;font-weight:700;color:'+(r.margin>=0?'#54c28a':'#e0868c')+'">'+r.margin.toFixed(1)+'%</td></tr>';});
+        h+='</tbody></table><div class="muted small" style="margin-top:6px">Per single schematic run, priced at your hub, after POCO + sales tax. Positive margin = worth importing inputs and producing.</div>';
+        $('pi-rank').innerHTML=h;st.textContent='';
+      });
+    }).catch(function(){st.textContent='Price fetch failed.';});
+  }
+
+  function runPlanets(){
+    var st=$('pi-status');var sysName=(($('pi-sys')||{}).value||'').trim();if(!sysName)return;
+    st.textContent='Looking up planets in '+sysName+'\u2026';
+    fetch('https://esi.evetech.net/latest/universe/ids/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify([sysName])}).then(function(r){return r.json();}).then(function(j){
+      var sid=j&&j.systems&&j.systems[0]?j.systems[0].id:null;if(!sid){st.textContent='System not found.';return;}
+      return fetch('https://esi.evetech.net/latest/universe/systems/'+sid+'/').then(function(r){return r.json();}).then(function(sys){
+        var pl=(sys.planets||[]).map(function(p){return p.planet_id;});
+        return Promise.all(pl.slice(0,30).map(function(pid){return fetch('https://esi.evetech.net/latest/universe/planets/'+pid+'/').then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});})).then(function(ps){
+          var tids=Array.from(new Set(ps.filter(Boolean).map(function(p){return p.type_id;})));
+          return resolveNames(tids).then(function(){
+            var h='<table style="width:100%;border-collapse:collapse;font-size:.82rem"><thead><tr class="muted small"><th style="text-align:left;padding:3px 6px">Planet</th><th style="text-align:left;padding:3px 6px">Type</th><th style="text-align:left;padding:3px 6px">Raw resources (P0)</th></tr></thead><tbody>';
+            ps.filter(Boolean).forEach(function(p){var tn=(nm(p.type_id)||'').replace(/^Planet\s*\(?|\)?$/g,'').trim();var key=Object.keys(P0BY).find(function(k){return tn.toLowerCase().indexOf(k.toLowerCase())>=0;});
+              h+='<tr style="border-bottom:1px solid rgba(120,150,170,.08)"><td style="padding:3px 6px">'+(p.name||('#'+p.planet_id))+'</td><td style="padding:3px 6px">'+tn+'</td><td style="padding:3px 6px" class="muted">'+(key?P0BY[key].join(', '):'\u2014')+'</td></tr>';});
+            h+='</tbody></table>';
+            $('pi-planets').innerHTML=h;st.textContent='';
+          });
+        });
+      });
+    }).catch(function(){st.textContent='Planet lookup failed.';});
+  }
+
+  function fillItems(){
+    var sel=$('pi-item');if(!sel||!SCH)return;
+    var list=(SCH||[]).map(function(s){var oid=outId(s);return {id:oid,name:nm(oid),tier:tierOf(oid)};});
+    var ids=list.map(function(x){return x.id;});
+    resolveNames(ids).then(function(){
+      list.forEach(function(x){x.name=nm(x.id);});
+      list.sort(function(a,b){return a.tier-b.tier||a.name.localeCompare(b.name);});
+      sel.innerHTML='<option value="">Select a commodity\u2026</option>'+list.map(function(x){return '<option value="'+x.id+'">P'+x.tier+' \u00b7 '+x.name+'</option>';}).join('');
+    });
+  }
+
+  function buildTab(){
+    if($('tab-pi'))return;
+    var nav=document.querySelector('nav.tabs');var main=document.querySelector('main.wrap');
+    if(!nav||!main)return;
+    var btn=document.createElement('button');btn.className='tab';btn.setAttribute('data-tab','pi');btn.textContent='Planetary';
+    var after=document.querySelector('[data-tab="react"]');
+    if(after&&after.nextSibling)nav.insertBefore(btn,after.nextSibling);else nav.appendChild(btn);
+    var panel=document.createElement('div');panel.id='tab-pi';panel.hidden=true;
+    panel.innerHTML='<div class="controls panel" style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;padding:12px">'+
+      '<div class="field"><label>MARKET HUB</label><select id="pi-hub"><option value="jita">Jita (The Forge)</option><option value="amarr">Amarr (Domain)</option><option value="dodixie">Dodixie (Sinq Laison)</option><option value="rens">Rens (Heimatar)</option><option value="hek">Hek (Metropolis)</option></select></div>'+
+      '<div class="field narrow"><label>POCO IMPORT %</label><input id="pi-imp" type="number" step="0.1" value="5"></div>'+
+      '<div class="field narrow"><label>POCO EXPORT %</label><input id="pi-exp" type="number" step="0.1" value="5"></div>'+
+      '<div class="field narrow"><label>SALES TAX %</label><input id="pi-sales" type="number" step="0.1" value="4.5"></div>'+
+      '<div class="field"><span id="pi-status" class="muted small"></span></div></div>'+
+      '<div class="panel" style="padding:12px;margin-top:10px"><div style="font-weight:700;margin-bottom:8px">\ud83c\udfed Production chain \u2014 buy vs make per tier</div>'+
+      '<div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px"><div class="field grow" style="min-width:240px"><label>COMMODITY</label><select id="pi-item"><option value="">Loading\u2026</option></select></div><div class="field narrow"><label>RUNS</label><input id="pi-runs" type="number" min="1" value="1"></div><div class="field"><label>&nbsp;</label><button id="pi-go" class="btn">Analyze chain</button></div></div>'+
+      '<div id="pi-chain"></div></div>'+
+      '<div class="panel" style="padding:12px;margin-top:10px"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div style="font-weight:700">\ud83d\udcc8 Profit ranker \u2014 what\u2019s worth producing now</div><button id="pi-rank-go" class="btn">Rank all PI</button></div><div id="pi-rank" style="margin-top:8px"></div></div>'+
+      '<div class="panel" style="padding:12px;margin-top:10px"><div style="font-weight:700;margin-bottom:8px">\ud83e\ude90 Planet finder \u2014 what a system can extract</div>'+
+      '<div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px"><div class="field"><label>SYSTEM</label><input id="pi-sys" type="text" placeholder="e.g. Jita, Tama"></div><div class="field"><label>&nbsp;</label><button id="pi-sys-go" class="btn">Find planets</button></div></div>'+
+      '<div id="pi-planets"></div>'+
+      '<div style="margin-top:12px"><div class="muted small" style="font-weight:700;margin-bottom:4px">PLANET TYPE \u2192 RAW RESOURCES</div><div id="pi-ref" class="muted small"></div></div></div>';
+    main.appendChild(panel);
+    $('pi-ref').innerHTML=Object.keys(P0BY).map(function(k){return '<div style="padding:2px 0"><b style="color:#c8d6e0">'+k+'</b>: '+P0BY[k].join(', ')+'</div>';}).join('');
+    $('pi-go').addEventListener('click',runChain);
+    $('pi-rank-go').addEventListener('click',runRank);
+    $('pi-sys-go').addEventListener('click',runPlanets);
+    // tab switching
+    nav.addEventListener('click',function(ev){var b=ev.target.closest('[data-tab]');if(!b)return;var key=b.getAttribute('data-tab');
+      if(key==='pi'){[].forEach.call(document.querySelectorAll('[id^="tab-"]'),function(p){p.hidden=(p.id!=='tab-pi');});
+        [].forEach.call(nav.querySelectorAll('[data-tab]'),function(x){x.classList.toggle('active',x===b);});}
+      else{var p=$('tab-pi');if(p)p.hidden=true;}});
+    loadSchem().then(function(){fillItems();var st=$('pi-status');if(st)st.textContent='';}).catch(function(){var st=$('pi-status');if(st)st.textContent='Could not load PI schematics.';});
+  }
+  var n=0,iv=setInterval(function(){if(document.querySelector('nav.tabs')&&document.querySelector('main.wrap')){buildTab();clearInterval(iv);}else if(n++>60)clearInterval(iv);},300);
+})();
+</script>
 </body>
 </html>
