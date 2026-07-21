@@ -4021,5 +4021,41 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   document.addEventListener('click',function(ev){if(!ev.target.closest)return;var t=ev.target.closest('.tab[data-tab="arb"]');if(t)setTimeout(ordersPanel,200);});
 })();
 </script>
+<script>
+/* Market live orders v1 */
+(function(){
+  function $(id){return document.getElementById(id);}
+  var HUB=10000002, HUBNAME='The Forge (Jita)';
+  var idCache={}, lastName='', lastFetch=0, cSell=null, cBuy=null;
+  function isk(n){if(n==null||isNaN(n))return '\u2014';var a=Math.abs(n);if(a>=1e9)return (n/1e9).toFixed(2)+'B';if(a>=1e6)return (n/1e6).toFixed(2)+'M';if(a>=1e3)return (n/1e3).toFixed(1)+'K';return Math.round(n).toString();}
+  async function resolveId(name){var k=name.trim().toLowerCase();if(idCache[k]!==undefined)return idCache[k];try{var r=await fetch('https://esi.evetech.net/latest/universe/ids/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify([name])});var j=await r.json();var t=j&&j.inventory_types&&j.inventory_types[0];var id=t?t.id:null;idCache[k]=id;return id;}catch(e){return null;}}
+  async function fetchOrders(id){try{var r=await fetch('https://esi.evetech.net/latest/markets/'+HUB+'/orders/?order_type=all&type_id='+id);if(!r.ok)return null;var all=await r.json();var pg=+(r.headers.get('x-pages')||1);for(var p=2;p<=Math.min(pg,5);p++){var rp=await fetch('https://esi.evetech.net/latest/markets/'+HUB+'/orders/?order_type=all&type_id='+id+'&page='+p);if(rp.ok){all=all.concat(await rp.json());}}return all;}catch(e){return null;}}
+  function panel(){var p=$('ab-live-orders');if(p)return p;var meta=$('ab-product-meta');if(!meta||!meta.parentNode)return null;p=document.createElement('section');p.id='ab-live-orders';p.className='panel';p.style.cssText='padding:14px;margin:12px 0';meta.parentNode.insertBefore(p,meta.nextSibling);return p;}
+  function fillSummary(){if(cSell!=null&&$('ab-bestsell')&&$('ab-bestsell').textContent.trim()==='\u2014')$('ab-bestsell').textContent=isk(cSell)+' ISK';if(cBuy!=null&&$('ab-bestbuy')&&$('ab-bestbuy').textContent.trim()==='\u2014')$('ab-bestbuy').textContent=isk(cBuy)+' ISK';}
+  async function render(){var pn=$('ab-product-name');if(!pn)return;var name=(pn.textContent||'').replace(/\u2713[^]*$/,'').trim();if(!name||name==='\u2014')return;
+    if(name===lastName&&Date.now()-lastFetch<40000){fillSummary();return;}
+    lastName=name;lastFetch=Date.now();
+    var p=panel();if(!p)return;
+    p.innerHTML='<div style="font-weight:700;margin-bottom:6px">\u26a1 Live order book \u2014 '+HUBNAME+' <span class="mkt-dot"></span><span id="ab-lo-upd" class="muted small" style="float:right;font-weight:400"></span></div><div id="ab-lo-body" class="muted small">Fetching live orders\u2026</div>';
+    var id=await resolveId(name);
+    if(!id){var b0=$('ab-lo-body');if(b0)b0.innerHTML='<div class="muted small">Live order book unavailable for this item.</div>';return;}
+    var ords=await fetchOrders(id);
+    if(!ords){var b1=$('ab-lo-body');if(b1)b1.innerHTML='<div class="muted small">Could not load live orders (try Refresh).</div>';return;}
+    var sells=ords.filter(function(o){return !o.is_buy_order;}).sort(function(a,b){return a.price-b.price;});
+    var buys=ords.filter(function(o){return o.is_buy_order;}).sort(function(a,b){return b.price-a.price;});
+    var bestSell=sells.length?sells[0].price:null,bestBuy=buys.length?buys[0].price:null;
+    cSell=bestSell;cBuy=bestBuy;fillSummary();
+    var mid=(bestSell&&bestBuy)?((bestSell+bestBuy)/2):null;var spr=(mid&&bestSell&&bestBuy)?((bestSell-bestBuy)/mid*100):null;
+    function side(list,label,color){var vol=list.reduce(function(s,o){return s+o.volume_remain;},0);var h='<div style="flex:1;min-width:150px"><div class="muted small" style="margin-bottom:2px">'+label+' \u00b7 '+vol.toLocaleString()+' units</div><table style="width:100%;border-collapse:collapse;font-size:.8rem">';list.slice(0,6).forEach(function(o){h+='<tr><td style="padding:2px 4px;color:'+color+'">'+isk(o.price)+'</td><td style="padding:2px 4px;text-align:right" class="muted">'+o.volume_remain.toLocaleString()+'</td></tr>';});h+='</table></div>';return h;}
+    var head='<div style="display:flex;gap:24px;margin-bottom:10px;flex-wrap:wrap"><div><div class="muted small">Best sell</div><div style="font-weight:800;font-size:1.15rem;color:#54c28a">'+(bestSell!=null?isk(bestSell):'\u2014')+'</div></div><div><div class="muted small">Best buy</div><div style="font-weight:800;font-size:1.15rem;color:#e3b341">'+(bestBuy!=null?isk(bestBuy):'\u2014')+'</div></div><div><div class="muted small">Spread</div><div style="font-weight:800;font-size:1.15rem">'+(spr!=null?spr.toFixed(1)+'%':'\u2014')+'</div></div></div>';
+    var body=$('ab-lo-body');if(body)body.innerHTML=head+'<div style="display:flex;gap:20px;flex-wrap:wrap">'+side(sells,'Sell orders (lowest first)','#54c28a')+side(buys,'Buy orders (highest first)','#e3b341')+'</div>';
+    var u=$('ab-lo-upd');if(u)u.textContent='updated '+new Date().toLocaleTimeString();
+  }
+  var st=document.createElement('style');st.textContent='.mkt-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#54c28a;margin-left:6px;box-shadow:0 0 0 0 rgba(84,194,138,.6);animation:mktpulse 1.4s infinite;vertical-align:middle}@keyframes mktpulse{0%{box-shadow:0 0 0 0 rgba(84,194,138,.6)}70%{box-shadow:0 0 0 6px rgba(84,194,138,0)}100%{box-shadow:0 0 0 0 rgba(84,194,138,0)}}';document.head.appendChild(st);
+  setInterval(function(){var t=$('tab-arb');if(t&&!t.hidden&&t.offsetParent!==null){render();fillSummary();}},2000);
+  setInterval(function(){lastFetch=0;},45000);
+  document.addEventListener('click',function(ev){if(!ev.target.closest)return;if(ev.target.closest('#ab-refresh')){lastFetch=0;setTimeout(render,150);}});
+})();
+</script>
 </body>
 </html>
