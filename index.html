@@ -3923,5 +3923,27 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',tick);else tick();
 })();
 </script>
+<script>
+/* CI layout v2 */
+(function(){
+  function $(id){return document.getElementById(id);}
+  function enh(){
+    var p=$('ci-panel'); if(!p||p.getAttribute('data-collapsible'))return;
+    var title=p.querySelector('div'); if(!title)return;
+    var body=document.createElement('div'); body.id='ci-body';
+    [].slice.call(p.children).forEach(function(k){ if(k!==title) body.appendChild(k); });
+    p.appendChild(body);
+    var out=$('ci-out'); if(out){out.style.maxHeight='300px';out.style.overflow='auto';}
+    title.style.cursor='pointer'; title.style.userSelect='none'; title.style.display='flex'; title.style.justifyContent='space-between'; title.style.alignItems='center';
+    var car=document.createElement('span'); car.className='ci-caret'; car.textContent='\u25b8'; car.style.transition='transform .15s ease'; car.style.opacity='.7'; car.style.fontSize='.9rem';
+    title.appendChild(car);
+    function set(open){ body.style.display=open?'':'none'; car.style.transform=open?'rotate(90deg)':'none'; p.setAttribute('data-open',open?'1':'0'); }
+    set(false);
+    title.addEventListener('click',function(){ set(p.getAttribute('data-open')!=='1'); });
+    p.setAttribute('data-collapsible','1');
+  }
+  setInterval(function(){var t=$('tab-calc');if(t&&!t.hidden&&t.offsetParent!==null)enh();},900);
+})();
+</script>
 </body>
 </html>
