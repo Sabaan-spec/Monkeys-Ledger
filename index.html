@@ -4052,7 +4052,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     var u=$('ab-lo-upd');if(u)u.textContent='updated '+new Date().toLocaleTimeString();
   }
   var st=document.createElement('style');st.textContent='.mkt-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#54c28a;margin-left:6px;box-shadow:0 0 0 0 rgba(84,194,138,.6);animation:mktpulse 1.4s infinite;vertical-align:middle}@keyframes mktpulse{0%{box-shadow:0 0 0 0 rgba(84,194,138,.6)}70%{box-shadow:0 0 0 6px rgba(84,194,138,0)}100%{box-shadow:0 0 0 0 rgba(84,194,138,0)}}';document.head.appendChild(st);
-  setInterval(function(){var t=$('tab-arb');if(t&&!t.hidden&&t.offsetParent!==null){render();fillSummary();}},2000);
+  setInterval(function(){var t=$('tab-arb');if(t&&!t.hidden&&t.offsetParent!==null){var _pn=$('ab-product-name');if(_pn&&(_pn.textContent||'').trim().length>1){var _rr=$('ab-result');if(_rr&&_rr.style.display==='none')_rr.style.display='';var _ee=$('ab-empty');if(_ee)_ee.style.display='none';}render();fillSummary();}},2000);
   setInterval(function(){lastFetch=0;},45000);
   document.addEventListener('click',function(ev){if(!ev.target.closest)return;if(ev.target.closest('#ab-refresh')){lastFetch=0;setTimeout(render,150);}});
 })();
