@@ -3234,7 +3234,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 <script>
 /* Tab order */
 (function(){
-  var ORDER=['calc','tree','ore','repro','research','invent','react','top','arb','plan','kills','fits','watch'];
+  var ORDER=['calc','tree','ore','repro','research','invent','react','top','arb','plan','kills','fits','sso'];
   function tryReorder(){
     var nav=document.querySelector('nav.tabs');if(!nav)return;
     var btns=[].slice.call(nav.querySelectorAll('[data-tab]'));
@@ -3900,6 +3900,27 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   }
   function init(){buildTab();handleCb().then(function(ok){if(ok){var sb=document.querySelector('.tab[data-tab=\"sso\"]');if(sb)sb.click();}});}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
+})();
+</script>
+<script>
+/* Account merge v1 */
+(function(){
+  function $(id){return document.getElementById(id);}
+  var moved=false;
+  function hideWatchBtn(){var b=document.querySelector('.tab[data-tab="watch"]');if(b)b.style.display='none';}
+  function moveWatch(){
+    if(moved)return;
+    var sso=$('tab-sso'); var w=$('tab-watch'); if(!sso||!w)return;
+    var host=$('sso-watch-host');
+    if(!host){host=document.createElement('div');host.id='sso-watch-host';host.style.marginTop='16px';host.style.paddingTop='14px';host.style.borderTop='1px solid rgba(120,150,170,.18)';sso.appendChild(host);}
+    while(w.firstChild){host.appendChild(w.firstChild);}
+    moved=true;
+  }
+  function ensureOrder(){var nav=document.querySelector('nav.tabs')||document.querySelector('.tabs');if(!nav)return;var sb=nav.querySelector('.tab[data-tab="sso"]');if(sb&&nav.lastElementChild!==sb)nav.appendChild(sb);}
+  function tick(){hideWatchBtn();moveWatch();ensureOrder();}
+  document.addEventListener('click',function(ev){if(!ev.target.closest)return;var t=ev.target.closest('.tab[data-tab="sso"]');if(t){setTimeout(function(){var r=$('wl-refresh');if(r)r.click();},350);}});
+  setInterval(tick,1000);
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',tick);else tick();
 })();
 </script>
 </body>
