@@ -4015,7 +4015,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     h+='</tbody></table>';
     $('ab-mo-body').innerHTML=h;
   }
-  function paintInline(){var pn=document.getElementById('ab-product-name');if(!pn)return;var name=((pn.childNodes[0]&&pn.childNodes[0].textContent)||pn.textContent||'').replace(/\u2713[^]*$/,'').trim();var st=(CTX.myOrderStatus||{})[name.toLowerCase()];var ex=document.getElementById('ab-myitem-alert');if(!name||!st){if(ex)ex.remove();return;}var meta=document.getElementById('ab-product-meta');if(!meta)return;if(!ex){ex=document.createElement('div');ex.id='ab-myitem-alert';ex.style.cssText='margin:6px 0;padding:8px 12px;border-radius:6px;font-size:.85rem;font-weight:700';meta.parentNode.insertBefore(ex,meta.nextSibling);}var bad=(st.status==='undercut'||st.status==='outbid');ex.style.background=bad?'rgba(224,85,90,.12)':'rgba(84,194,138,.12)';ex.style.border='1px solid '+(bad?'rgba(224,85,90,.5)':'rgba(84,194,138,.5)');ex.style.color=bad?'#ff8f93':'#8ff0c0';if(bad){ex.textContent=(st.buy?'\u26a0\ufe0f Your buy order is outbid':'\u26a0\ufe0f Someone is underselling your order')+' \u2014 yours '+isk(st.price)+', market best '+isk(st.best)+(st.gap?(' (by '+isk(st.gap)+')'):'');}else{ex.textContent=(st.buy?'\u2705 Your buy order is the highest':'\u2705 Your sell order is the cheapest')+' \u2014 '+isk(st.price);}}
+  function paintInline(){var pn=document.getElementById('mb-product');if(!pn)return;var name=((pn.childNodes[0]&&pn.childNodes[0].textContent)||pn.textContent||'').replace(/\u2713[^]*$/,'').trim();var st=(CTX.myOrderStatus||{})[name.toLowerCase()];var ex=document.getElementById('ab-myitem-alert');if(!name||!st){if(ex)ex.remove();return;}if(!ex){ex=document.createElement('div');ex.id='ab-myitem-alert';ex.style.cssText='margin:8px 0;padding:8px 12px;border-radius:6px;font-size:.85rem;font-weight:700';pn.parentNode.insertBefore(ex,pn.nextSibling);}var bad=(st.status==='undercut'||st.status==='outbid');ex.style.background=bad?'rgba(224,85,90,.12)':'rgba(84,194,138,.12)';ex.style.border='1px solid '+(bad?'rgba(224,85,90,.5)':'rgba(84,194,138,.5)');ex.style.color=bad?'#ff8f93':'#8ff0c0';if(bad){ex.textContent=(st.buy?'\u26a0\ufe0f Your buy order is outbid':'\u26a0\ufe0f Someone is underselling your order')+' \u2014 yours '+isk(st.price)+', market best '+isk(st.best)+(st.gap?(' (by '+isk(st.gap)+')'):'');}else{ex.textContent=(st.buy?'\u2705 Your buy order is the highest':'\u2705 Your sell order is the cheapest')+' \u2014 '+isk(st.price);}}
   var started=false;
   function boot(){ if(!window.EVEAPI)return; if(!started){started=true;loadCtx();ordersPanel();setInterval(loadCtx,300000);} }
   setInterval(function(){boot();paintBadges();netCost();paintInline();var _mo=document.getElementById('ab-myorders');if(_mo&&window.EVEAPI&&EVEAPI.loggedIn())_mo.style.setProperty('display','block','important');},1200);
@@ -4023,15 +4023,8 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 })();
 </script>
 <script>
-/* Market reveal fix v3 */
-(function(){
-  function $(id){return document.getElementById(id);}
-  function hasItem(){var pn=$('ab-product-name');if(!pn)return false;var n=(pn.textContent||'').replace(/\u2713[^]*$/,'').trim();return n.length>1&&n!=='\u2014';}
-  function marketMode(){var b=$('mb-view-orders');return !b||b.classList.contains('on');}
-  function reveal(){if(!hasItem()||!marketMode())return;var rr=$('ab-result');if(rr&&getComputedStyle(rr).display==='none')rr.style.display='';var ee=$('ab-empty');if(ee)ee.style.display='none';}
-  function attach(){var rr=$('ab-result');if(!rr||rr._obs)return;rr._obs=1;var mo=new MutationObserver(function(){if(rr.style.display==='none'&&hasItem()&&marketMode())rr.style.display='';});mo.observe(rr,{attributes:true,attributeFilter:['style']});}
-  setInterval(function(){var t=$('tab-arb');if(t&&!t.hidden&&t.offsetParent!==null){attach();reveal();}},800);
-})();
+/* Hide legacy market */
+(function(){function $(id){return document.getElementById(id);}setInterval(function(){var r=$('ab-result');if(r&&getComputedStyle(r).display!=='none')r.style.setProperty('display','none','important');var e=$('ab-empty');if(e&&getComputedStyle(e).display!=='none')e.style.setProperty('display','none','important');},1000);})();
 </script>
 <script>
 /* Shopping list export */
@@ -4067,9 +4060,9 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   function openMarket(name,region){
     var reg=document.getElementById('mb-region');
     if(reg&&region){var has=[].some.call(reg.options,function(op){return op.value===String(region);});if(has&&reg.value!==String(region)){reg.value=String(region);reg.dispatchEvent(new Event('change',{bubbles:true}));}}
-    var s=document.getElementById('ab-search');if(!s)return;
+    var s=document.getElementById('mb-search');if(!s)return;
     s.value=name;s.dispatchEvent(new Event('input',{bubbles:true}));try{s.focus();}catch(e){}
-    var tries=0;var iv=setInterval(function(){tries++;var sug=document.getElementById('ab-suggestions');if(sug&&sug.children.length){var li=[].slice.call(sug.children).find(function(e){var sp=e.querySelector('span');return sp&&sp.textContent.trim().toLowerCase()===String(name).toLowerCase();})||sug.children[sug.children.length-1];if(li){['mousedown','mouseup','click'].forEach(function(t){li.dispatchEvent(new MouseEvent(t,{bubbles:true}));});clearInterval(iv);try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){window.scrollTo(0,0);}return;}}if(tries>25)clearInterval(iv);},200);
+    var tries=0;var iv=setInterval(function(){tries++;var sug=document.getElementById('mb-suggestions');if(sug&&sug.children.length){var li=[].slice.call(sug.children).find(function(e){var sp=e.querySelector('span');return sp&&sp.textContent.trim().toLowerCase()===String(name).toLowerCase();})||sug.children[sug.children.length-1];if(li){['mousedown','mouseup','click'].forEach(function(t){li.dispatchEvent(new MouseEvent(t,{bubbles:true}));});clearInterval(iv);try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){window.scrollTo(0,0);}return;}}if(tries>25)clearInterval(iv);},200);
   }
   document.addEventListener('click',function(ev){if(!ev.target.closest)return;var tr=ev.target.closest('.mo-row');if(!tr)return;var name=tr.getAttribute('data-name');var region=tr.getAttribute('data-region');if(name)openMarket(name,region);});
 })();
