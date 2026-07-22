@@ -4022,21 +4022,25 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 })();
 </script>
 <script>
-/* Market live orders v1 */
+/* Market live orders v2 */
 (function(){
   function $(id){return document.getElementById(id);}
-  var HUB=10000002, HUBNAME='The Forge (Jita)';
+  var HUBS=[[10000002,'The Forge (Jita)'],[10000043,'Domain (Amarr)'],[10000032,'Sinq Laison (Dodixie)'],[10000030,'Heimatar (Rens)'],[10000042,'Metropolis (Hek)']];
+  var HUB=+(localStorage.getItem('eveLoHub')||10000002);
   var idCache={}, lastName='', lastFetch=0, cSell=null, cBuy=null;
   function isk(n){if(n==null||isNaN(n))return '\u2014';var a=Math.abs(n);if(a>=1e9)return (n/1e9).toFixed(2)+'B';if(a>=1e6)return (n/1e6).toFixed(2)+'M';if(a>=1e3)return (n/1e3).toFixed(1)+'K';return Math.round(n).toString();}
   async function resolveId(name){var k=name.trim().toLowerCase();if(idCache[k]!==undefined)return idCache[k];try{var r=await fetch('https://esi.evetech.net/latest/universe/ids/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify([name])});var j=await r.json();var t=j&&j.inventory_types&&j.inventory_types[0];var id=t?t.id:null;idCache[k]=id;return id;}catch(e){return null;}}
   async function fetchOrders(id){try{var r=await fetch('https://esi.evetech.net/latest/markets/'+HUB+'/orders/?order_type=all&type_id='+id);if(!r.ok)return null;var all=await r.json();var pg=+(r.headers.get('x-pages')||1);for(var p=2;p<=Math.min(pg,5);p++){var rp=await fetch('https://esi.evetech.net/latest/markets/'+HUB+'/orders/?order_type=all&type_id='+id+'&page='+p);if(rp.ok){all=all.concat(await rp.json());}}return all;}catch(e){return null;}}
   function panel(){var p=$('ab-live-orders');if(p)return p;var meta=$('ab-product-meta');if(!meta||!meta.parentNode)return null;p=document.createElement('section');p.id='ab-live-orders';p.className='panel';p.style.cssText='padding:14px;margin:12px 0';meta.parentNode.insertBefore(p,meta.nextSibling);return p;}
   function fillSummary(){if(cSell!=null&&$('ab-bestsell')&&$('ab-bestsell').textContent.trim()==='\u2014')$('ab-bestsell').textContent=isk(cSell)+' ISK';if(cBuy!=null&&$('ab-bestbuy')&&$('ab-bestbuy').textContent.trim()==='\u2014')$('ab-bestbuy').textContent=isk(cBuy)+' ISK';}
+  function hubOpts(){return HUBS.map(function(h){return '<option value="'+h[0]+'"'+(h[0]===HUB?' selected':'')+'>'+h[1]+'</option>';}).join('');}
+  function wireRegion(){var sel=$('ab-lo-region');if(sel&&!sel._w){sel._w=1;sel.addEventListener('change',function(){HUB=+this.value;try{localStorage.setItem('eveLoHub',HUB);}catch(e){}lastName='';lastFetch=0;render();});}}
   async function render(){var pn=$('ab-product-name');if(!pn)return;var name=(pn.textContent||'').replace(/\u2713[^]*$/,'').trim();if(!name||name==='\u2014')return;
     if(name===lastName&&Date.now()-lastFetch<40000){fillSummary();return;}
     lastName=name;lastFetch=Date.now();
     var p=panel();if(!p)return;
-    p.innerHTML='<div style="font-weight:700;margin-bottom:6px">\u26a1 Live order book \u2014 '+HUBNAME+' <span class="mkt-dot"></span><span id="ab-lo-upd" class="muted small" style="float:right;font-weight:400"></span></div><div id="ab-lo-body" class="muted small">Fetching live orders\u2026</div>';
+    p.innerHTML='<div style="font-weight:700;margin-bottom:6px">\u26a1 Live order book \u2014 <select id="ab-lo-region" style="background:#0d1a24;color:#cfe3f0;border:1px solid #2a4a5c;border-radius:4px;padding:1px 4px;font-size:.85rem">'+hubOpts()+'</select> <span class="mkt-dot"></span><span id="ab-lo-upd" class="muted small" style="float:right;font-weight:400"></span></div><div id="ab-lo-body" class="muted small">Fetching live orders\u2026</div>';
+    wireRegion();
     var id=await resolveId(name);
     if(!id){var b0=$('ab-lo-body');if(b0)b0.innerHTML='<div class="muted small">Live order book unavailable for this item.</div>';return;}
     var ords=await fetchOrders(id);
@@ -4071,6 +4075,18 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(function(){toast('Copied '+lines.length+' items \u2014 paste into EVE Multibuy');},function(){var ok=false;try{var ta2=document.createElement('textarea');ta2.value=text;ta2.style.position='fixed';ta2.style.opacity='0';document.body.appendChild(ta2);ta2.select();ok=document.execCommand('copy');ta2.remove();}catch(e){}toast(ok?('Copied '+lines.length+' items \u2014 paste into EVE Multibuy'):'Copy failed \u2014 tap again');});}
     else{var ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');toast('Copied \u2014 paste into EVE Multibuy');}catch(e){toast('Copy failed');}ta.remove();}
   });
+})();
+</script>
+<script>
+/* Active jobs badge */
+(function(){
+  function $(id){return document.getElementById(id);}
+  var jobsByName={},ready=false,lastLoad=0;
+  var ACTS={1:'building',3:'researching TE',4:'researching ME',5:'copying',7:'reverse-eng',8:'inventing',9:'reacting'};
+  function tleft(end){var ms=new Date(end).getTime()-Date.now();if(ms<=0)return 'ready to deliver';var h=Math.floor(ms/3.6e6),m=Math.floor(ms%3.6e6/6e4);if(h>24)return 'ready in '+Math.floor(h/24)+'d '+(h%24)+'h';return 'ready in '+h+'h '+m+'m';}
+  async function load(){if(!window.EVEAPI||!EVEAPI.loggedIn())return;if(ready&&Date.now()-lastLoad<120000)return;lastLoad=Date.now();var ch=EVEAPI.getChar();if(!ch)return;var r=await EVEAPI.esi('/characters/'+ch.id+'/industry/jobs/?include_completed=false');var jobs=(r&&Array.isArray(r.data))?r.data:[];var ids=jobs.map(function(j){return j.product_type_id;});var NM=await EVEAPI.names(ids);var map={};jobs.forEach(function(j){var nm=NM[j.product_type_id];if(!nm)return;var k=nm.toLowerCase();(map[k]=map[k]||[]).push(j);});jobsByName=map;ready=true;paint();}
+  function paint(){if(!ready)return;var pn=$('product-name');if(!pn)return;var name=((pn.childNodes[0]&&pn.childNodes[0].textContent)||pn.textContent||'').trim();var tag=$('mf-jobtag');if(!name||name.length<2){if(tag)tag.remove();return;}var list=jobsByName[name.toLowerCase()];if(!list||!list.length){if(tag)tag.remove();return;}var soon=list.slice().sort(function(a,b){return new Date(a.end_date)-new Date(b.end_date);})[0];if(!tag){tag=document.createElement('div');tag.id='mf-jobtag';tag.style.cssText='margin-top:6px;display:inline-block;font-size:.8rem;font-weight:700;color:#7fb0c8;background:rgba(90,150,190,.12);border:1px solid rgba(90,150,190,.4);border-radius:5px;padding:3px 9px';pn.parentNode.insertBefore(tag,pn.nextSibling);}tag.textContent='\u2699\ufe0f '+list.length+' job'+(list.length>1?'s':'')+' '+(ACTS[soon.activity_id]||'running')+' \u00b7 '+tleft(soon.end_date);}
+  setInterval(function(){var t=$('tab-calc');if(t&&!t.hidden&&t.offsetParent!==null){load();paint();}},1500);
 })();
 </script>
 </body>
