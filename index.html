@@ -4011,7 +4011,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     var nBad=rows.filter(function(x){return x.status==='undercut'||x.status==='outbid';}).length;
     var h='<div class="muted small" style="margin-bottom:6px">'+orders.length+' open \u00b7 <b style="color:'+(nBad?'#e0555a':'#54c28a')+'">'+(nBad?nBad+' need attention':'all competitive')+'</b></div>';
     h+='<table style="width:100%;border-collapse:collapse;font-size:.82rem"><thead><tr class="muted small"><th style="text-align:left;padding:3px 6px">Side</th><th style="text-align:left;padding:3px 6px">Item</th><th style="text-align:right;padding:3px 6px">Your price</th><th style="text-align:right;padding:3px 6px">Market best</th><th style="text-align:right;padding:3px 6px">Remain</th><th style="text-align:left;padding:3px 6px">Status</th></tr></thead><tbody>';
-    rows.forEach(function(x){h+='<tr class="mo-row" data-name="'+String(x.name).split('"').join('')+'" data-region="'+(x.o.region_id||'')+'" style="border-bottom:1px solid rgba(120,150,170,.08);cursor:pointer"><td style="padding:3px 6px;color:'+(x.o.is_buy_order?'#e3b341':'#54c28a')+'">'+(x.o.is_buy_order?'BUY':'SELL')+'</td><td style="padding:3px 6px">'+x.name+'</td><td style="text-align:right;padding:3px 6px">'+isk(x.o.price)+'</td><td style="text-align:right;padding:3px 6px">'+isk(x.best)+'</td><td style="text-align:right;padding:3px 6px">'+x.o.volume_remain+'/'+x.o.volume_total+'</td><td style="padding:3px 6px;color:'+(col[x.status]||'#9fb2c0')+';font-weight:700">'+(lbl[x.status]||'')+(x.gap?(' <span class="muted" style="font-weight:400">by '+isk(x.gap)+'</span>'):'')+'</td></tr>';});
+    rows.forEach(function(x){h+='<tr class="mo-row" data-name="'+String(x.name).split('"').join('')+'" data-region="'+(x.o.region_id||'')+'" data-typeid="'+(x.o.type_id||'')+'" style="border-bottom:1px solid rgba(120,150,170,.08);cursor:pointer"><td style="padding:3px 6px;color:'+(x.o.is_buy_order?'#e3b341':'#54c28a')+'">'+(x.o.is_buy_order?'BUY':'SELL')+'</td><td style="padding:3px 6px">'+x.name+'</td><td style="text-align:right;padding:3px 6px">'+isk(x.o.price)+'</td><td style="text-align:right;padding:3px 6px">'+isk(x.best)+'</td><td style="text-align:right;padding:3px 6px">'+x.o.volume_remain+'/'+x.o.volume_total+'</td><td style="padding:3px 6px;color:'+(col[x.status]||'#9fb2c0')+';font-weight:700">'+(lbl[x.status]||'')+(x.gap?(' <span class="muted" style="font-weight:400">by '+isk(x.gap)+'</span>'):'')+'</td></tr>';});
     h+='</tbody></table>';
     $('ab-mo-body').innerHTML=h;
   }
@@ -4057,14 +4057,14 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 <script>
 /* Order row click */
 (function(){
-  function openMarket(name,region){
+  function openMarket(name,region,typeid){
     var reg=document.getElementById('mb-region');
     if(reg&&region){var has=[].some.call(reg.options,function(op){return op.value===String(region);});if(has&&reg.value!==String(region)){reg.value=String(region);reg.dispatchEvent(new Event('change',{bubbles:true}));}}
     var s=document.getElementById('mb-search');if(!s)return;
     s.value=name;s.dispatchEvent(new Event('input',{bubbles:true}));try{s.focus();}catch(e){}
-    var tries=0;var iv=setInterval(function(){tries++;var sug=document.getElementById('mb-suggestions');if(sug&&sug.children.length){var li=[].slice.call(sug.children).find(function(e){var sp=e.querySelector('span');return sp&&sp.textContent.trim().toLowerCase()===String(name).toLowerCase();})||sug.children[sug.children.length-1];if(li){['mousedown','mouseup','click'].forEach(function(t){li.dispatchEvent(new MouseEvent(t,{bubbles:true}));});clearInterval(iv);try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){window.scrollTo(0,0);}return;}}if(tries>25)clearInterval(iv);},200);
+    var tries=0;var iv=setInterval(function(){tries++;var sug=document.getElementById('mb-suggestions');if(sug&&sug.children.length){var kids=[].slice.call(sug.children);var li=null;if(typeid)li=kids.find(function(el){return el.getAttribute&&el.getAttribute('data-id')===String(typeid);});if(!li)li=kids.find(function(el){return (el.textContent||'').trim().toLowerCase()===String(name).toLowerCase();});if(li){['mousedown','mouseup','click'].forEach(function(t){li.dispatchEvent(new MouseEvent(t,{bubbles:true}));});clearInterval(iv);try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){window.scrollTo(0,0);}return;}}if(tries>30)clearInterval(iv);},200);
   }
-  document.addEventListener('click',function(ev){if(!ev.target.closest)return;var tr=ev.target.closest('.mo-row');if(!tr)return;var name=tr.getAttribute('data-name');var region=tr.getAttribute('data-region');if(name)openMarket(name,region);});
+  document.addEventListener('click',function(ev){if(!ev.target.closest)return;var tr=ev.target.closest('.mo-row');if(!tr)return;var name=tr.getAttribute('data-name');var region=tr.getAttribute('data-region');var typeid=tr.getAttribute('data-typeid');if(name)openMarket(name,region,typeid);});
 })();
 </script>
 </body>
