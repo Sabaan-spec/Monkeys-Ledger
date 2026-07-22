@@ -3993,7 +3993,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   async function ordersPanel(){
     var arb=$('tab-arb'); if(!arb)return;
     var host=$('ab-myorders');
-    if(!host){host=document.createElement('section');host.id='ab-myorders';host.className='panel';host.style.cssText='padding:14px;margin-bottom:12px';arb.insertBefore(host,arb.firstChild);}
+    if(!host){host=document.createElement('section');host.id='ab-myorders';host.className='panel';host.style.cssText='padding:14px;margin-bottom:12px';arb.insertBefore(host,arb.firstChild);}if(host)host.style.setProperty('display','block','important');
     if(!window.EVEAPI||!EVEAPI.loggedIn()){host.innerHTML='<div style="font-weight:700;margin-bottom:4px">\u2694\ufe0f Your Orders</div><div class="muted small">Log in on the Account tab to watch your orders for undercutting here.</div>';return;}
     host.innerHTML='<div style="font-weight:700;margin-bottom:6px">\u2694\ufe0f Your Orders \u2014 undercut watch <span id="ab-mo-refresh" style="float:right;cursor:pointer;font-weight:400;font-size:.8rem;color:#7fb0c8">\u21bb refresh</span></div><div id="ab-mo-body" class="muted small">Checking live prices\u2026</div>';
     var rf=$('ab-mo-refresh'); if(rf)rf.addEventListener('click',ordersPanel);
@@ -4004,7 +4004,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       if(Array.isArray(mk)){if(o.is_buy_order){var buys=mk.filter(function(x){return x.is_buy_order;}).map(function(x){return x.price;});var top=buys.length?Math.max.apply(null,buys):o.price;best=top;if(top>o.price+1e-6){status='outbid';gap=top-o.price;}else{status='top';}}else{var sells=mk.filter(function(x){return !x.is_buy_order;}).map(function(x){return x.price;});var low=sells.length?Math.min.apply(null,sells):o.price;best=low;if(low<o.price-1e-6){status='undercut';gap=o.price-low;}else{status='best';}}}
       rows.push({o:o,name:NM[o.type_id]||('#'+o.type_id),best:best,status:status,gap:gap});
     }
-    var col={undercut:'#e0555a',outbid:'#e0555a',best:'#54c28a',top:'#54c28a'};
+    CTX.myOrderStatus={};rows.forEach(function(x){var k=x.name.toLowerCase();var cur=CTX.myOrderStatus[k];var bad=(x.status==='undercut'||x.status==='outbid');if(!cur||bad)CTX.myOrderStatus[k]={status:x.status,gap:x.gap,price:x.o.price,best:x.best,buy:x.o.is_buy_order};});var col={undercut:'#e0555a',outbid:'#e0555a',best:'#54c28a',top:'#54c28a'};
     var lbl={undercut:'UNDERCUT',outbid:'OUTBID',best:'BEST',top:'BEST'};
     var ord={undercut:0,outbid:0};
     rows.sort(function(a,b){return (ord[a.status]==null?1:0)-(ord[b.status]==null?1:0);});
@@ -4015,9 +4015,10 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     h+='</tbody></table>';
     $('ab-mo-body').innerHTML=h;
   }
+  function paintInline(){var pn=document.getElementById('ab-product-name');if(!pn)return;var name=((pn.childNodes[0]&&pn.childNodes[0].textContent)||pn.textContent||'').replace(/\u2713[^]*$/,'').trim();var st=(CTX.myOrderStatus||{})[name.toLowerCase()];var ex=document.getElementById('ab-myitem-alert');if(!name||!st){if(ex)ex.remove();return;}var meta=document.getElementById('ab-product-meta');if(!meta)return;if(!ex){ex=document.createElement('div');ex.id='ab-myitem-alert';ex.style.cssText='margin:6px 0;padding:8px 12px;border-radius:6px;font-size:.85rem;font-weight:700';meta.parentNode.insertBefore(ex,meta.nextSibling);}var bad=(st.status==='undercut'||st.status==='outbid');ex.style.background=bad?'rgba(224,85,90,.12)':'rgba(84,194,138,.12)';ex.style.border='1px solid '+(bad?'rgba(224,85,90,.5)':'rgba(84,194,138,.5)');ex.style.color=bad?'#ff8f93':'#8ff0c0';if(bad){ex.textContent=(st.buy?'\u26a0\ufe0f Your buy order is outbid':'\u26a0\ufe0f Someone is underselling your order')+' \u2014 yours '+isk(st.price)+', market best '+isk(st.best)+(st.gap?(' (by '+isk(st.gap)+')'):'');}else{ex.textContent=(st.buy?'\u2705 Your buy order is the highest':'\u2705 Your sell order is the cheapest')+' \u2014 '+isk(st.price);}}
   var started=false;
   function boot(){ if(!window.EVEAPI)return; if(!started){started=true;loadCtx();ordersPanel();setInterval(loadCtx,300000);} }
-  setInterval(function(){boot();paintBadges();netCost();},1200);
+  setInterval(function(){boot();paintBadges();netCost();paintInline();var _mo=document.getElementById('ab-myorders');if(_mo&&window.EVEAPI&&EVEAPI.loggedIn())_mo.style.setProperty('display','block','important');},1200);
   document.addEventListener('click',function(ev){if(!ev.target.closest)return;var t=ev.target.closest('.tab[data-tab="arb"]');if(t)setTimeout(ordersPanel,200);});
 })();
 </script>
