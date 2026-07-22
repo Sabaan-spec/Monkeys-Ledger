@@ -3852,7 +3852,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 (function(){
   var CID='338120aa23d64fbabc5185ed10ddcd89';
   var REDIR='https://www.kaalakiotaforge.com/index.html';
-  var SCOPES='publicData esi-wallet.read_character_wallet.v1 esi-skills.read_skills.v1 esi-industry.read_character_jobs.v1 esi-assets.read_assets.v1 esi-markets.read_character_orders.v1';
+  var SCOPES='publicData esi-wallet.read_character_wallet.v1 esi-skills.read_skills.v1 esi-industry.read_character_jobs.v1 esi-assets.read_assets.v1 esi-markets.read_character_orders.v1 esi-characters.read_blueprints.v1';
   var AUTHZ='https://login.eveonline.com/v2/oauth/authorize/';
   var TOKEN='https://login.eveonline.com/v2/oauth/token';
   var ESI='https://esi.evetech.net/latest';
@@ -4131,6 +4131,68 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     h.innerHTML=card('\ud83d\udcb0 Net worth',nwInner)+card('\ud83d\udd14 Needs attention',attInner)+card('\ud83c\udfed Job slots',slotsInner)+card('\ud83d\udcc8 Wallet P&amp;L',pnlInner);
   }
   setInterval(function(){var t=$('tab-sso');if(t&&!t.hidden&&t.offsetParent!==null)load();},2000);
+})();
+</script>
+<script>
+/* Blueprints v1 */
+(function(){
+  function $(id){return document.getElementById(id);}
+  var lastLoad=0,loading=false,loaded=false;
+  window.EVEBP={byProduct:{},list:[],ok:false};
+  async function loadBP(){
+    if(!window.EVEAPI||!EVEAPI.loggedIn())return;
+    if(loading)return;if(loaded&&Date.now()-lastLoad<300000)return;
+    loading=true;lastLoad=Date.now();
+    try{
+      var ch=EVEAPI.getChar();var cid=ch.id;
+      var r=await EVEAPI.esi('/characters/'+cid+'/blueprints/');
+      if(!r){EVEBP.ok=false;loaded=true;loading=false;renderCard();return;}
+      var all=(r.data||[]).slice();var pg=Math.min(r.pages||1,10);
+      for(var p=2;p<=pg;p++){var rp=await EVEAPI.esi('/characters/'+cid+'/blueprints/?page='+p);if(rp)all=all.concat(rp.data||[]);}
+      var ids=all.map(function(b){return b.type_id;});
+      var NM=await EVEAPI.names(ids);
+      var byProduct={},list=[];
+      all.forEach(function(b){
+        var bn=NM[b.type_id]||('#'+b.type_id);
+        var prod=bn.replace(/ Blueprint$/,'');
+        var bpo=(b.runs===-1||b.quantity===-1);
+        var rec={product:prod,bpName:bn,me:b.material_efficiency||0,te:b.time_efficiency||0,bpo:bpo,runs:b.runs};
+        list.push(rec);
+        var k=prod.toLowerCase();var cur=byProduct[k];
+        if(!cur||(bpo&&!cur.bpo)||(rec.me>cur.me))byProduct[k]=rec;
+      });
+      EVEBP.byProduct=byProduct;EVEBP.list=list;EVEBP.ok=true;loaded=true;renderCard();
+    }catch(e){}
+    loading=false;
+  }
+  function renderCard(){
+    var t=$('tab-sso');if(!t)return;
+    var h=$('acc-bp');
+    if(!h){var sb=$('sso-body');h=document.createElement('div');h.id='acc-bp';if(sb&&sb.parentNode){sb.parentNode.insertBefore(h,sb.nextSibling);}else{t.appendChild(h);}}
+    var inner;
+    if(!EVEBP.ok){inner='<div class="muted small">No blueprint data yet. If you just enabled the scope, log out and back in (below) to grant blueprint access.</div>';}
+    else if(!EVEBP.list.length){inner='<div class="muted small">You own no blueprints.</div>';}
+    else{
+      var l=EVEBP.list.slice().sort(function(a,b){return a.product<b.product?-1:(a.product>b.product?1:0);});
+      inner='<div class="muted small" style="margin-bottom:4px">'+EVEBP.list.length+' blueprint'+(EVEBP.list.length>1?'s':'')+'</div><table style="width:100%;border-collapse:collapse;font-size:.82rem"><thead><tr class="muted small"><th style="text-align:left;padding:2px 6px">Blueprint</th><th style="padding:2px 6px">Type</th><th style="text-align:right;padding:2px 6px">ME</th><th style="text-align:right;padding:2px 6px">TE</th><th style="text-align:right;padding:2px 6px">Runs</th></tr></thead><tbody>';
+      l.slice(0,300).forEach(function(r){inner+='<tr style="border-bottom:1px solid rgba(120,150,170,.08)"><td style="padding:2px 6px">'+r.product+'</td><td style="text-align:center;padding:2px 6px;color:'+(r.bpo?'#54c28a':'#7fb0c8')+'">'+(r.bpo?'BPO':'BPC')+'</td><td style="text-align:right;padding:2px 6px">'+r.me+'</td><td style="text-align:right;padding:2px 6px">'+r.te+'</td><td style="text-align:right;padding:2px 6px" class="muted">'+(r.bpo?'\u221e':r.runs)+'</td></tr>';});
+      inner+='</tbody></table>';
+    }
+    h.innerHTML='<section class="panel" style="padding:14px;margin-bottom:12px"><div style="font-weight:700;margin-bottom:8px">\ud83d\udcd8 Blueprints</div>'+inner+'</section>';
+  }
+  function paintMf(){
+    if(!EVEBP.ok)return;
+    var pn=$('product-name');if(!pn)return;
+    var name=((pn.childNodes[0]&&pn.childNodes[0].textContent)||pn.textContent||'').replace(/\u2713[^]*$/,'').trim();
+    var bp=name?EVEBP.byProduct[name.toLowerCase()]:null;
+    var tag=$('mf-bpbadge');
+    if(!name||!bp){if(tag)tag.remove();return;}
+    if(!tag){tag=document.createElement('span');tag.id='mf-bpbadge';tag.style.cssText='margin-left:8px;font-size:.75rem;font-weight:700;color:#8ea6ff;background:rgba(120,140,255,.12);border:1px solid rgba(120,140,255,.4);border-radius:4px;padding:1px 6px;cursor:pointer;white-space:nowrap';pn.appendChild(tag);tag.addEventListener('click',function(){var me=$('me');if(me&&tag._me!=null){me.value=tag._me;me.dispatchEvent(new Event('input',{bubbles:true}));me.dispatchEvent(new Event('change',{bubbles:true}));}});}
+    tag._me=bp.me;
+    tag.title='Click to apply your blueprint ME ('+bp.me+') to the calc';
+    tag.textContent='\ud83d\udcd8 Own '+(bp.bpo?'BPO':'BPC')+' \u00b7 ME '+bp.me+' / TE '+bp.te+' \u00b7 use';
+  }
+  setInterval(function(){loadBP();var tc=$('tab-calc');if(tc&&!tc.hidden&&tc.offsetParent!==null)paintMf();},2000);
 })();
 </script>
 </body>
