@@ -4134,7 +4134,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 })();
 </script>
 <script>
-/* Blueprints v2 */
+/* Blueprints v3 */
 (function(){
   function $(id){return document.getElementById(id);}
   var lastLoad=0,loading=false,loaded=false,lastAuto='';
@@ -4174,12 +4174,22 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     else if(!EVEBP.list.length){inner='<div class="muted small">You own no blueprints.</div>';}
     else{
       var l=EVEBP.list.slice().sort(function(a,b){return a.product<b.product?-1:(a.product>b.product?1:0);});
-      inner='<div class="muted small" style="margin-bottom:4px">'+EVEBP.list.length+' blueprint'+(EVEBP.list.length>1?'s':'')+'</div><table style="width:100%;border-collapse:collapse;font-size:.82rem"><thead><tr class="muted small"><th style="text-align:left;padding:2px 6px">Blueprint</th><th style="padding:2px 6px">Type</th><th style="text-align:right;padding:2px 6px">ME</th><th style="text-align:right;padding:2px 6px">TE</th><th style="text-align:right;padding:2px 6px">Runs</th></tr></thead><tbody>';
-      l.slice(0,300).forEach(function(r){inner+='<tr style="border-bottom:1px solid rgba(120,150,170,.08)"><td style="padding:2px 6px">'+r.product+'</td><td style="text-align:center;padding:2px 6px;color:'+(r.bpo?'#54c28a':'#7fb0c8')+'">'+(r.bpo?'BPO':'BPC')+'</td><td style="text-align:right;padding:2px 6px">'+r.me+'</td><td style="text-align:right;padding:2px 6px">'+r.te+'</td><td style="text-align:right;padding:2px 6px" class="muted">'+(r.bpo?'\u221e':r.runs)+'</td></tr>';});
+      inner='<div class="muted small" style="margin-bottom:4px">'+EVEBP.list.length+' blueprint'+(EVEBP.list.length>1?'s':'')+' \u2014 click to open in Build Tree</div><table style="width:100%;border-collapse:collapse;font-size:.82rem"><thead><tr class="muted small"><th style="text-align:left;padding:2px 6px">Blueprint</th><th style="padding:2px 6px">Type</th><th style="text-align:right;padding:2px 6px">ME</th><th style="text-align:right;padding:2px 6px">TE</th><th style="text-align:right;padding:2px 6px">Runs</th></tr></thead><tbody>';
+      l.slice(0,300).forEach(function(r){inner+='<tr class="bp-row" data-name="'+String(r.product).split('"').join('')+'" data-me="'+r.me+'" title="Open in Build Tree" style="border-bottom:1px solid rgba(120,150,170,.08);cursor:pointer"><td style="padding:2px 6px">'+r.product+'</td><td style="text-align:center;padding:2px 6px;color:'+(r.bpo?'#54c28a':'#7fb0c8')+'">'+(r.bpo?'BPO':'BPC')+'</td><td style="text-align:right;padding:2px 6px">'+r.me+'</td><td style="text-align:right;padding:2px 6px">'+r.te+'</td><td style="text-align:right;padding:2px 6px" class="muted">'+(r.bpo?'\u221e':r.runs)+'</td></tr>';});
       inner+='</tbody></table>';
     }
     h.innerHTML='<section class="panel" style="padding:14px;margin-bottom:12px"><div style="font-weight:700;margin-bottom:8px">\ud83d\udcd8 Blueprints</div>'+inner+'</section>';
   }
+  function openTree(name,me){
+    var tb=document.querySelector('.tab[data-tab="tree"]');if(tb)tb.click();
+    setTimeout(function(){
+      var mEl=$('bt-me');if(mEl){mEl.value=me;mEl.dispatchEvent(new Event('input',{bubbles:true}));mEl.dispatchEvent(new Event('change',{bubbles:true}));}
+      var s=$('bt-search');if(!s)return;
+      s.value=name;s.dispatchEvent(new Event('input',{bubbles:true}));try{s.focus();}catch(e){}
+      var tries=0;var iv=setInterval(function(){tries++;var sug=$('bt-sug');if(sug&&sug.children.length){var li=[].slice.call(sug.children).find(function(el){return (el.textContent||'').trim().toLowerCase()===String(name).toLowerCase();});if(li){['mousedown','mouseup','click'].forEach(function(t){li.dispatchEvent(new MouseEvent(t,{bubbles:true}));});clearInterval(iv);setTimeout(function(){var m2=$('bt-me');if(m2&&String(m2.value)!==String(me)){m2.value=me;m2.dispatchEvent(new Event('input',{bubbles:true}));m2.dispatchEvent(new Event('change',{bubbles:true}));}},900);try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){}return;}}if(tries>30)clearInterval(iv);},200);
+    },250);
+  }
+  document.addEventListener('click',function(ev){if(!ev.target.closest)return;var tr=ev.target.closest('.bp-row');if(!tr)return;var name=tr.getAttribute('data-name');var me=tr.getAttribute('data-me');if(name)openTree(name,me);});
   function mkTag(pn){var t=document.createElement('span');t.id='mf-bpbadge';t.style.cssText='margin-left:8px;font-size:.75rem;font-weight:700;border-radius:4px;padding:1px 6px;white-space:nowrap';pn.appendChild(t);return t;}
   function styl(t,col,bg,bd,cur){t.style.color=col;t.style.background=bg;t.style.border='1px solid '+bd;t.style.cursor=cur;}
   function applyMe(me){var el=$('me');if(el&&String(el.value)!==String(me)){el.value=me;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));}}
