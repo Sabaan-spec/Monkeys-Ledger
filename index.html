@@ -4068,7 +4068,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     [].forEach.call(mb.querySelectorAll('tr'),function(tr){var td=tr.querySelectorAll('td');if(td.length<2)return;var name=firstText(td[0]);var qty=Math.round(num(firstText(td[1])));if(!name||!qty)return;var own=acc[name.toLowerCase()]||0;var need=Math.max(0,qty-own);if(need>0)lines.push(name+' '+need);});
     if(!lines.length){toast('Nothing to buy \u2014 you already own it all');return;}
     var text=lines.join('\n');
-    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(function(){toast('Copied '+lines.length+' items \u2014 paste into EVE Multibuy');},function(){toast('Copy failed');});}
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(function(){toast('Copied '+lines.length+' items \u2014 paste into EVE Multibuy');},function(){var ok=false;try{var ta2=document.createElement('textarea');ta2.value=text;ta2.style.position='fixed';ta2.style.opacity='0';document.body.appendChild(ta2);ta2.select();ok=document.execCommand('copy');ta2.remove();}catch(e){}toast(ok?('Copied '+lines.length+' items \u2014 paste into EVE Multibuy'):'Copy failed \u2014 tap again');});}
     else{var ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');toast('Copied \u2014 paste into EVE Multibuy');}catch(e){toast('Copy failed');}ta.remove();}
   });
 })();
