@@ -4134,10 +4134,10 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 })();
 </script>
 <script>
-/* Blueprints v1 */
+/* Blueprints v2 */
 (function(){
   function $(id){return document.getElementById(id);}
-  var lastLoad=0,loading=false,loaded=false;
+  var lastLoad=0,loading=false,loaded=false,lastAuto='';
   window.EVEBP={byProduct:{},list:[],ok:false};
   async function loadBP(){
     if(!window.EVEAPI||!EVEAPI.loggedIn())return;
@@ -4180,17 +4180,32 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     }
     h.innerHTML='<section class="panel" style="padding:14px;margin-bottom:12px"><div style="font-weight:700;margin-bottom:8px">\ud83d\udcd8 Blueprints</div>'+inner+'</section>';
   }
+  function mkTag(pn){var t=document.createElement('span');t.id='mf-bpbadge';t.style.cssText='margin-left:8px;font-size:.75rem;font-weight:700;border-radius:4px;padding:1px 6px;white-space:nowrap';pn.appendChild(t);return t;}
+  function styl(t,col,bg,bd,cur){t.style.color=col;t.style.background=bg;t.style.border='1px solid '+bd;t.style.cursor=cur;}
+  function applyMe(me){var el=$('me');if(el&&String(el.value)!==String(me)){el.value=me;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));}}
   function paintMf(){
     if(!EVEBP.ok)return;
     var pn=$('product-name');if(!pn)return;
     var name=((pn.childNodes[0]&&pn.childNodes[0].textContent)||pn.textContent||'').replace(/\u2713[^]*$/,'').trim();
-    var bp=name?EVEBP.byProduct[name.toLowerCase()]:null;
     var tag=$('mf-bpbadge');
-    if(!name||!bp){if(tag)tag.remove();return;}
-    if(!tag){tag=document.createElement('span');tag.id='mf-bpbadge';tag.style.cssText='margin-left:8px;font-size:.75rem;font-weight:700;color:#8ea6ff;background:rgba(120,140,255,.12);border:1px solid rgba(120,140,255,.4);border-radius:4px;padding:1px 6px;cursor:pointer;white-space:nowrap';pn.appendChild(tag);tag.addEventListener('click',function(){var me=$('me');if(me&&tag._me!=null){me.value=tag._me;me.dispatchEvent(new Event('input',{bubbles:true}));me.dispatchEvent(new Event('change',{bubbles:true}));}});}
-    tag._me=bp.me;
-    tag.title='Click to apply your blueprint ME ('+bp.me+') to the calc';
-    tag.textContent='\ud83d\udcd8 Own '+(bp.bpo?'BPO':'BPC')+' \u00b7 ME '+bp.me+' / TE '+bp.te+' \u00b7 use';
+    if(!name){if(tag)tag.remove();lastAuto='';return;}
+    var bp=EVEBP.byProduct[name.toLowerCase()];
+    var mb=$('mat-body');var buildable=!!(mb&&mb.querySelector('tr'));
+    if(!bp){
+      if(!buildable){if(tag)tag.remove();return;}
+      if(!tag)tag=mkTag(pn);
+      tag.onclick=null;styl(tag,'#e3b341','rgba(227,179,65,.12)','rgba(227,179,65,.4)','default');
+      tag.title='You do not own a blueprint for this item';
+      tag.textContent='\ud83d\udcd8 No BP owned';
+      return;
+    }
+    if(!tag)tag=mkTag(pn);
+    styl(tag,'#8ea6ff','rgba(120,140,255,.12)','rgba(120,140,255,.4)','pointer');
+    tag.onclick=function(){applyMe(bp.me);};
+    tag.title='Auto-applied your blueprint ME ('+bp.me+'). Click to re-apply.';
+    tag.textContent='\ud83d\udcd8 Own '+(bp.bpo?'BPO':'BPC')+' \u00b7 ME '+bp.me+' / TE '+bp.te+' \u00b7 auto';
+    var key=name.toLowerCase();
+    if(lastAuto!==key){lastAuto=key;applyMe(bp.me);}
   }
   setInterval(function(){loadBP();var tc=$('tab-calc');if(tc&&!tc.hidden&&tc.offsetParent!==null)paintMf();},2000);
 })();
