@@ -4406,7 +4406,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
         var repU=0;t.mats.forEach(function(m){repU+=m.q*yld*(pr[m.id]||0);});repU=repU/t.portion;
         var sellU=pr[id]||0;if(repU<=0&&sellU<=0)return;
         var repT=repU*qty,sellT=sellU*qty;
-        rows.push({id:id,name:(t.name||nm[id]||('#'+id)),qty:qty,sellT:sellT,repT:repT,better:repT>sellT?'REPROCESS':'SELL',gain:Math.abs(repT-sellT)});
+        rows.push({id:id,name:(nm[id]||(typeof t.name==='string'?t.name:('#'+id))),qty:qty,sellT:sellT,repT:repT,better:repT>sellT?'REPROCESS':'SELL',gain:Math.abs(repT-sellT)});
       });
       rows.sort(function(a,b){var ar=a.better==='REPROCESS'?1:0,br=b.better==='REPROCESS'?1:0;if(ar!==br)return br-ar;return b.gain-a.gain;});
       render(rows,yld);
