@@ -4339,7 +4339,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   function host(){var h=$('acc-burn');if(h)return h;var t=$('tab-sso');if(!t)return null;var sb=$('sso-body');h=document.createElement('div');h.id='acc-burn';if(sb&&sb.parentNode){sb.parentNode.insertBefore(h,sb.nextSibling);}else{t.appendChild(h);}return h;}
   async function load(){
     if(!window.EVEAPI||!EVEAPI.loggedIn())return;
-    if(loading)return;if(Date.now()-last<120000&&jnet!=null){render();return;}
+    if(loading)return;if(Date.now()-last<120000&&jnet!=null){if(!$('acc-burn')||!$('acc-burn').innerHTML)render();return;}
     loading=true;last=Date.now();
     try{
       var ch=EVEAPI.getChar();var cid=ch.id;
@@ -4353,7 +4353,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   }
   function render(){
     var h=host();if(!h)return;
-    var daily=jnet!=null?jnet/jdays:0;
+    if($('acc-goal-in')&&document.activeElement===$('acc-goal-in'))return;var daily=jnet!=null?jnet/jdays:0;
     var snaps={};try{snaps=JSON.parse(localStorage.getItem('eveNetWorthV1')||'{}');}catch(e){}
     var keys=Object.keys(snaps).sort();var current=keys.length?snaps[keys[keys.length-1]]:0;
     var goal=0;try{goal=+(localStorage.getItem('eveGoalV1')||0);}catch(e){}
