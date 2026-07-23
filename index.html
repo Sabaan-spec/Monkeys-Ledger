@@ -4220,5 +4220,52 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   setInterval(function(){loadBP();var tc=$('tab-calc');if(tc&&!tc.hidden&&tc.offsetParent!==null)paintMf();},2000);
 })();
 </script>
+<script>
+/* Job timeline v1 */
+(function(){
+  function $(id){return document.getElementById(id);}
+  var ESI='https://esi.evetech.net/latest';
+  var last=0,loading=false;
+  var ACTS={1:'Manufacturing',3:'TE research',4:'ME research',5:'Copying',7:'Reverse eng',8:'Invention',9:'Reaction'};
+  var ACOL={1:'#8ea6ff',3:'#7fb0c8',4:'#7fb0c8',5:'#7fb0c8',7:'#c88fe0',8:'#c88fe0',9:'#54c28a'};
+  function isk(n){if(n==null||isNaN(n))return '\u2014';var a=Math.abs(n);if(a>=1e9)return (a/1e9).toFixed(2)+'B';if(a>=1e6)return (a/1e6).toFixed(2)+'M';if(a>=1e3)return (a/1e3).toFixed(1)+'K';return Math.round(a).toString();}
+  function tleft(ms){if(ms<=0)return 'ready';var h=Math.floor(ms/3.6e6),m=Math.floor(ms%3.6e6/6e4);if(h>=24)return Math.floor(h/24)+'d '+(h%24)+'h';return h+'h '+m+'m';}
+  async function load(){
+    if(!window.EVEAPI||!EVEAPI.loggedIn())return;
+    if(loading)return;if(Date.now()-last<60000 && $('acc-jobs') && $('acc-jobs').innerHTML)return;
+    loading=true;last=Date.now();
+    try{
+      var ch=EVEAPI.getChar();var cid=ch.id;
+      var jR=await EVEAPI.esi('/characters/'+cid+'/industry/jobs/?include_completed=false');var jobs=(jR&&Array.isArray(jR.data))?jR.data:[];
+      var ids=jobs.map(function(j){return j.product_type_id;});
+      var NM=await EVEAPI.names(ids);
+      var pr={};try{var pp=await fetch(ESI+'/markets/prices/');var pj=await pp.json();(pj||[]).forEach(function(e){pr[e.type_id]=e.average_price||e.adjusted_price||0;});}catch(e){}
+      render(jobs,NM,pr);
+    }catch(e){}
+    loading=false;
+  }
+  function render(jobs,NM,pr){
+    var t=$('tab-sso');if(!t)return;
+    var h=$('acc-jobs');if(!h){var sb=$('sso-body');h=document.createElement('div');h.id='acc-jobs';if(sb&&sb.parentNode){sb.parentNode.insertBefore(h,sb.nextSibling);}else{t.appendChild(h);}}
+    var inner;
+    if(!jobs.length){inner='<div class="muted small">No active industry jobs.</div>';}
+    else{
+      var now=Date.now();
+      jobs.sort(function(a,b){return new Date(a.end_date)-new Date(b.end_date);});
+      var totVal=0;inner='';
+      jobs.forEach(function(j){
+        var start=new Date(j.start_date).getTime(),end=new Date(j.end_date).getTime(),ms=end-now;
+        var prog=end>start?Math.max(0,Math.min(1,(now-start)/(end-start))):1;var pct=(prog*100).toFixed(1);
+        var val=(pr[j.product_type_id]||0)*(j.runs||1);totVal+=val;
+        var name=NM[j.product_type_id]||('#'+j.product_type_id);var col=ACOL[j.activity_id]||'#8ea6ff';
+        inner+='<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:.8rem"><span><b>'+name+'</b> <span class="muted">\u00b7 '+(ACTS[j.activity_id]||'job')+' \u00b7 x'+(j.runs||1)+'</span></span><span style="color:'+(ms<=0?'#54c28a':'#cfe3f0')+'">'+(ms<=0?'ready to deliver':tleft(ms))+' \u00b7 '+isk(val)+'</span></div><div style="height:8px;background:rgba(120,150,170,.12);border-radius:4px;margin-top:2px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+(ms<=0?'#54c28a':col)+';border-radius:4px"></div></div></div>';
+      });
+      inner+='<div class="muted small" style="margin-top:6px">Bar = progress to completion. Est. output value \u2248 <b>'+isk(totVal)+'</b> (Jita avg \u00d7 runs).</div>';
+    }
+    h.innerHTML='<section class="panel" style="padding:14px;margin-bottom:12px"><div style="font-weight:700;margin-bottom:8px">\u23f3 Job timeline</div>'+inner+'</section>';
+  }
+  setInterval(function(){var st=$('tab-sso');if(st&&!st.hidden&&st.offsetParent!==null)load();},2000);
+})();
+</script>
 </body>
 </html>
