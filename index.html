@@ -4267,5 +4267,68 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   setInterval(function(){var st=$('tab-sso');if(st&&!st.hidden&&st.offsetParent!==null)load();},2000);
 })();
 </script>
+<script>
+/* Build ranker v1 */
+(function(){
+  function $(id){return document.getElementById(id);}
+  var ESI='https://esi.evetech.net/latest';
+  var last=0,running=false,boms=null;
+  function isk(n){if(n==null||isNaN(n))return '\u2014';var a=Math.abs(n);var s=n<0?'-':'';if(a>=1e9)return s+(a/1e9).toFixed(2)+'B';if(a>=1e6)return s+(a/1e6).toFixed(2)+'M';if(a>=1e3)return s+(a/1e3).toFixed(1)+'K';return s+Math.round(a);}
+  function ldBom(){if(boms)return boms;try{boms=JSON.parse(localStorage.getItem('eveBpBomV1')||'{}');}catch(e){boms={};}return boms;}
+  function svBom(){try{localStorage.setItem('eveBpBomV1',JSON.stringify(boms));}catch(e){}}
+  async function pool(tasks,limit){var i=0;async function w(){while(i<tasks.length){var idx=i++;await tasks[idx]();}}var ws=[];for(var k=0;k<limit;k++)ws.push(w());await Promise.all(ws);}
+  async function bomFor(bpId){var b=ldBom();if(b[bpId])return b[bpId];try{var r=await fetch('https://ref-data.everef.net/blueprints/'+bpId);if(!r.ok){b[bpId]={none:true};return b[bpId];}var j=await r.json();var mfg=j.activities&&j.activities.manufacturing;if(!mfg||!mfg.products){b[bpId]={none:true};return b[bpId];}b[bpId]={mats:mfg.materials||{},prod:mfg.products||{}};return b[bpId];}catch(e){return {none:true};}}
+  function stub(){var h=host();if(h&&!h.innerHTML){h.innerHTML='<section class="panel" style="padding:14px;margin-bottom:12px"><div style="font-weight:700">\ud83d\udd28 What to build now</div><div class="muted small" id="acc-rk-status">Computing profitability\u2026 (first run fetches recipes, may take a moment)</div></section>';}}
+  function setStatus(m){var s=$('acc-rk-status');if(s)s.textContent=m;}
+  function host(){var h=$('acc-ranker');if(h)return h;var t=$('tab-sso');if(!t)return null;var sb=$('sso-body');h=document.createElement('div');h.id='acc-ranker';if(sb&&sb.parentNode){sb.parentNode.insertBefore(h,sb.nextSibling);}else{t.appendChild(h);}return h;}
+  async function run(force){
+    if(!window.EVEAPI||!EVEAPI.loggedIn())return;
+    if(running)return;if(!force&&Date.now()-last<180000&&$('acc-ranker')&&$('acc-ranker').innerHTML&&$('acc-ranker').innerHTML.indexOf('acc-rk-status')<0)return;
+    running=true;last=Date.now();stub();
+    try{
+      var ch=EVEAPI.getChar();var cid=ch.id;
+      var r=await EVEAPI.esi('/characters/'+cid+'/blueprints/');var all=(r&&r.data)?r.data.slice():[];
+      var pg=r?Math.min(r.pages||1,10):1;for(var p=2;p<=pg;p++){var rp=await EVEAPI.esi('/characters/'+cid+'/blueprints/?page='+p);if(rp)all=all.concat(rp.data||[]);}
+      var uniq={};all.forEach(function(b){var k=b.type_id;var me=b.material_efficiency||0;if(!uniq[k]||me>uniq[k].me)uniq[k]={bpId:k,me:me};});
+      var bps=Object.keys(uniq).map(function(k){return uniq[k];});
+      if(!bps.length){render([]);running=false;return;}
+      boms=ldBom();
+      setStatus('Loading recipes for '+bps.length+' blueprints\u2026');
+      var done=0;var tasks=bps.map(function(bp){return function(){return bomFor(bp.bpId).then(function(bom){bp.bom=bom;done++;if(done%10===0)setStatus('Loading recipes '+done+'/'+bps.length+'\u2026');});};});
+      await pool(tasks,6);svBom();
+      var pr={};try{var pp=await fetch(ESI+'/markets/prices/');var pj=await pp.json();(pj||[]).forEach(function(e){pr[e.type_id]=e.average_price||e.adjusted_price||0;});}catch(e){}
+      var pids=[];bps.forEach(function(bp){if(bp.bom&&bp.bom.prod){var k=Object.keys(bp.bom.prod)[0];if(k)pids.push(+k);}});
+      var NM=await EVEAPI.names(pids);
+      var rows=[];
+      bps.forEach(function(bp){
+        if(!bp.bom||bp.bom.none||!bp.bom.prod)return;
+        var pk=Object.keys(bp.bom.prod)[0];if(!pk)return;var prod=bp.bom.prod[pk];
+        var matCost=0;var mats=bp.bom.mats||{};
+        Object.keys(mats).forEach(function(mk){var m=mats[mk];var q=Math.max(1,Math.ceil((m.quantity||0)*(1-bp.me/100)));matCost+=q*(pr[m.type_id]||0);});
+        if(matCost<=0)return;
+        var revenue=(prod.quantity||1)*(pr[prod.type_id]||0);
+        var profit=revenue*0.955-matCost;var margin=matCost>0?profit/matCost*100:0;
+        rows.push({name:NM[prod.type_id]||('#'+prod.type_id),me:bp.me,cost:matCost,rev:revenue,profit:profit,margin:margin});
+      });
+      rows.sort(function(a,b){return b.profit-a.profit;});
+      render(rows);
+    }catch(e){setStatus('Could not compute.');}
+    running=false;
+  }
+  function render(rows){
+    var h=host();if(!h)return;
+    var inner;
+    if(!rows.length){inner='<div class="muted small">No buildable blueprints found (or blueprint access not granted \u2014 log out and back in).</div>';}
+    else{
+      inner='<table style="width:100%;border-collapse:collapse;font-size:.82rem"><thead><tr class="muted small"><th style="text-align:left;padding:2px 6px">Build</th><th style="text-align:right;padding:2px 6px">ME</th><th style="text-align:right;padding:2px 6px">Cost</th><th style="text-align:right;padding:2px 6px">Sells</th><th style="text-align:right;padding:2px 6px">Profit</th><th style="text-align:right;padding:2px 6px">Margin</th></tr></thead><tbody>';
+      rows.slice(0,40).forEach(function(r){var pc=r.profit>=0?'#54c28a':'#e0555a';inner+='<tr style="border-bottom:1px solid rgba(120,150,170,.08)"><td style="padding:2px 6px">'+r.name+'</td><td style="text-align:right;padding:2px 6px" class="muted">'+r.me+'</td><td style="text-align:right;padding:2px 6px">'+isk(r.cost)+'</td><td style="text-align:right;padding:2px 6px">'+isk(r.rev)+'</td><td style="text-align:right;padding:2px 6px;color:'+pc+';font-weight:700">'+isk(r.profit)+'</td><td style="text-align:right;padding:2px 6px;color:'+pc+'">'+r.margin.toFixed(0)+'%</td></tr>';});
+      inner+='</tbody></table><div class="muted small" style="margin-top:4px">Per-unit, your ME applied, Jita average prices, 4.5% sales tax, job fees excluded. <a href="#" id="acc-rk-refresh" style="color:#7fb0c8">refresh prices</a></div>';
+    }
+    h.innerHTML='<section class="panel" style="padding:14px;margin-bottom:12px"><div style="font-weight:700;margin-bottom:8px">\ud83d\udd28 What to build now <span id="acc-rk-status" class="muted small" style="font-weight:400"></span></div>'+inner+'</section>';
+    var rf=$('acc-rk-refresh');if(rf)rf.addEventListener('click',function(ev){ev.preventDefault();run(true);});
+  }
+  setInterval(function(){var st=$('tab-sso');if(st&&!st.hidden&&st.offsetParent!==null)run(false);},2500);
+})();
+</script>
 </body>
 </html>
