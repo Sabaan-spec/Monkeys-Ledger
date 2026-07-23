@@ -3852,7 +3852,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 (function(){
   var CID='338120aa23d64fbabc5185ed10ddcd89';
   var REDIR='https://www.kaalakiotaforge.com/index.html';
-  var SCOPES='publicData esi-wallet.read_character_wallet.v1 esi-skills.read_skills.v1 esi-industry.read_character_jobs.v1 esi-assets.read_assets.v1 esi-markets.read_character_orders.v1 esi-characters.read_blueprints.v1';
+  var SCOPES='publicData esi-wallet.read_character_wallet.v1 esi-skills.read_skills.v1 esi-industry.read_character_jobs.v1 esi-assets.read_assets.v1 esi-markets.read_character_orders.v1 esi-characters.read_blueprints.v1 esi-planets.manage_planets.v1';
   var AUTHZ='https://login.eveonline.com/v2/oauth/authorize/';
   var TOKEN='https://login.eveonline.com/v2/oauth/token';
   var ESI='https://esi.evetech.net/latest';
@@ -4429,6 +4429,45 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   }
   document.addEventListener('click',function(ev){if(!ev.target.closest)return;var tr=ev.target.closest('.rp-scan-row');if(!tr)return;var id=+tr.getAttribute('data-id');var name=tr.getAttribute('data-name');if(window.rpSelect){try{rpSelect({id:id,name:name});}catch(e){}}var tb=document.querySelector('.tab[data-tab="repro"]');if(tb)tb.click();try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){}});
   setInterval(function(){var st=$('tab-sso');if(st&&!st.hidden&&st.offsetParent!==null)run(false);},3000);
+})();
+</script>
+<script>
+/* PI colonies v1 */
+(function(){
+  function $(id){return document.getElementById(id);}
+  var last=0,loading=false,MAP=null;
+  function sysName(sid){if(!MAP){try{MAP=JSON.parse(localStorage.getItem('eveMapV2')||'null');}catch(e){}}if(MAP&&MAP.sys&&MAP.sys[sid])return MAP.sys[sid][2];return '#'+sid;}
+  function tleft(ts){var ms=new Date(ts).getTime()-Date.now();if(ms<=0)return null;var h=Math.floor(ms/3.6e6),m=Math.floor(ms%3.6e6/6e4);if(h>=24)return Math.floor(h/24)+'d '+(h%24)+'h';return h+'h '+m+'m';}
+  function cap(s){return s?String(s).charAt(0).toUpperCase()+String(s).slice(1):s;}
+  function host(){var t=$('tab-pi');if(!t)return null;var h=$('pi-colonies');if(h)return h;h=document.createElement('div');h.id='pi-colonies';t.insertBefore(h,t.firstChild);return h;}
+  function stub(){var h=host();if(h&&!h.innerHTML){h.innerHTML='<section class="panel" style="padding:14px;margin-bottom:12px"><div style="font-weight:700">\ud83e\ude90 Your PI colonies</div><div class="muted small" id="pi-col-status">Loading colonies\u2026</div></section>';}}
+  async function load(){
+    if(!window.EVEAPI||!EVEAPI.loggedIn())return;
+    if(loading)return;if(Date.now()-last<120000&&$('pi-colonies')&&$('pi-colonies').innerHTML&&$('pi-colonies').innerHTML.indexOf('pi-col-status')<0)return;
+    loading=true;last=Date.now();stub();
+    try{
+      var ch=EVEAPI.getChar();var cid=ch.id;
+      var r=await EVEAPI.esi('/characters/'+cid+'/planets/');
+      if(!r){render(null);loading=false;return;}
+      var cols=(r.data||[]);var out=[];
+      for(var i=0;i<cols.length;i++){var c=cols[i];var d=await EVEAPI.esi('/characters/'+cid+'/planets/'+c.planet_id+'/');var pins=(d&&d.data&&d.data.pins)?d.data.pins:[];var exps=[];var ext=0;pins.forEach(function(p){if(p.extractor_details){ext++;}if(p.expiry_time)exps.push(p.expiry_time);});exps.sort();out.push({type:c.planet_type,sys:c.solar_system_id,lvl:c.upgrade_level,pins:c.num_pins,ext:ext,soonest:exps.length?exps[0]:null});}
+      render(out);
+    }catch(e){}
+    loading=false;
+  }
+  function render(cols){
+    var h=host();if(!h)return;var inner;
+    if(cols===null){inner='<div class="muted small">No colony data. If you just enabled the scope, log out and back in on the Account tab to grant planet access.</div>';}
+    else if(!cols.length){inner='<div class="muted small">You have no planetary colonies.</div>';}
+    else{
+      var idle=cols.filter(function(c){return c.ext&&(!c.soonest||new Date(c.soonest).getTime()<=Date.now());}).length;
+      inner='<div class="muted small" style="margin-bottom:4px">'+cols.length+' colon'+(cols.length>1?'ies':'y')+(idle?(' \u00b7 <span style="color:#e0555a;font-weight:700">'+idle+' need attention</span>'):' \u00b7 <span style="color:#54c28a">all running</span>')+'</div><table style="width:100%;border-collapse:collapse;font-size:.82rem"><thead><tr class="muted small"><th style="text-align:left;padding:2px 6px">Planet</th><th style="text-align:left;padding:2px 6px">System</th><th style="text-align:right;padding:2px 6px">CC</th><th style="text-align:left;padding:2px 6px">Extractors</th></tr></thead><tbody>';
+      cols.forEach(function(c){var tl=c.soonest?tleft(c.soonest):null;var st,col;if(!c.ext){st='no extractor';col='#9fb2c0';}else if(!tl){st='\u26a0\ufe0f IDLE \u2014 expired';col='#e0555a';}else{st='expires in '+tl;col=(new Date(c.soonest).getTime()-Date.now()<6*3.6e6)?'#e3b341':'#cfe3f0';}inner+='<tr style="border-bottom:1px solid rgba(120,150,170,.08)"><td style="padding:2px 6px">'+cap(c.type)+'</td><td style="padding:2px 6px">'+sysName(c.sys)+'</td><td style="text-align:right;padding:2px 6px" class="muted">'+c.lvl+'</td><td style="padding:2px 6px;color:'+col+';font-weight:600">'+st+'</td></tr>';});
+      inner+='</tbody></table><div class="muted small" style="margin-top:4px">Extractor expiry = when heads stop pulling. Restart before then to avoid idle time.</div>';
+    }
+    h.innerHTML='<section class="panel" style="padding:14px;margin-bottom:12px"><div style="font-weight:700;margin-bottom:8px">\ud83e\ude90 Your PI colonies <span id="pi-col-status" class="muted small" style="font-weight:400"></span></div>'+inner+'</section>';
+  }
+  setInterval(function(){var t=$('tab-pi');if(t&&!t.hidden&&t.offsetParent!==null)load();},2500);
 })();
 </script>
 </body>
