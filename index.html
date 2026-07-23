@@ -4330,5 +4330,45 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   setInterval(function(){var st=$('tab-sso');if(st&&!st.hidden&&st.offsetParent!==null)run(false);},2500);
 })();
 </script>
+<script>
+/* Burn rate v1 */
+(function(){
+  function $(id){return document.getElementById(id);}
+  var last=0,loading=false,jnet=null,jdays=30;
+  function isk(n){if(n==null||isNaN(n))return '\u2014';var a=Math.abs(n);var s=n<0?'-':'';if(a>=1e9)return s+(a/1e9).toFixed(2)+'B';if(a>=1e6)return s+(a/1e6).toFixed(2)+'M';if(a>=1e3)return s+(a/1e3).toFixed(1)+'K';return s+Math.round(a);}
+  function host(){var h=$('acc-burn');if(h)return h;var t=$('tab-sso');if(!t)return null;var sb=$('sso-body');h=document.createElement('div');h.id='acc-burn';if(sb&&sb.parentNode){sb.parentNode.insertBefore(h,sb.nextSibling);}else{t.appendChild(h);}return h;}
+  async function load(){
+    if(!window.EVEAPI||!EVEAPI.loggedIn())return;
+    if(loading)return;if(Date.now()-last<120000&&jnet!=null){render();return;}
+    loading=true;last=Date.now();
+    try{
+      var ch=EVEAPI.getChar();var cid=ch.id;
+      var journal=[];var jr=await EVEAPI.esi('/characters/'+cid+'/wallet/journal/');if(jr){journal=(jr.data||[]).slice();var pg=Math.min(jr.pages||1,4);for(var p=2;p<=pg;p++){var jp=await EVEAPI.esi('/characters/'+cid+'/wallet/journal/?page='+p);if(jp)journal=journal.concat(jp.data||[]);}}
+      var cutoff=Date.now()-30*86400000;var recent=journal.filter(function(e){return new Date(e.date).getTime()>=cutoff;});
+      var net=0,oldest=Date.now();recent.forEach(function(e){net+=e.amount||0;var d=new Date(e.date).getTime();if(d<oldest)oldest=d;});
+      jdays=Math.max(1,Math.min(30,Math.round((Date.now()-oldest)/86400000)))||30;
+      jnet=net;render();
+    }catch(e){}
+    loading=false;
+  }
+  function render(){
+    var h=host();if(!h)return;
+    var daily=jnet!=null?jnet/jdays:0;
+    var snaps={};try{snaps=JSON.parse(localStorage.getItem('eveNetWorthV1')||'{}');}catch(e){}
+    var keys=Object.keys(snaps).sort();var current=keys.length?snaps[keys[keys.length-1]]:0;
+    var goal=0;try{goal=+(localStorage.getItem('eveGoalV1')||0);}catch(e){}
+    var daysToGoal=(goal>current&&daily>0)?Math.ceil((goal-current)/daily):null;
+    var eta=daysToGoal!=null?new Date(Date.now()+daysToGoal*86400000).toISOString().slice(0,10):null;
+    var earnBurn=daily>=0?('<span style="color:#54c28a;font-weight:700">earning '+isk(Math.abs(daily))+'/day</span>'):('<span style="color:#e0555a;font-weight:700">burning '+isk(Math.abs(daily))+'/day</span>');
+    var inner='<div style="font-size:.95rem;margin-bottom:8px">'+earnBurn+' <span class="muted small">\u00b7 30-day net '+isk(jnet)+'</span></div>';
+    inner+='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="muted small">Goal ISK:</span><input id="acc-goal-in" type="text" value="'+(goal||'')+'" placeholder="e.g. 5000000000" style="width:150px;background:#0d1a24;color:#cfe3f0;border:1px solid #2a4a5c;border-radius:4px;padding:2px 6px;font-size:.82rem"><button id="acc-goal-set" class="btn" style="font-size:.75rem;padding:2px 8px">set</button>';
+    if(goal>0){if(current>=goal){inner+='<span style="color:#54c28a;font-weight:700">\u2705 goal reached</span>';}else if(daysToGoal!=null){inner+='<span style="font-weight:700;color:#8ea6ff">'+daysToGoal.toLocaleString()+' days \u2192 '+eta+'</span>';}else{inner+='<span class="muted small">need positive net income to project</span>';}}
+    inner+='</div><div class="muted small" style="margin-top:6px">Daily rate from your wallet journal (last '+jdays+'d). Projection vs current net worth '+isk(current)+' (from the Net worth card).</div>';
+    h.innerHTML='<section class="panel" style="padding:14px;margin-bottom:12px"><div style="font-weight:700;margin-bottom:8px">\ud83d\udcc9 Burn / earn rate</div>'+inner+'</section>';
+    var b=$('acc-goal-set');if(b)b.onclick=function(){var v=(($('acc-goal-in')||{}).value||'').replace(/[^0-9]/g,'');try{localStorage.setItem('eveGoalV1',v||'0');}catch(e){}render();};
+  }
+  setInterval(function(){var st=$('tab-sso');if(st&&!st.hidden&&st.offsetParent!==null)load();},2500);
+})();
+</script>
 </body>
 </html>
