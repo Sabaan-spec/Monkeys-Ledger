@@ -4370,5 +4370,64 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   setInterval(function(){var st=$('tab-sso');if(st&&!st.hidden&&st.offsetParent!==null)load();},2500);
 })();
 </script>
+<script>
+/* Reprocess scanner v1 */
+(function(){
+  function $(id){return document.getElementById(id);}
+  var ESI='https://esi.evetech.net/latest';
+  var last=0,running=false,types=null;
+  function isk(n){if(n==null||isNaN(n))return '\u2014';var a=Math.abs(n);if(a>=1e9)return (a/1e9).toFixed(2)+'B';if(a>=1e6)return (a/1e6).toFixed(2)+'M';if(a>=1e3)return (a/1e3).toFixed(1)+'K';return Math.round(a).toString();}
+  function ldTypes(){if(types)return types;try{types=JSON.parse(localStorage.getItem('eveTypeMatV1')||'{}');}catch(e){types={};}return types;}
+  function svTypes(){try{localStorage.setItem('eveTypeMatV1',JSON.stringify(types));}catch(e){}}
+  async function pool(tasks,limit){var i=0;async function w(){while(i<tasks.length){var idx=i++;await tasks[idx]();}}var ws=[];for(var k=0;k<limit;k++)ws.push(w());await Promise.all(ws);}
+  async function typeFor(id){var t=ldTypes();if(t[id])return t[id];try{var r=await fetch('https://ref-data.everef.net/types/'+id);if(!r.ok){t[id]={none:true};return t[id];}var j=await r.json();var tm=j.type_materials;if(!tm||!Object.keys(tm).length||!j.portion_size){t[id]={none:true};return t[id];}var mats=Object.keys(tm).map(function(k){return {id:tm[k].material_type_id,q:tm[k].quantity};});t[id]={portion:j.portion_size,mats:mats,name:j.name,cat:j.category_id};return t[id];}catch(e){return {none:true};}}
+  function host(){var h=$('acc-repro');if(h)return h;var t=$('tab-sso');if(!t)return null;var sb=$('sso-body');h=document.createElement('div');h.id='acc-repro';if(sb&&sb.parentNode){sb.parentNode.insertBefore(h,sb.nextSibling);}else{t.appendChild(h);}return h;}
+  function setStatus(m){var s=$('acc-rp-status');if(s)s.textContent=m;}
+  function stub(){var h=host();if(h&&!h.innerHTML){h.innerHTML='<section class="panel" style="padding:14px;margin-bottom:12px"><div style="font-weight:700">\u267b\ufe0f Reprocess scanner</div><div class="muted small" id="acc-rp-status">Scanning your assets\u2026 (first run fetches item data)</div></section>';}}
+  async function run(force){
+    if(!window.EVEAPI||!EVEAPI.loggedIn())return;
+    if(running)return;if(!force&&Date.now()-last<180000&&$('acc-repro')&&$('acc-repro').innerHTML&&$('acc-repro').innerHTML.indexOf('acc-rp-status')<0)return;
+    running=true;last=Date.now();stub();
+    try{
+      var byId=(window.EVEACC&&EVEACC.byId)||{};var ids=Object.keys(byId).map(Number);
+      if(!ids.length){render([],0.5);running=false;return;}
+      var pr={};try{var pp=await fetch(ESI+'/markets/prices/');var pj=await pp.json();(pj||[]).forEach(function(e){pr[e.type_id]=e.average_price||e.adjusted_price||0;});}catch(e){}
+      ids.sort(function(a,b){return (pr[b]||0)*byId[b]-(pr[a]||0)*byId[a];});
+      var scan=ids.slice(0,150);
+      types=ldTypes();
+      var yEl=$('rp-yield');var yld=(yEl&&+yEl.value)?(+yEl.value/100):0.5;if(yld<=0||yld>1)yld=0.5;
+      setStatus('Scanning '+scan.length+' item types\u2026');
+      var done=0;var tasks=scan.map(function(id){return function(){return typeFor(id).then(function(){done++;if(done%20===0)setStatus('Scanning '+done+'/'+scan.length+'\u2026');});};});
+      await pool(tasks,6);svTypes();
+      var nm=await EVEAPI.names(scan);
+      var rows=[];
+      scan.forEach(function(id){
+        var t=types[id];if(!t||t.none)return;var qty=byId[id];
+        var repU=0;t.mats.forEach(function(m){repU+=m.q*yld*(pr[m.id]||0);});repU=repU/t.portion;
+        var sellU=pr[id]||0;if(repU<=0&&sellU<=0)return;
+        var repT=repU*qty,sellT=sellU*qty;
+        rows.push({id:id,name:(t.name||nm[id]||('#'+id)),qty:qty,sellT:sellT,repT:repT,better:repT>sellT?'REPROCESS':'SELL',gain:Math.abs(repT-sellT)});
+      });
+      rows.sort(function(a,b){var ar=a.better==='REPROCESS'?1:0,br=b.better==='REPROCESS'?1:0;if(ar!==br)return br-ar;return b.gain-a.gain;});
+      render(rows,yld);
+    }catch(e){setStatus('Could not scan.');}
+    running=false;
+  }
+  function render(rows,yld){
+    var h=host();if(!h)return;var inner;
+    if(!rows.length){inner='<div class="muted small">No reprocessable assets found (need assets loaded and logged in).</div>';}
+    else{
+      var rep=rows.filter(function(r){return r.better==='REPROCESS';}).length;
+      inner='<div class="muted small" style="margin-bottom:4px">'+rep+' of '+rows.length+' worth reprocessing at ~'+Math.round(yld*100)+'% yield \u2014 click a row to open in Reprocess</div><table style="width:100%;border-collapse:collapse;font-size:.82rem"><thead><tr class="muted small"><th style="text-align:left;padding:2px 6px">Item</th><th style="text-align:right;padding:2px 6px">Qty</th><th style="text-align:right;padding:2px 6px">Sell</th><th style="text-align:right;padding:2px 6px">Reprocess</th><th style="padding:2px 6px">Better</th></tr></thead><tbody>';
+      rows.slice(0,40).forEach(function(r){var c=r.better==='REPROCESS'?'#54c28a':'#7fb0c8';inner+='<tr class="rp-scan-row" data-id="'+r.id+'" data-name="'+String(r.name).split('"').join('')+'" title="Open in Reprocess" style="border-bottom:1px solid rgba(120,150,170,.08);cursor:pointer"><td style="padding:2px 6px">'+r.name+'</td><td style="text-align:right;padding:2px 6px" class="muted">'+r.qty.toLocaleString()+'</td><td style="text-align:right;padding:2px 6px">'+isk(r.sellT)+'</td><td style="text-align:right;padding:2px 6px">'+isk(r.repT)+'</td><td style="text-align:center;padding:2px 6px;color:'+c+';font-weight:700">'+r.better+'</td></tr>';});
+      inner+='</tbody></table><div class="muted small" style="margin-top:4px">Reprocess value at your Reprocess-tab yield ('+Math.round(yld*100)+'%), Jita avg material prices. <a href="#" id="acc-rp-refresh" style="color:#7fb0c8">rescan</a></div>';
+    }
+    h.innerHTML='<section class="panel" style="padding:14px;margin-bottom:12px"><div style="font-weight:700;margin-bottom:8px">\u267b\ufe0f Reprocess scanner <span id="acc-rp-status" class="muted small" style="font-weight:400"></span></div>'+inner+'</section>';
+    var rf=$('acc-rp-refresh');if(rf)rf.addEventListener('click',function(ev){ev.preventDefault();run(true);});
+  }
+  document.addEventListener('click',function(ev){if(!ev.target.closest)return;var tr=ev.target.closest('.rp-scan-row');if(!tr)return;var id=+tr.getAttribute('data-id');var name=tr.getAttribute('data-name');if(window.rpSelect){try{rpSelect({id:id,name:name});}catch(e){}}var tb=document.querySelector('.tab[data-tab="repro"]');if(tb)tb.click();try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){}});
+  setInterval(function(){var st=$('tab-sso');if(st&&!st.hidden&&st.offsetParent!==null)run(false);},3000);
+})();
+</script>
 </body>
 </html>
