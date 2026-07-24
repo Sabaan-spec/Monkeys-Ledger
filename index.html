@@ -4476,7 +4476,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
         if(expired)idle++;else if(soonest&&new Date(soonest).getTime()-Date.now()<6*3.6e6)soon++;
         rows.push({c:c,products:products,soonest:soonest,daily:daily,prog:prog,expired:expired});
       });
-      window.EVEACC=window.EVEACC||{};EVEACC.piAttention={idle:idle,soon:soon};
+      window.EVEACC=window.EVEACC||{};EVEACC.piAttention={idle:idle,soon:soon};window.EVEPICOLS=rows;
       rows.sort(function(a,b){var ax=a.expired?0:(a.soonest?new Date(a.soonest).getTime():9e15);var bx=b.expired?0:(b.soonest?new Date(b.soonest).getTime():9e15);return ax-bx;});
       render(rows);
     }catch(e){}
@@ -4732,6 +4732,83 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   document.addEventListener('change',function(ev){if(ev.target&&ev.target.id==='pw-group'){if(String(ev.target.value).indexOf('raw:')!==0)rawActive=null;}},true);
   function watchBody(){var body=$('pw-body');if(!body||body._rawObs)return;body._rawObs=1;new MutationObserver(function(){if(rawActive&&!myWrite){if(reTimer)clearTimeout(reTimer);reTimer=setTimeout(function(){if(rawActive&&!building)runRaw(rawActive);},450);}}).observe(body,{childList:true});}
   setInterval(function(){var t=$('tab-top');if(!(t&&!t.hidden&&t.offsetParent!==null))return;addOpts();watchBody();var grp=$('pw-group');if(rawActive&&grp&&grp.value===''&&[].some.call(grp.options,function(o){return o.value==='raw:'+rawActive;})){grp.value='raw:'+rawActive;}},900);
+})();
+</script>
+<script>
+/* PI optimizer v1 */
+(function(){
+  function $(id){return document.getElementById(id);}
+  function isk(n){if(n==null||isNaN(n))return '\u2014';var a=Math.abs(n);if(a>=1e9)return (a/1e9).toFixed(2)+'B';if(a>=1e6)return (a/1e6).toFixed(2)+'M';if(a>=1e3)return (a/1e3).toFixed(1)+'K';return Math.round(a).toString();}
+  // Canonical ECU output prediction (CCP Prism X formula)
+  function program(qtyPerHour,cycleSec,totalSec){
+    var f1=1/12,f2=1/5,f3=1/2,decay=0.012,noise=0.8;
+    var barWidth=cycleSec/900.0;
+    var n=Math.floor(totalSec/cycleSec);
+    var vals=[];var total=0;
+    var phase=Math.pow(qtyPerHour,0.7);
+    for(var i=0;i<n;i++){
+      var t=(i+0.5)*barWidth;
+      var decayValue=qtyPerHour/(1+t*decay);
+      var sinA=Math.cos(phase+t*f1),sinB=Math.cos(phase/2+t*f2),sinC=Math.cos(t*f3);
+      var sinStuff=Math.max((sinA+sinB+sinC)/3,0);
+      var v=Math.floor(barWidth*decayValue*(1+noise*sinStuff));
+      vals.push(v);total+=v;
+    }
+    return {total:total,cycles:n,vals:vals};
+  }
+  // program length -> cycle time (EVE: cycle scales with program length)
+  function cycleFor(hours){if(hours<=25)return 1800;if(hours<=50)return 3600;if(hours<=100)return 7200;return 14400;}
+  function build(){
+    var t=$('tab-pi');if(!t||$('pi-opt'))return;
+    var host=document.createElement('div');host.id='pi-opt';
+    var anchor=$('pi-colonies');
+    if(anchor&&anchor.nextSibling)t.insertBefore(host,anchor.nextSibling);else t.appendChild(host);
+    host.innerHTML='<section class="panel" style="padding:14px;margin-bottom:12px"><div style="font-weight:700;margin-bottom:8px">\u2699\ufe0f Extractor program optimizer</div>'
+      +'<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:8px">'
+      +'<div class="field narrow"><label>QTY / HOUR (BASE)</label><input id="pio-qph" type="number" value="8000" style="width:110px"></div>'
+      +'<div class="field"><label>ISK / UNIT (P0)</label><input id="pio-isk" type="number" step="0.1" value="15" style="width:90px"></div>'
+      +'<div class="field"><button id="pio-go" class="btn">Compare programs</button></div>'
+      +'<div class="field"><span id="pio-from" class="muted small"></span></div></div>'
+      +'<div id="pio-out" class="muted small">Set your extractor\u2019s base rate (or click a colony above to prefill) and compare program lengths.</div></section>';
+    $('pio-go').addEventListener('click',run);
+  }
+  function run(){
+    var qph=+($('pio-qph')||{}).value||0;var iskU=+($('pio-isk')||{}).value||0;
+    if(qph<=0){$('pio-out').textContent='Enter a base qty/hour.';return;}
+    var lens=[[24,'1 day'],[48,'2 days'],[72,'3 days'],[96,'4 days'],[168,'7 days'],[336,'14 days']];
+    var rows=lens.map(function(L){var cyc=cycleFor(L[0]);var p=program(qph,cyc,L[0]*3600);var perDay=p.total/(L[0]/24);return {label:L[1],cyc:cyc,total:p.total,perDay:perDay,cycles:p.cycles};});
+    var best=rows.reduce(function(a,b){return b.perDay>a.perDay?b:a;},rows[0]);
+    var h='<table style="width:100%;border-collapse:collapse;font-size:.82rem"><thead><tr class="muted small"><th style="text-align:left;padding:2px 6px">Program</th><th style="text-align:right;padding:2px 6px">Cycle</th><th style="text-align:right;padding:2px 6px">Cycles</th><th style="text-align:right;padding:2px 6px">Total units</th><th style="text-align:right;padding:2px 6px">Units / day</th><th style="text-align:right;padding:2px 6px">ISK / day</th><th style="padding:2px 6px"></th></tr></thead><tbody>';
+    rows.forEach(function(r){var isBest=r===best;h+='<tr style="border-bottom:1px solid rgba(120,150,170,.08)'+(isBest?';background:rgba(84,194,138,.08)':'')+'"><td style="padding:2px 6px">'+r.label+'</td><td style="text-align:right;padding:2px 6px" class="muted">'+(r.cyc/60)+'m</td><td style="text-align:right;padding:2px 6px" class="muted">'+r.cycles+'</td><td style="text-align:right;padding:2px 6px">'+r.total.toLocaleString()+'</td><td style="text-align:right;padding:2px 6px;font-weight:700">'+Math.round(r.perDay).toLocaleString()+'</td><td style="text-align:right;padding:2px 6px;color:#54c28a">'+isk(r.perDay*iskU)+'</td><td style="padding:2px 6px;color:#54c28a;font-weight:700">'+(isBest?'\u2b50 best rate':'')+'</td></tr>';});
+    h+='</tbody></table><div class="muted small" style="margin-top:4px">Shorter programs = higher yield/day but more clicking; longer = convenience at a discount. CCP decay formula; treats hotspot richness as constant.</div>';
+    $('pio-out').innerHTML=h;
+  }
+  // prefill from clicked colony (uses live extractor data)
+  document.addEventListener('click',function(ev){if(!ev.target.closest)return;var row=ev.target.closest('.pi-col-row');if(!row)return;var cols=window.EVEPICOLS||[];var prod=row.getAttribute('data-prod');var col=cols.find(function(c){return (c.products||[])[0]===prod;});if(!col)return;var ext=(col.c&&col.c.exts||[]).find(function(p){return p.extractor_details&&p.extractor_details.qty_per_cycle;});if(!ext)return;var ed=ext.extractor_details;var qph=Math.round(ed.qty_per_cycle/(ed.cycle_time/3600));var qEl=$('pio-qph');if(qEl&&qph>0){qEl.value=qph;var f=$('pio-from');if(f)f.textContent='prefilled from your '+(col.c.type||'')+' colony ('+prod+')';}});
+  // Insights card
+  var insLast=0;
+  async function insights(){
+    var t=$('tab-pi');if(!t)return;
+    var cols=window.EVEPICOLS;if(!cols||!cols.length){var old=$('pi-insights');if(old)old.remove();return;}
+    if(Date.now()-insLast<60000&&$('pi-insights'))return;insLast=Date.now();
+    var host=$('pi-insights');
+    if(!host){host=document.createElement('div');host.id='pi-insights';var anchor=$('pi-opt')||$('pi-colonies');if(anchor&&anchor.nextSibling)t.insertBefore(host,anchor.nextSibling);else t.appendChild(host);}
+    var totDaily=0;cols.forEach(function(r){totDaily+=(r.daily||0);});
+    var tips=[];
+    var idle=cols.filter(function(r){return r.expired;}).length;
+    if(idle)tips.push({c:'#e0555a',t:idle+' colon'+(idle>1?'ies':'y')+' with expired extractors \u2014 restarting them is free ISK.'});
+    var noExt=cols.filter(function(r){return !(r.c.exts||[]).length;}).length;
+    if(noExt)tips.push({c:'#e3b341',t:noExt+' colon'+(noExt>1?'ies':'y')+' with no extractor running.'});
+    var lowCC=cols.filter(function(r){return (r.c.lvl||0)<5;}).length;
+    if(lowCC)tips.push({c:'#e3b341',t:lowCC+' command center'+(lowCC>1?'s':'')+' below level 5 \u2014 upgrading adds CPU/PG for more heads &amp; factories.'});
+    var maxPlanets=null;
+    try{if(window.EVEAPI&&EVEAPI.loggedIn()){var ch=EVEAPI.getChar();var sk=await EVEAPI.esi('/characters/'+ch.id+'/skills/');var f=sk&&sk.data&&sk.data.skills?sk.data.skills.find(function(s){return s.skill_id===2495;}):null;maxPlanets=1+(f?f.active_skill_level:0);}}catch(e){}
+    if(maxPlanets!=null&&cols.length<maxPlanets)tips.push({c:'#8ea6ff',t:'You can run '+maxPlanets+' planets but only have '+cols.length+' colonies \u2014 '+(maxPlanets-cols.length)+' free slot'+(maxPlanets-cols.length>1?'s':'')+'.'});
+    var inner='<div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:8px"><div><div class="muted small">Est. PI income</div><div style="font-weight:800;font-size:1.3rem;color:#54c28a">'+isk(totDaily)+' / day</div></div><div><div class="muted small">Colonies</div><div style="font-weight:800;font-size:1.3rem">'+cols.length+(maxPlanets!=null?('<span class="muted" style="font-size:.85rem"> / '+maxPlanets+'</span>'):'')+'</div></div></div>';
+    inner+=tips.length?tips.map(function(x){return '<div style="padding:4px 0;border-bottom:1px solid rgba(120,150,170,.08);color:'+x.c+';font-weight:600">\u2022 '+x.t+'</div>';}).join(''):'<div class="muted small" style="color:#54c28a">\u2705 Colonies look well set up.</div>';
+    host.innerHTML='<section class="panel" style="padding:14px;margin-bottom:12px"><div style="font-weight:700;margin-bottom:8px">\ud83d\udca1 PI insights</div>'+inner+'</section>';
+  }
+  setInterval(function(){var t=$('tab-pi');if(t&&!t.hidden&&t.offsetParent!==null){build();insights();}},1500);
 })();
 </script>
 </body>
