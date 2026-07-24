@@ -4687,7 +4687,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   function setStatus(m){var s=$('pw-status');if(s)s.textContent=m;}
   function hideCatCol(){var c=$('pw-th-cat');if(c)c.style.display='none';}
   async function runRaw(kind){
-    building=true;myWrite=true;rawActive=kind;hideCatCol();
+    building=true;myWrite=true;rawActive=kind;hideCatCol();var _w=$('pw-wrap');if(_w){_w.hidden=false;if(getComputedStyle(_w).display==='none')_w.style.display='block';}var _e=$('pw-empty');if(_e)_e.style.display='none';
     setStatus('Loading item list\u2026');
     await buildLists();
     var ids=(LIST[kind]||[]).filter(function(x){return x;});
