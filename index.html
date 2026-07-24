@@ -4597,5 +4597,37 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   var pend=false;function kick(){if(pend)return;pend=true;requestAnimationFrame(function(){pend=false;var t=$('tab-sso');if(t&&!t.hidden)enhance();});}var obsStarted=false;function watch(){if(obsStarted)return;var t=$('tab-sso');if(!t)return;obsStarted=true;new MutationObserver(kick).observe(t,{childList:true,subtree:true});}setInterval(function(){watch();var t=$('tab-sso');if(t&&!t.hidden&&t.offsetParent!==null){enhance();var a=$('acc-asof');if(a)a.textContent='data as of '+new Date().toLocaleTimeString();}},1500);
 })();
 </script>
+<script>
+/* Market sidebar v1 */
+(function(){
+  function $(id){return document.getElementById(id);}
+  var css=document.createElement('style');
+  css.textContent='#mb-side{position:relative;transition:flex-basis .18s ease}#mb-side.mb-collapsed{flex:0 0 30px!important;width:30px!important;min-width:30px!important;overflow:hidden}#mb-side.mb-collapsed>*:not(#mb-side-toggle){display:none!important}#mb-side-toggle{position:absolute;top:2px;right:2px;z-index:5;width:24px;height:24px;line-height:22px;text-align:center;border:1px solid rgba(120,150,170,.4);border-radius:5px;background:rgba(20,40,55,.85);color:#7fb0c8;cursor:pointer;font-size:.8rem;user-select:none}#mb-side-toggle:hover{color:#cfe3f0;border-color:#7fb0c8}#mb-side.mb-collapsed #mb-side-toggle{right:3px}#mb-history svg,#mb-history canvas{width:100%!important;height:auto}#mb-orders{max-width:none}';
+  document.head.appendChild(css);
+  function saved(){try{return localStorage.getItem('eveMbSideV1')==='0';}catch(e){return false;}}
+  function save(collapsed){try{localStorage.setItem('eveMbSideV1',collapsed?'0':'1');}catch(e){}}
+  function redraw(){
+    try{window.dispatchEvent(new Event('resize'));}catch(e){}
+    // re-click the active period button to force the history chart to redraw at the new width
+    setTimeout(function(){
+      var hist=$('mb-history');if(!hist||getComputedStyle(hist).display==='none')return;
+      var btns=[].slice.call(document.querySelectorAll('#tab-arb button')).filter(function(b){return /^(7D|30D|90D|180D|1Y)$/.test(b.textContent.trim());});
+      var act=btns.find(function(b){return b.className.indexOf('on')>=0||b.getAttribute('data-on')==='1';})||btns[1];
+      if(act)act.click();
+    },200);
+  }
+  function apply(collapsed){var s=$('mb-side');if(!s)return;s.classList.toggle('mb-collapsed',collapsed);var t=$('mb-side-toggle');if(t){t.textContent=collapsed?'\u276f':'\u276e';t.title=collapsed?'Expand sidebar':'Minimize sidebar';}save(collapsed);redraw();}
+  function ensure(){
+    var s=$('mb-side');if(!s)return;
+    if(!$('mb-side-toggle')){
+      var t=document.createElement('div');t.id='mb-side-toggle';
+      s.insertBefore(t,s.firstChild);
+      t.addEventListener('click',function(){apply(!s.classList.contains('mb-collapsed'));});
+      if(saved())apply(true);
+    }
+  }
+  setInterval(function(){var t=$('tab-arb');if(t&&!t.hidden&&t.offsetParent!==null)ensure();},1000);
+})();
+</script>
 </body>
 </html>
