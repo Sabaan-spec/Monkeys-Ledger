@@ -4538,7 +4538,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   function $(id){return document.getElementById(id);}
   var ORDER=['characters','net worth','needs attention','job slots','job timeline','burn / earn','wallet p&l','what to build','blueprints','reprocess scanner','all characters','watchlist'];
   var css=document.createElement('style');
-  css.textContent='#tab-sso{display:grid;grid-template-columns:1fr 1fr;gap:0 14px;align-items:start}#tab-sso>div{display:contents}#tab-sso>section.panel{grid-column:1/-1}@media(max-width:1100px){#tab-sso{grid-template-columns:1fr}}#tab-sso .acc-col-title{cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center}#tab-sso .acc-caret{transition:transform .15s ease;opacity:.6;font-size:.85rem;margin-left:8px}';
+  css.textContent='#tab-sso[hidden]{display:none!important}#tab-sso{display:grid;grid-template-columns:1fr 1fr;gap:0 14px;align-items:start}#tab-sso>div{display:contents}#tab-sso>section.panel{grid-column:1/-1}@media(max-width:1100px){#tab-sso{grid-template-columns:1fr}}#tab-sso .acc-col-title{cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center}#tab-sso .acc-caret{transition:transform .15s ease;opacity:.6;font-size:.85rem;margin-left:8px}';
   document.head.appendChild(css);
   function state(){try{return JSON.parse(localStorage.getItem('eveAccCollapse')||'{}');}catch(e){return {};}}
   function setState(s){try{localStorage.setItem('eveAccCollapse',JSON.stringify(s));}catch(e){}}
@@ -4594,7 +4594,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       var nameEl=box.firstElementChild;if(nameEl&&nameEl.nextSibling)box.insertBefore(line,nameEl.nextSibling);else box.appendChild(line);
     }catch(e){headDone=false;}
   }
-  setInterval(function(){var t=$('tab-sso');if(t&&!t.hidden&&t.offsetParent!==null){enhance();var a=$('acc-asof');if(a)a.textContent='data as of '+new Date().toLocaleTimeString();}},1500);
+  var pend=false;function kick(){if(pend)return;pend=true;requestAnimationFrame(function(){pend=false;var t=$('tab-sso');if(t&&!t.hidden)enhance();});}var obsStarted=false;function watch(){if(obsStarted)return;var t=$('tab-sso');if(!t)return;obsStarted=true;new MutationObserver(kick).observe(t,{childList:true,subtree:true});}setInterval(function(){watch();var t=$('tab-sso');if(t&&!t.hidden&&t.offsetParent!==null){enhance();var a=$('acc-asof');if(a)a.textContent='data as of '+new Date().toLocaleTimeString();}},1500);
 })();
 </script>
 </body>
