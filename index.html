@@ -4711,7 +4711,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   document.addEventListener('click',function(ev){if(!ev.target.closest)return;var b=ev.target.closest('#pw-go');if(!b)return;var grp=$('pw-group');if(!grp)return;if(String(grp.value).indexOf('raw:')===0){ev.stopImmediatePropagation();ev.preventDefault();if(!building)runRaw(grp.value.slice(4));}else{rawActive=null;}},true);
   document.addEventListener('change',function(ev){if(ev.target&&ev.target.id==='pw-group'){if(String(ev.target.value).indexOf('raw:')!==0)rawActive=null;}},true);
   function watchBody(){var body=$('pw-body');if(!body||body._rawObs)return;body._rawObs=1;new MutationObserver(function(){if(rawActive&&!myWrite){if(reTimer)clearTimeout(reTimer);reTimer=setTimeout(function(){if(rawActive&&!building)runRaw(rawActive);},450);}}).observe(body,{childList:true});}
-  setInterval(function(){var t=$('tab-top');if(!(t&&!t.hidden&&t.offsetParent!==null))return;addOpts();watchBody();var grp=$('pw-group');if(rawActive&&grp&&grp.value!=='raw:'+rawActive&&[].some.call(grp.options,function(o){return o.value==='raw:'+rawActive;})){grp.value='raw:'+rawActive;}},900);
+  setInterval(function(){var t=$('tab-top');if(!(t&&!t.hidden&&t.offsetParent!==null))return;addOpts();watchBody();var grp=$('pw-group');if(rawActive&&grp&&grp.value===''&&[].some.call(grp.options,function(o){return o.value==='raw:'+rawActive;})){grp.value='raw:'+rawActive;}},900);
 })();
 </script>
 </body>
