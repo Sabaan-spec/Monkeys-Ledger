@@ -4706,7 +4706,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     setStatus(rows.length+' items \u00b7 '+({min:'Minerals',ice:'Ice',gas:'Gas'}[kind])+' @ '+(($('pw-hub')||{}).value||'jita'));
     building=false;
   }
-  function addOpts(){var grp=$('pw-group');if(!grp||grp._rawadded)return;if(grp.options.length<4)return;grp._rawadded=true;[['raw:min','\u26cf\ufe0f Minerals'],['raw:ice','\u2744\ufe0f Ice'],['raw:gas','\u2601\ufe0f Gas']].forEach(function(p){var op=document.createElement('option');op.value=p[0];op.textContent=p[1];grp.appendChild(op);});}
+  function addOpts(){var grp=$('pw-group');if(!grp)return;if(grp.options.length<4)return;if([].some.call(grp.options,function(o){return o.value==='raw:min';}))return;[['raw:min','\u26cf\ufe0f Minerals'],['raw:ice','\u2744\ufe0f Ice'],['raw:gas','\u2601\ufe0f Gas']].forEach(function(p){var op=document.createElement('option');op.value=p[0];op.textContent=p[1];grp.appendChild(op);});}
   document.addEventListener('click',function(ev){if(!ev.target.closest)return;var b=ev.target.closest('#pw-go');if(!b)return;var grp=$('pw-group');if(grp&&String(grp.value).indexOf('raw:')===0){ev.stopImmediatePropagation();ev.preventDefault();if(!building)runRaw(grp.value.slice(4));}},true);
   setInterval(function(){var t=$('tab-top');if(t&&!t.hidden&&t.offsetParent!==null)addOpts();},1200);
 })();
