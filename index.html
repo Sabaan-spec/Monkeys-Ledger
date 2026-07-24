@@ -4629,5 +4629,39 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   setInterval(function(){var t=$('tab-arb');if(t&&!t.hidden&&t.offsetParent!==null)ensure();},1000);
 })();
 </script>
+<script>
+/* ESI resilience v1 */
+(function(){
+  if(window.__esiWrap)return;window.__esiWrap=1;
+  var orig=window.fetch.bind(window);
+  var st={remain:100,resetAt:0};
+  var active=0,MAXC=6,q=[];
+  function isEsi(u){return typeof u==='string'&&u.indexOf('esi.evetech.net')>=0;}
+  function sleep(ms){return new Promise(function(r){setTimeout(r,Math.max(0,ms));});}
+  function acquire(){return new Promise(function(res){if(active<MAXC){active++;res();}else q.push(res);});}
+  function release(){active--;if(q.length){active++;q.shift()();}}
+  function backoff(a,r){if(r&&r.status===420){var w=st.resetAt-Date.now();return (w>0?w:5000)+300;}return Math.min(500*Math.pow(2,a),8000);}
+  var degTimer=null;
+  function badge(){var b=document.getElementById('esi-degraded');if(!b){b=document.createElement('div');b.id='esi-degraded';b.style.cssText='position:fixed;bottom:12px;right:12px;z-index:99999;background:#3a1f1f;color:#ffb3b3;border:1px solid #6b3535;padding:6px 12px;border-radius:6px;font-size:.78rem;opacity:.96;box-shadow:0 2px 8px rgba(0,0,0,.4)';b.textContent='\u26a0 ESI slow / rate-limited \u2014 retrying\u2026';if(document.body)document.body.appendChild(b);}return b;}
+  function degraded(){var b=badge();if(b)b.style.display='';if(degTimer)clearTimeout(degTimer);degTimer=setTimeout(function(){var bb=document.getElementById('esi-degraded');if(bb)bb.style.display='none';},15000);}
+  async function wrapped(input,init){
+    if(st.remain<=4&&Date.now()<st.resetAt){degraded();await sleep(st.resetAt-Date.now()+300);}
+    await acquire();
+    try{
+      for(var a=0;a<4;a++){
+        try{
+          var r=await orig(input,init);
+          var rem=r.headers.get('x-esi-error-limit-remain');if(rem!=null)st.remain=+rem;
+          var rst=r.headers.get('x-esi-error-limit-reset');if(rst!=null)st.resetAt=Date.now()+(+rst*1000);
+          if((r.status===420||r.status===429||r.status>=500)&&a<3){degraded();await sleep(backoff(a,r));continue;}
+          return r;
+        }catch(e){if(a<3){degraded();await sleep(500*Math.pow(2,a));continue;}throw e;}
+      }
+    }finally{release();}
+  }
+  window.fetch=function(input,init){var u=(typeof input==='string')?input:((input&&input.url)||'');if(!isEsi(u))return orig(input,init);return wrapped(input,init);};
+  window.__esiState=st;
+})();
+</script>
 </body>
 </html>
