@@ -4663,5 +4663,53 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   window.__esiState=st;
 })();
 </script>
+<script>
+/* Profit watch raw v1 */
+(function(){
+  function $(id){return document.getElementById(id);}
+  var ESI='https://esi.evetech.net/latest';
+  var REG={jita:10000002,amarr:10000043,dodixie:10000032,rens:10000030,hek:10000042};
+  var ICE_ORES=['Blue Ice','Clear Icicle','Glacial Mass','White Glaze','Dark Glitter','Gelidus','Glare Crust','Krystallos','Enriched Clear Icicle','Pristine White Glaze','Smooth Glacial Mass','Thick Blue Ice'];
+  var GAS=['Fullerite-C28','Fullerite-C32','Fullerite-C50','Fullerite-C60','Fullerite-C70','Fullerite-C72','Fullerite-C84','Fullerite-C320','Fullerite-C540'];
+  var LIST={min:null,ice:null,gas:null},building=false;
+  function catidx(){try{var c=JSON.parse(localStorage.getItem('eveCatIdxV1')||'null');return Array.isArray(c)?c:(c&&c.groups);}catch(e){return null;}}
+  function grpTypes(gid){var g=catidx();if(!g)return [];var f=g.find(function(x){return x.gid===gid;});return f?(f.types||[]):[];}
+  async function resolveNames(names){var ids=[];try{var r=await fetch(ESI+'/universe/ids/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(names)});var j=await r.json();(j.inventory_types||[]).forEach(function(t){ids.push(t.id);});}catch(e){}return ids;}
+  async function buildLists(){
+    if(LIST.min&&LIST.ice&&LIST.gas)return;
+    if(!LIST.min)LIST.min=grpTypes(18).concat(grpTypes(4932));
+    if(!LIST.ice)LIST.ice=(await resolveNames(ICE_ORES)).concat(grpTypes(423));
+    if(!LIST.gas)LIST.gas=await resolveNames(GAS);
+  }
+  async function pool(tasks,limit){var i=0;async function w(){while(i<tasks.length){var idx=i++;await tasks[idx]();}}var ws=[];for(var k=0;k<limit;k++)ws.push(w());await Promise.all(ws);}
+  async function names(ids){var m={};for(var i=0;i<ids.length;i+=900){var ch=ids.slice(i,i+900);try{var r=await fetch(ESI+'/universe/names/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(ch)});var j=await r.json();(j||[]).forEach(function(e){m[e.id]=e.name;});}catch(e){}}return m;}
+  function iskF(n){return Math.round(n).toLocaleString();}
+  function spark(vals){var w=88,h=24,min=Math.min.apply(null,vals),max=Math.max.apply(null,vals),rng=(max-min)||1;var pts=vals.map(function(v,i){var x=(i/(Math.max(1,vals.length-1))*w).toFixed(1);var y=(h-((v-min)/rng)*(h-2)-1).toFixed(1);return x+','+y;}).join(' ');return '<svg width="88" height="24" viewBox="0 0 88 24" style="display:block"><polyline points="'+pts+'" fill="none" stroke="'+(vals[vals.length-1]>=vals[0]?'#54c28a':'#e0555a')+'" stroke-width="1.5"/></svg>';}
+  function setStatus(m){var s=$('pw-status');if(s)s.textContent=m;}
+  async function runRaw(kind){
+    building=true;
+    setStatus('Loading item list\u2026');
+    await buildLists();
+    var ids=(LIST[kind]||[]).filter(function(x){return x;});
+    var reg=REG[($('pw-hub')||{}).value]||10000002;
+    var sigSel=($('pw-signal')||{}).value||'both';
+    var minpct=+(($('pw-minpct')||{}).value)||0;
+    var minvol=+(($('pw-minvol')||{}).value)||0;
+    var body=$('pw-body');if(body)body.innerHTML='';
+    setStatus('Scanning '+ids.length+' items\u2026');
+    var NM=await names(ids);
+    var rows=[];
+    await pool(ids.map(function(id){return function(){return fetch(ESI+'/markets/'+reg+'/history/?type_id='+id).then(function(r){return r.ok?r.json():null;}).then(function(h){if(!h||!h.length)return;var hh=h.slice(-30);var avgs=hh.map(function(x){return x.average;});var now=avgs[avgs.length-1];var avg30=avgs.reduce(function(a,b){return a+b;},0)/avgs.length;var vs=avg30?((now-avg30)/avg30*100):0;var wk=avgs.length>7?avgs[avgs.length-8]:avgs[0];var tr=wk?((now-wk)/wk*100):0;var vol=hh.reduce(function(a,b){return a+(b.volume||0);},0)/hh.length;rows.push({id:id,name:NM[id]||('#'+id),now:now,avg:avg30,vs:vs,tr:tr,vol:vol,sig:(vs>0?'sell':'buy'),spark:avgs});}).catch(function(){});};}),6);
+    rows=rows.filter(function(r){return Math.abs(r.vs)>=minpct&&r.vol>=minvol&&(sigSel==='both'||sigSel===r.sig);});
+    rows.sort(function(a,b){return Math.abs(b.vs)-Math.abs(a.vs);});
+    if(body){rows.forEach(function(r){var tr=document.createElement('tr');tr.innerHTML='<td>'+r.name+'</td><td class="'+(r.sig==='sell'?'sig-sell':'sig-buy')+'">'+(r.sig==='sell'?'SELL':'BUY')+'</td><td class="num">'+iskF(r.now)+' ISK</td><td class="num">'+iskF(r.avg)+' ISK</td><td class="num">'+(r.vs>=0?'+':'')+r.vs.toFixed(1)+'%</td><td class="num '+(r.tr>=0?'up':'down')+'">'+(r.tr>=0?'\u25b2 +':'\u25bc ')+r.tr.toFixed(1)+'%</td><td>'+spark(r.spark)+'</td><td class="num">'+Math.round(r.vol).toLocaleString()+'</td>';body.appendChild(tr);});}
+    setStatus(rows.length+' items \u00b7 '+({min:'Minerals',ice:'Ice',gas:'Gas'}[kind])+' @ '+(($('pw-hub')||{}).value||'jita'));
+    building=false;
+  }
+  function addOpts(){var grp=$('pw-group');if(!grp||grp._rawadded)return;if(grp.options.length<4)return;grp._rawadded=true;[['raw:min','\u26cf\ufe0f Minerals'],['raw:ice','\u2744\ufe0f Ice'],['raw:gas','\u2601\ufe0f Gas']].forEach(function(p){var op=document.createElement('option');op.value=p[0];op.textContent=p[1];grp.appendChild(op);});}
+  document.addEventListener('click',function(ev){if(!ev.target.closest)return;var b=ev.target.closest('#pw-go');if(!b)return;var grp=$('pw-group');if(grp&&String(grp.value).indexOf('raw:')===0){ev.stopImmediatePropagation();ev.preventDefault();if(!building)runRaw(grp.value.slice(4));}},true);
+  setInterval(function(){var t=$('tab-top');if(t&&!t.hidden&&t.offsetParent!==null)addOpts();},1200);
+})();
+</script>
 </body>
 </html>
