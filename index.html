@@ -4495,5 +4495,70 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   setInterval(function(){syncActive();var t=$('tab-sso');if(t&&!t.hidden&&t.offsetParent!==null){renderSwitcher();runAgg(false);}},2500);
 })();
 </script>
+<script>
+/* Account layout v1 */
+(function(){
+  function $(id){return document.getElementById(id);}
+  var ORDER=['characters','net worth','needs attention','job slots','job timeline','burn / earn','wallet p&l','what to build','blueprints','reprocess scanner','all characters','watchlist'];
+  var css=document.createElement('style');
+  css.textContent='#tab-sso{display:grid;grid-template-columns:1fr 1fr;gap:0 14px;align-items:start}#tab-sso>div{display:contents}#tab-sso>section.panel{grid-column:1/-1}@media(max-width:1100px){#tab-sso{grid-template-columns:1fr}}#tab-sso .acc-col-title{cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center}#tab-sso .acc-caret{transition:transform .15s ease;opacity:.6;font-size:.85rem;margin-left:8px}';
+  document.head.appendChild(css);
+  function state(){try{return JSON.parse(localStorage.getItem('eveAccCollapse')||'{}');}catch(e){return {};}}
+  function setState(s){try{localStorage.setItem('eveAccCollapse',JSON.stringify(s));}catch(e){}}
+  function keyOf(p){var t=p.querySelector('div');var tx=(t?t.textContent:'').toLowerCase();for(var i=0;i<ORDER.length;i++){if(tx.indexOf(ORDER[i])>=0)return ORDER[i];}return tx.slice(0,18);}
+  function enhance(){
+    var t=$('tab-sso');if(!t)return;
+    [].slice.call(t.querySelectorAll('section.panel')).forEach(function(p){
+      var title=p.querySelector('div');if(!title)return;
+      var k=keyOf(p);
+      // grid order
+      var oi=ORDER.indexOf(k);p.style.order=(oi<0?50:oi);
+      // full width for header-ish cards
+      if(k==='characters'||k==='watchlist'||p.querySelector('img[src*="portrait"]')){p.style.gridColumn='1/-1';}
+      else{p.style.gridColumn='auto';}
+      p.style.marginBottom='12px';
+      if(p.getAttribute('data-coll'))return;
+      // skip the login card and character head (no collapse)
+      if(p.querySelector('#sso-login')||p.querySelector('img[src*="portrait"]'))return;
+      p.setAttribute('data-coll','1');
+      title.classList.add('acc-col-title');
+      var car=document.createElement('span');car.className='acc-caret';car.textContent='\u25be';title.appendChild(car);
+      function body(){return [].slice.call(p.children).filter(function(c){return c!==title;});}
+      function set(open){body().forEach(function(c){c.style.display=open?'':'none';});car.style.transform=open?'none':'rotate(-90deg)';var s=state();s[k]=open?1:0;setState(s);}
+      var s=state();if(s[k]===0)set(false);
+      title.addEventListener('click',function(ev){if(ev.target.closest('a,button,input,select'))return;var s2=state();set(s2[k]===0);});
+    });
+    // watchlist host full width + order last
+    var w=$('sso-watch-host');if(w){w.style.order=ORDER.length;w.style.gridColumn='1/-1';w.style.display='block';}
+    bar();charHead();
+  }
+  function bar(){
+    var t=$('tab-sso');if(!t||$('acc-topbar'))return;
+    if(!(window.EVEAPI&&EVEAPI.loggedIn()))return;
+    var b=document.createElement('div');b.id='acc-topbar';b.style.cssText='grid-column:1/-1;order:-1;display:flex;justify-content:flex-end;align-items:center;gap:10px;padding:2px 2px 8px';
+    b.innerHTML='<span id="acc-asof" class="muted small"></span><button id="acc-refresh-all" class="btn" style="font-size:.75rem;padding:3px 10px">\u21bb Refresh all</button>';
+    t.insertBefore(b,t.firstChild);
+    $('acc-refresh-all').addEventListener('click',function(){location.reload();});
+  }
+  var headDone=false;
+  async function charHead(){
+    if(headDone)return;if(!(window.EVEAPI&&EVEAPI.loggedIn()))return;
+    var img=document.querySelector('#sso-body img[src*="portrait"]');if(!img)return;
+    headDone=true;
+    try{
+      var ch=EVEAPI.getChar();var cid=ch.id;
+      var pr=await fetch('https://esi.evetech.net/latest/characters/'+cid+'/');if(!pr.ok){headDone=false;return;}
+      var pj=await pr.json();
+      var corp='';try{var cr=await fetch('https://esi.evetech.net/latest/corporations/'+pj.corporation_id+'/');if(cr.ok){corp=(await cr.json()).name;}}catch(e){}
+      var sec=(pj.security_status!=null)?pj.security_status:null;
+      var box=img.parentElement.querySelector('div');if(!box)return;
+      var line=document.createElement('div');line.className='muted small';line.style.marginTop='2px';
+      line.innerHTML=(corp?corp+' \u00b7 ':'')+(sec!=null?('sec <span style="color:'+(sec>=0?'#54c28a':'#e0555a')+'">'+sec.toFixed(2)+'</span>'):'');
+      var nameEl=box.firstElementChild;if(nameEl&&nameEl.nextSibling)box.insertBefore(line,nameEl.nextSibling);else box.appendChild(line);
+    }catch(e){headDone=false;}
+  }
+  setInterval(function(){var t=$('tab-sso');if(t&&!t.hidden&&t.offsetParent!==null){enhance();var a=$('acc-asof');if(a)a.textContent='data as of '+new Date().toLocaleTimeString();}},1500);
+})();
+</script>
 </body>
 </html>
