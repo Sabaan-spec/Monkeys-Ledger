@@ -4117,7 +4117,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     else if(soon.length)items.push({c:'#e3b341',t:soon.length+' job'+(soon.length>1?'s':'')+' finishing within 6h'});
     var expSoon=d.orders.filter(function(o){var exp=new Date(o.issued).getTime()+((o.duration||0)*86400000);return exp>Date.now()&&exp-Date.now()<3*86400000;});
     if(expSoon.length)items.push({c:'#e3b341',t:expSoon.length+' order'+(expSoon.length>1?'s':'')+' expiring within 3 days'});
-    var attInner=items.length?items.map(function(x){return '<div style="padding:5px 0;border-bottom:1px solid rgba(120,150,170,.08);color:'+x.c+';font-weight:600">\u2022 '+x.t+'</div>';}).join(''):'<div class="muted small" style="color:#54c28a">\u2705 Nothing needs attention right now.</div>';
+    var pa=(window.EVEACC&&EVEACC.piAttention)||null;if(pa&&pa.idle)items.push({c:'#e0555a',t:pa.idle+' PI extractor'+(pa.idle>1?'s':'')+' IDLE \u2014 restart on the Planetary tab'});if(pa&&pa.soon)items.push({c:'#e3b341',t:pa.soon+' PI extractor'+(pa.soon>1?'s':'')+' expiring within 6h'});var attInner=items.length?items.map(function(x){return '<div style="padding:5px 0;border-bottom:1px solid rgba(120,150,170,.08);color:'+x.c+';font-weight:600">\u2022 '+x.t+'</div>';}).join(''):'<div class="muted small" style="color:#54c28a">\u2705 Nothing needs attention right now.</div>';
     var mfgMax=1+skLvl(d.sk,3387)+skLvl(d.sk,24625),sciMax=1+skLvl(d.sk,3406)+skLvl(d.sk,24624),reaMax=1+skLvl(d.sk,45748)+skLvl(d.sk,45749);
     var mfgUsed=d.jobs.filter(function(j){return j.activity_id===1;}).length,sciUsed=d.jobs.filter(function(j){return [3,4,5,7,8].indexOf(j.activity_id)>=0;}).length,reaUsed=d.jobs.filter(function(j){return j.activity_id===9;}).length;
     function slotRow(label,used,max){var idle=Math.max(0,max-used);var col=idle>0?'#e3b341':'#54c28a';return '<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:.85rem"><span>'+label+'</span><span><b>'+used+'/'+max+'</b> <span style="color:'+col+'">'+(idle>0?(idle+' idle'):'full')+'</span></span></div>';}
@@ -4432,11 +4432,15 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 })();
 </script>
 <script>
-/* PI colonies v1 */
+/* PI colonies v2 */
 (function(){
   function $(id){return document.getElementById(id);}
+  var ESI='https://esi.evetech.net/latest';
   var last=0,loading=false,MAP=null;
-  function sysName(sid){if(!MAP){try{MAP=JSON.parse(localStorage.getItem('eveMapV2')||'null');}catch(e){}}if(MAP&&MAP.sys&&MAP.sys[sid])return MAP.sys[sid][2];return '#'+sid;}
+  var ICON={barren:'\ud83c\udf11',temperate:'\ud83c\udf0d',oceanic:'\ud83c\udf0a',gas:'\ud83c\udf00',ice:'\u2744\ufe0f',lava:'\ud83c\udf0b',plasma:'\u26a1',storm:'\ud83c\udf29\ufe0f'};
+  function isk(n){if(n==null||isNaN(n))return '\u2014';var a=Math.abs(n);if(a>=1e9)return (a/1e9).toFixed(2)+'B';if(a>=1e6)return (a/1e6).toFixed(2)+'M';if(a>=1e3)return (a/1e3).toFixed(1)+'K';return Math.round(a).toString();}
+  function sysInfo(sid){if(!MAP){try{MAP=JSON.parse(localStorage.getItem('eveMapV2')||'null');}catch(e){}}if(MAP&&MAP.sys&&MAP.sys[sid])return {name:MAP.sys[sid][2],sec:MAP.sys[sid][0]/10};return {name:'#'+sid,sec:null};}
+  function secCol(s){if(s==null)return '#9fb2c0';return s>=0.5?'#54c28a':(s>0?'#e3b341':'#e0555a');}
   function tleft(ts){var ms=new Date(ts).getTime()-Date.now();if(ms<=0)return null;var h=Math.floor(ms/3.6e6),m=Math.floor(ms%3.6e6/6e4);if(h>=24)return Math.floor(h/24)+'d '+(h%24)+'h';return h+'h '+m+'m';}
   function cap(s){return s?String(s).charAt(0).toUpperCase()+String(s).slice(1):s;}
   function host(){var t=$('tab-pi');if(!t)return null;var h=$('pi-colonies');if(h)return h;h=document.createElement('div');h.id='pi-colonies';t.insertBefore(h,t.firstChild);return h;}
@@ -4449,24 +4453,57 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       var ch=EVEAPI.getChar();var cid=ch.id;
       var r=await EVEAPI.esi('/characters/'+cid+'/planets/');
       if(!r){render(null);loading=false;return;}
-      var cols=(r.data||[]);var out=[];
-      for(var i=0;i<cols.length;i++){var c=cols[i];var d=await EVEAPI.esi('/characters/'+cid+'/planets/'+c.planet_id+'/');var pins=(d&&d.data&&d.data.pins)?d.data.pins:[];var exps=[];var ext=0;pins.forEach(function(p){if(p.extractor_details){ext++;}if(p.expiry_time)exps.push(p.expiry_time);});exps.sort();out.push({type:c.planet_type,sys:c.solar_system_id,lvl:c.upgrade_level,pins:c.num_pins,ext:ext,soonest:exps.length?exps[0]:null});}
-      render(out);
+      var cols=(r.data||[]);var out=[];var prodIds=[];
+      for(var i=0;i<cols.length;i++){
+        var c=cols[i];var d=await EVEAPI.esi('/characters/'+cid+'/planets/'+c.planet_id+'/');
+        var pins=(d&&d.data&&d.data.pins)?d.data.pins:[];
+        var exts=[];pins.forEach(function(p){if(p.extractor_details){exts.push(p);if(p.extractor_details.product_type_id)prodIds.push(p.extractor_details.product_type_id);}});
+        out.push({type:c.planet_type,sys:c.solar_system_id,lvl:c.upgrade_level,pins:c.num_pins,exts:exts});
+      }
+      var NM=await EVEAPI.names(prodIds);
+      var pr={};try{var pp=await fetch(ESI+'/markets/prices/');var pj=await pp.json();(pj||[]).forEach(function(e){pr[e.type_id]=e.average_price||e.adjusted_price||0;});}catch(e){}
+      var rows=[];var idle=0,soon=0;
+      out.forEach(function(c){
+        var products=[],soonest=null,daily=0,prog=null;
+        c.exts.forEach(function(p){
+          var ed=p.extractor_details||{};
+          if(ed.product_type_id)products.push(NM[ed.product_type_id]||('#'+ed.product_type_id));
+          if(ed.qty_per_cycle&&ed.cycle_time)daily+=ed.qty_per_cycle*(86400/ed.cycle_time)*(pr[ed.product_type_id]||0);
+          if(p.expiry_time){if(!soonest||new Date(p.expiry_time)<new Date(soonest))soonest=p.expiry_time;
+            if(p.install_time){var st=new Date(p.install_time).getTime(),en=new Date(p.expiry_time).getTime();if(en>st){var pp2=(Date.now()-st)/(en-st);if(prog==null||pp2>prog)prog=Math.max(0,Math.min(1,pp2));}}}
+        });
+        var expired=c.exts.length&&(!soonest||new Date(soonest).getTime()<=Date.now());
+        if(expired)idle++;else if(soonest&&new Date(soonest).getTime()-Date.now()<6*3.6e6)soon++;
+        rows.push({c:c,products:products,soonest:soonest,daily:daily,prog:prog,expired:expired});
+      });
+      window.EVEACC=window.EVEACC||{};EVEACC.piAttention={idle:idle,soon:soon};
+      rows.sort(function(a,b){var ax=a.expired?0:(a.soonest?new Date(a.soonest).getTime():9e15);var bx=b.expired?0:(b.soonest?new Date(b.soonest).getTime():9e15);return ax-bx;});
+      render(rows);
     }catch(e){}
     loading=false;
   }
-  function render(cols){
+  function render(rows){
     var h=host();if(!h)return;var inner;
-    if(cols===null){inner='<div class="muted small">No colony data. If you just enabled the scope, log out and back in on the Account tab to grant planet access.</div>';}
-    else if(!cols.length){inner='<div class="muted small">You have no planetary colonies.</div>';}
+    if(rows===null){inner='<div class="muted small">No colony data. If you just enabled the scope, log out and back in on the Account tab to grant planet access.</div>';}
+    else if(!rows.length){inner='<div class="muted small">You have no planetary colonies.</div>';}
     else{
-      var idle=cols.filter(function(c){return c.ext&&(!c.soonest||new Date(c.soonest).getTime()<=Date.now());}).length;
-      inner='<div class="muted small" style="margin-bottom:4px">'+cols.length+' colon'+(cols.length>1?'ies':'y')+(idle?(' \u00b7 <span style="color:#e0555a;font-weight:700">'+idle+' need attention</span>'):' \u00b7 <span style="color:#54c28a">all running</span>')+'</div><table style="width:100%;border-collapse:collapse;font-size:.82rem"><thead><tr class="muted small"><th style="text-align:left;padding:2px 6px">Planet</th><th style="text-align:left;padding:2px 6px">System</th><th style="text-align:right;padding:2px 6px">CC</th><th style="text-align:left;padding:2px 6px">Extractors</th></tr></thead><tbody>';
-      cols.forEach(function(c){var tl=c.soonest?tleft(c.soonest):null;var st,col;if(!c.ext){st='no extractor';col='#9fb2c0';}else if(!tl){st='\u26a0\ufe0f IDLE \u2014 expired';col='#e0555a';}else{st='expires in '+tl;col=(new Date(c.soonest).getTime()-Date.now()<6*3.6e6)?'#e3b341':'#cfe3f0';}inner+='<tr style="border-bottom:1px solid rgba(120,150,170,.08)"><td style="padding:2px 6px">'+cap(c.type)+'</td><td style="padding:2px 6px">'+sysName(c.sys)+'</td><td style="text-align:right;padding:2px 6px" class="muted">'+c.lvl+'</td><td style="padding:2px 6px;color:'+col+';font-weight:600">'+st+'</td></tr>';});
-      inner+='</tbody></table><div class="muted small" style="margin-top:4px">Extractor expiry = when heads stop pulling. Restart before then to avoid idle time.</div>';
+      var bad=rows.filter(function(r){return r.expired;}).length;
+      inner='<div class="muted small" style="margin-bottom:6px">'+rows.length+' colon'+(rows.length>1?'ies':'y')+(bad?(' \u00b7 <span style="color:#e0555a;font-weight:700">'+bad+' idle</span>'):' \u00b7 <span style="color:#54c28a">all running</span>')+' \u2014 click a colony to analyze its chain</div>';
+      rows.forEach(function(r){
+        var c=r.c;var si=sysInfo(c.sys);var tl=r.soonest?tleft(r.soonest):null;
+        var st,col;if(!c.exts.length){st='no extractor';col='#9fb2c0';}else if(r.expired){st='\u26a0\ufe0f IDLE \u2014 extractor expired';col='#e0555a';}else{st='expires in '+tl;col=(new Date(r.soonest).getTime()-Date.now()<6*3.6e6)?'#e3b341':'#cfe3f0';}
+        var pct=r.prog!=null?Math.round(r.prog*100):null;
+        inner+='<div class="pi-col-row" data-prod="'+(r.products[0]||'').split('"').join('')+'" style="padding:8px 10px;border:1px solid rgba(120,150,170,.14);border-radius:6px;margin-bottom:8px;cursor:'+(r.products.length?'pointer':'default')+'">'
+          +'<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px"><span><b>'+(ICON[c.type]||'\ud83e\ude90')+' '+cap(c.type)+'</b> \u00b7 <span style="color:'+secCol(si.sec)+'">'+si.name+'</span> <span class="muted small">CC'+c.lvl+' \u00b7 '+c.pins+' pins</span></span><span style="color:'+col+';font-weight:700;font-size:.85rem">'+st+'</span></div>'
+          +'<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;margin-top:2px"><span class="muted small">'+(r.products.length?('extracting <b style="color:#cfe3f0">'+r.products.join(', ')+'</b>'):'nothing extracting')+'</span><span class="muted small">'+(r.daily>0?('\u2248 '+isk(r.daily)+'/day'):'')+'</span></div>'
+          +(pct!=null?('<div style="height:6px;background:rgba(120,150,170,.12);border-radius:3px;margin-top:5px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+(r.expired?'#e0555a':'#54c28a')+'"></div></div>'):'')
+          +'</div>';
+      });
+      inner+='<div class="muted small">Progress bar = extractor program elapsed. Restart extractors before expiry to avoid idle time.</div>';
     }
     h.innerHTML='<section class="panel" style="padding:14px;margin-bottom:12px"><div style="font-weight:700;margin-bottom:8px">\ud83e\ude90 Your PI colonies <span id="pi-col-status" class="muted small" style="font-weight:400"></span></div>'+inner+'</section>';
   }
+  document.addEventListener('click',function(ev){if(!ev.target.closest)return;var row=ev.target.closest('.pi-col-row');if(!row)return;var prod=row.getAttribute('data-prod');if(!prod)return;var sel=$('pi-item');if(!sel)return;var found=false;[].forEach.call(sel.options,function(op){if(op.textContent.trim().toLowerCase()===prod.toLowerCase()){sel.value=op.value;found=true;}});if(found){sel.dispatchEvent(new Event('change',{bubbles:true}));var go=$('pi-go');if(go)go.click();try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){}}});
   setInterval(function(){var t=$('tab-pi');if(t&&!t.hidden&&t.offsetParent!==null)load();},2500);
 })();
 </script>
