@@ -4735,11 +4735,11 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 })();
 </script>
 <script>
-/* PI optimizer v1 */
+/* PI optimizer v2 */
 (function(){
   function $(id){return document.getElementById(id);}
+  var ESI='https://esi.evetech.net/latest';
   function isk(n){if(n==null||isNaN(n))return '\u2014';var a=Math.abs(n);if(a>=1e9)return (a/1e9).toFixed(2)+'B';if(a>=1e6)return (a/1e6).toFixed(2)+'M';if(a>=1e3)return (a/1e3).toFixed(1)+'K';return Math.round(a).toString();}
-  // Canonical ECU output prediction (CCP Prism X formula)
   function program(qtyPerHour,cycleSec,totalSec){
     var f1=1/12,f2=1/5,f3=1/2,decay=0.012,noise=0.8;
     var barWidth=cycleSec/900.0;
@@ -4756,8 +4756,9 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     }
     return {total:total,cycles:n,vals:vals};
   }
-  // program length -> cycle time (EVE: cycle scales with program length)
   function cycleFor(hours){if(hours<=25)return 1800;if(hours<=50)return 3600;if(hours<=100)return 7200;return 14400;}
+  var PRICES=null,priceAt=0;
+  async function prices(){if(PRICES&&Date.now()-priceAt<600000)return PRICES;try{var r=await fetch(ESI+'/markets/prices/');var j=await r.json();var m={};(j||[]).forEach(function(e){m[e.type_id]=e.average_price||e.adjusted_price||0;});PRICES=m;priceAt=Date.now();}catch(e){}return PRICES||{};}
   function build(){
     var t=$('tab-pi');if(!t||$('pi-opt'))return;
     var host=document.createElement('div');host.id='pi-opt';
@@ -4765,12 +4766,40 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     if(anchor&&anchor.nextSibling)t.insertBefore(host,anchor.nextSibling);else t.appendChild(host);
     host.innerHTML='<section class="panel" style="padding:14px;margin-bottom:12px"><div style="font-weight:700;margin-bottom:8px">\u2699\ufe0f Extractor program optimizer</div>'
       +'<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:8px">'
+      +'<div class="field"><label>YOUR COLONY</label><select id="pio-colony" style="min-width:190px"><option value="">\u2014 manual entry \u2014</option></select></div>'
       +'<div class="field narrow"><label>QTY / HOUR (BASE)</label><input id="pio-qph" type="number" value="8000" style="width:110px"></div>'
       +'<div class="field"><label>ISK / UNIT (P0)</label><input id="pio-isk" type="number" step="0.1" value="15" style="width:90px"></div>'
       +'<div class="field"><button id="pio-go" class="btn">Compare programs</button></div>'
       +'<div class="field"><span id="pio-from" class="muted small"></span></div></div>'
-      +'<div id="pio-out" class="muted small">Set your extractor\u2019s base rate (or click a colony above to prefill) and compare program lengths.</div></section>';
+      +'<div id="pio-out" class="muted small">Pick one of your colonies (auto-fills rate &amp; price from its live extractor) or enter values manually.</div></section>';
     $('pio-go').addEventListener('click',run);
+    $('pio-colony').addEventListener('change',fromColony);
+  }
+  function fillColonies(){
+    var sel=$('pio-colony');if(!sel)return;var cols=window.EVEPICOLS||[];
+    var want=cols.filter(function(c){return (c.c.exts||[]).some(function(p){return p.extractor_details&&p.extractor_details.qty_per_cycle;});});
+    var sig=want.map(function(c){return (c.c.type||'')+(c.products||[]).join('');}).join('|');
+    if(sel._sig===sig)return;sel._sig=sig;
+    var cur=sel.value;
+    sel.innerHTML='<option value="">\u2014 manual entry \u2014</option>'+want.map(function(c,i){return '<option value="'+i+'">'+(c.c.type?c.c.type.charAt(0).toUpperCase()+c.c.type.slice(1):'?')+' \u2014 '+((c.products||[])[0]||'?')+'</option>';}).join('');
+    sel._cols=want;sel.value=cur;
+  }
+  async function fromColony(){
+    var sel=$('pio-colony');if(!sel||sel.value===''){var f0=$('pio-from');if(f0)f0.textContent='';return;}
+    var col=(sel._cols||[])[+sel.value];if(!col)return;
+    var ext=(col.c.exts||[]).find(function(p){return p.extractor_details&&p.extractor_details.qty_per_cycle;});if(!ext)return;
+    var ed=ext.extractor_details;
+    var q=ed.qty_per_cycle,c=ed.cycle_time||1800;
+    var hours=null;
+    if(ext.install_time&&ext.expiry_time){hours=(new Date(ext.expiry_time)-new Date(ext.install_time))/3.6e6;}
+    var base;
+    if(hours&&hours>0){var unit=program(1,c,Math.max(1,Math.round(hours))*3600);base=(unit.vals&&unit.vals[0]>0)?Math.round(q/unit.vals[0]):Math.round(q/(c/3600));}
+    else{base=Math.round(q/(c/3600));}
+    var qEl=$('pio-qph');if(qEl&&base>0)qEl.value=base;
+    var pid=ed.product_type_id;var pm=await prices();var pr=pid?(pm[pid]||0):0;
+    var iEl=$('pio-isk');if(iEl&&pr>0)iEl.value=(Math.round(pr*100)/100);
+    var f=$('pio-from');if(f)f.textContent='auto: '+((col.products||[])[0]||'')+' \u00b7 base '+(base>0?base.toLocaleString():'?')+'/hr \u00b7 '+(pr>0?(Math.round(pr*100)/100)+' ISK Jita avg':'price n/a');
+    run();
   }
   function run(){
     var qph=+($('pio-qph')||{}).value||0;var iskU=+($('pio-isk')||{}).value||0;
@@ -4780,12 +4809,10 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     var best=rows.reduce(function(a,b){return b.perDay>a.perDay?b:a;},rows[0]);
     var h='<table style="width:100%;border-collapse:collapse;font-size:.82rem"><thead><tr class="muted small"><th style="text-align:left;padding:2px 6px">Program</th><th style="text-align:right;padding:2px 6px">Cycle</th><th style="text-align:right;padding:2px 6px">Cycles</th><th style="text-align:right;padding:2px 6px">Total units</th><th style="text-align:right;padding:2px 6px">Units / day</th><th style="text-align:right;padding:2px 6px">ISK / day</th><th style="padding:2px 6px"></th></tr></thead><tbody>';
     rows.forEach(function(r){var isBest=r===best;h+='<tr style="border-bottom:1px solid rgba(120,150,170,.08)'+(isBest?';background:rgba(84,194,138,.08)':'')+'"><td style="padding:2px 6px">'+r.label+'</td><td style="text-align:right;padding:2px 6px" class="muted">'+(r.cyc/60)+'m</td><td style="text-align:right;padding:2px 6px" class="muted">'+r.cycles+'</td><td style="text-align:right;padding:2px 6px">'+r.total.toLocaleString()+'</td><td style="text-align:right;padding:2px 6px;font-weight:700">'+Math.round(r.perDay).toLocaleString()+'</td><td style="text-align:right;padding:2px 6px;color:#54c28a">'+isk(r.perDay*iskU)+'</td><td style="padding:2px 6px;color:#54c28a;font-weight:700">'+(isBest?'\u2b50 best rate':'')+'</td></tr>';});
-    h+='</tbody></table><div class="muted small" style="margin-top:4px">Shorter programs = higher yield/day but more clicking; longer = convenience at a discount. CCP decay formula; treats hotspot richness as constant.</div>';
+    h+='</tbody></table><div class="muted small" style="margin-top:4px">Base rate derived from your live extractor\u2019s current program; price = Jita average for the extracted P0. Shorter programs = more units/day but more resets. CCP decay formula; assumes hotspot richness constant.</div>';
     $('pio-out').innerHTML=h;
   }
-  // prefill from clicked colony (uses live extractor data)
-  document.addEventListener('click',function(ev){if(!ev.target.closest)return;var row=ev.target.closest('.pi-col-row');if(!row)return;var cols=window.EVEPICOLS||[];var prod=row.getAttribute('data-prod');var col=cols.find(function(c){return (c.products||[])[0]===prod;});if(!col)return;var ext=(col.c&&col.c.exts||[]).find(function(p){return p.extractor_details&&p.extractor_details.qty_per_cycle;});if(!ext)return;var ed=ext.extractor_details;var qph=Math.round(ed.qty_per_cycle/(ed.cycle_time/3600));var qEl=$('pio-qph');if(qEl&&qph>0){qEl.value=qph;var f=$('pio-from');if(f)f.textContent='prefilled from your '+(col.c.type||'')+' colony ('+prod+')';}});
-  // Insights card
+  document.addEventListener('click',function(ev){if(!ev.target.closest)return;var row=ev.target.closest('.pi-col-row');if(!row)return;var sel=$('pio-colony');if(!sel||!sel._cols)return;var prod=row.getAttribute('data-prod');var idx=sel._cols.findIndex(function(c){return (c.products||[])[0]===prod;});if(idx>=0){sel.value=String(idx);fromColony();}});
   var insLast=0;
   async function insights(){
     var t=$('tab-pi');if(!t)return;
@@ -4808,7 +4835,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     inner+=tips.length?tips.map(function(x){return '<div style="padding:4px 0;border-bottom:1px solid rgba(120,150,170,.08);color:'+x.c+';font-weight:600">\u2022 '+x.t+'</div>';}).join(''):'<div class="muted small" style="color:#54c28a">\u2705 Colonies look well set up.</div>';
     host.innerHTML='<section class="panel" style="padding:14px;margin-bottom:12px"><div style="font-weight:700;margin-bottom:8px">\ud83d\udca1 PI insights</div>'+inner+'</section>';
   }
-  setInterval(function(){var t=$('tab-pi');if(t&&!t.hidden&&t.offsetParent!==null){build();insights();}},1500);
+  setInterval(function(){var t=$('tab-pi');if(t&&!t.hidden&&t.offsetParent!==null){build();fillColonies();insights();}},1500);
 })();
 </script>
 </body>
