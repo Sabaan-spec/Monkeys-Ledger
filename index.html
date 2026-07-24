@@ -4664,7 +4664,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 })();
 </script>
 <script>
-/* Profit watch raw v2 */
+/* Profit watch raw v3 */
 (function(){
   function $(id){return document.getElementById(id);}
   var ESI='https://esi.evetech.net/latest';
@@ -4674,7 +4674,8 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   var LIST={min:null,ice:null,gas:null},building=false,rawActive=null,myWrite=false,reTimer=null;
   function catidx(){try{var c=JSON.parse(localStorage.getItem('eveCatIdxV1')||'null');return Array.isArray(c)?c:(c&&c.groups);}catch(e){return null;}}
   function grpTypes(gid){var g=catidx();if(!g)return [];var f=g.find(function(x){return x.gid===gid;});return f?(f.types||[]):[];}
-  async function resolveNames(names){var ids=[];try{var r=await fetch(ESI+'/universe/ids/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(names)});var j=await r.json();(j.inventory_types||[]).forEach(function(t){ids.push(t.id);});}catch(e){}return ids;}
+  function median(arr){if(!arr||!arr.length)return 0;var srt=arr.slice().sort(function(a,b){return a-b;});var m=Math.floor(srt.length/2);return srt.length%2?srt[m]:(srt[m-1]+srt[m])/2;}
+  async function resolveNames(nms){var ids=[];try{var r=await fetch(ESI+'/universe/ids/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(nms)});var j=await r.json();(j.inventory_types||[]).forEach(function(t){ids.push(t.id);});}catch(e){}return ids;}
   async function buildLists(){
     if(!LIST.min)LIST.min=grpTypes(18).concat(grpTypes(4932));
     if(!LIST.ice)LIST.ice=(await resolveNames(ICE_ORES)).concat(grpTypes(423));
@@ -4696,10 +4697,29 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     var minpct=+(($('pw-minpct')||{}).value)||0;
     var minvol=+(($('pw-minvol')||{}).value)||0;
     var body=$('pw-body');if(body)body.innerHTML='';
-    setStatus('Scanning '+ids.length+' items\u2026');
+    setStatus('Scanning '+ids.length+' items (live prices)\u2026');
     var NM=await names(ids);
     var rows=[];
-    await pool(ids.map(function(id){return function(){return fetch(ESI+'/markets/'+reg+'/history/?type_id='+id).then(function(r){return r.ok?r.json():null;}).then(function(h){if(!h||!h.length)return;var hh=h.slice(-30);var avgs=hh.map(function(x){return x.average;});var now=avgs[avgs.length-1];var avg30=avgs.reduce(function(a,b){return a+b;},0)/avgs.length;var vs=avg30?((now-avg30)/avg30*100):0;var tr=null;if(avgs.length>=8){var wk=avgs[avgs.length-8];if(wk>0){var t=(now-wk)/wk*100;if(isFinite(t)&&Math.abs(t)<=500)tr=t;}}var vol=hh.reduce(function(a,b){return a+(b.volume||0);},0)/hh.length;rows.push({id:id,name:NM[id]||('#'+id),now:now,avg:avg30,vs:vs,tr:tr,vol:vol,sig:(vs>0?'sell':'buy'),spark:avgs});}).catch(function(){});};}),6);
+    await pool(ids.map(function(id){return function(){return Promise.all([
+      fetch(ESI+'/markets/'+reg+'/history/?type_id='+id).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;}),
+      fetch(ESI+'/markets/'+reg+'/orders/?order_type=all&type_id='+id).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;})
+    ]).then(function(res){var h=res[0],ords=res[1];if(!h||!h.length)return;
+      var hh=h.slice(-30);var avgs=hh.map(function(x){return x.average;});
+      var avg30=median(avgs);
+      var last7=median(avgs.slice(-7)),prev7=median(avgs.slice(-14,-7));
+      var tr=null;if(prev7>0){var t=(last7-prev7)/prev7*100;if(isFinite(t)&&Math.abs(t)<=500)tr=t;}
+      var vol=hh.reduce(function(a,b){return a+(b.volume||0);},0)/hh.length;
+      var bestAsk=null,bestBid=null;
+      if(Array.isArray(ords)){var sells=ords.filter(function(o){return !o.is_buy_order;}).map(function(o){return o.price;});var buys=ords.filter(function(o){return o.is_buy_order;}).map(function(o){return o.price;});if(sells.length)bestAsk=Math.min.apply(null,sells);if(buys.length)bestBid=Math.max.apply(null,buys);}
+      var sig,now;
+      if(bestAsk!=null&&bestAsk<avg30){sig='buy';now=bestAsk;}
+      else if(bestBid!=null&&bestBid>avg30){sig='sell';now=bestBid;}
+      else if(bestBid!=null){sig='sell';now=bestBid;}
+      else if(bestAsk!=null){sig='buy';now=bestAsk;}
+      else {now=avgs[avgs.length-1];sig=now>avg30?'sell':'buy';}
+      var vs=avg30?((now-avg30)/avg30*100):0;
+      rows.push({id:id,name:NM[id]||('#'+id),now:now,avg:avg30,vs:vs,tr:tr,vol:vol,sig:sig,spark:avgs});
+    }).catch(function(){});};}),6);
     rows=rows.filter(function(r){return Math.abs(r.vs)>=minpct&&r.vol>=minvol&&(sigSel==='both'||sigSel===r.sig);});
     rows.sort(function(a,b){return Math.abs(b.vs)-Math.abs(a.vs);});
     hideCatCol();
