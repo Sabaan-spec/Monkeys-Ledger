@@ -4869,5 +4869,77 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   setInterval(function(){var t=$('tab-pi');if(t&&!t.hidden&&t.offsetParent!==null){build();fillColonies();insights();}},1500);
 })();
 </script>
+<script>
+/* Setup helper v1 */
+(function(){
+  function $(id){return document.getElementById(id);}
+  var busy={map:false,cat:false};
+  function mapReady(){try{var m=JSON.parse(localStorage.getItem('eveMapV2')||'null');return !!(m&&m.sys&&Object.keys(m.sys).length>3000&&m.adj);}catch(e){return false;}}
+  function catReady(){try{var c=JSON.parse(localStorage.getItem('eveCatIdxV1')||'null');var g=Array.isArray(c)?c:(c&&c.groups);return !!(g&&g.length>100);}catch(e){return false;}}
+  function loggedIn(){return !!(window.EVEAPI&&EVEAPI.loggedIn&&EVEAPI.loggedIn());}
+  var SCOPES=null,scopeAt=0;
+  async function scopes(){
+    if(!loggedIn())return null;
+    if(SCOPES&&Date.now()-scopeAt<120000)return SCOPES;
+    try{var t=await EVEAPI.getAccess();if(!t)return null;var b=t.split('.')[1].split('-').join('+').split('_').join('/');var pl=JSON.parse(decodeURIComponent(escape(atob(b))));var sc=pl.scp||[];SCOPES=(typeof sc==='string')?[sc]:sc;scopeAt=Date.now();return SCOPES;}catch(e){return null;}
+  }
+  function mapProgress(){var t=$('tab-plan');if(!t)return '';var m=(t.innerText||'').match(/(Systems|Stargates)\s+([0-9,]+)\s*\/\s*([0-9,]+)/);return m?(m[1]+' '+m[2]+'/'+m[3]):'';}
+  function startMap(){if(busy.map||mapReady())return;var b=$('pl-buildmap');if(!b)return;busy.map=true;b.click();
+    var iv=setInterval(function(){if(mapReady()){busy.map=false;clearInterval(iv);render();}},2000);
+    setTimeout(function(){busy.map=false;},480000);render();}
+  function startCat(){if(busy.cat||catReady())return;var b=$('pw-buildidx');if(!b)return;busy.cat=true;b.click();
+    var iv=setInterval(function(){if(catReady()){busy.cat=false;clearInterval(iv);render();}},2000);
+    setTimeout(function(){busy.cat=false;},240000);render();}
+  window.eveStartMap=startMap;window.eveStartCat=startCat;
+  // ---- inline "Build it now" buttons ----
+  function inlineFix(){
+    var st=$('ci-status');
+    if(st&&/map not built/i.test(st.textContent)&&!st.querySelector('#ci-fixmap')){
+      var b=document.createElement('button');b.id='ci-fixmap';b.className='btn';b.style.cssText='margin-left:8px;font-size:.72rem;padding:2px 8px';
+      b.textContent=busy.map?'building\u2026':'Build it now';
+      b.onclick=function(ev){ev.preventDefault();startMap();b.textContent='building\u2026';};
+      st.appendChild(b);
+    }
+    if(st&&busy.map&&/map not built/i.test(st.textContent)){var pb=$('ci-fixmap');if(pb)pb.textContent='building\u2026 '+mapProgress();}
+    var grp=$('pw-group');
+    if(grp&&!catReady()&&!$('pw-fixcat')&&grp.parentNode){
+      var b2=document.createElement('button');b2.id='pw-fixcat';b2.className='btn';b2.style.cssText='margin-left:8px;font-size:.72rem;padding:2px 8px';
+      b2.textContent=busy.cat?'building\u2026':'Build categories now';
+      b2.onclick=function(ev){ev.preventDefault();startCat();b2.textContent='building\u2026';};
+      grp.parentNode.appendChild(b2);
+    }
+    var fx=$('pw-fixcat');if(fx&&catReady())fx.remove();
+  }
+  // ---- setup checklist ----
+  function dismissed(){try{return localStorage.getItem('eveSetupDismiss')==='1';}catch(e){return false;}}
+  function row(ok,label,btnId,btnTxt,note){
+    return '<div style="display:flex;align-items:center;gap:8px;padding:3px 0"><span style="color:'+(ok?'#54c28a':'#e3b341')+';font-weight:700;width:14px">'+(ok?'\u2713':'\u2717')+'</span><span style="flex:1">'+label+(note?(' <span class="muted small">'+note+'</span>'):'')+'</span>'+(ok?'':('<button id="'+btnId+'" class="btn" style="font-size:.7rem;padding:2px 8px">'+btnTxt+'</button>'))+'</div>';
+  }
+  async function render(){
+    if(dismissed())return;
+    var mOK=mapReady(),cOK=catReady(),lOK=loggedIn();
+    var sc=await scopes();
+    var need=['esi-characters.read_blueprints.v1','esi-planets.manage_planets.v1'];
+    var missing=sc?need.filter(function(x){return sc.indexOf(x)<0;}):[];
+    var scOK=lOK&&sc&&missing.length===0;
+    if(mOK&&cOK&&lOK&&scOK){var ex=$('eve-setup');if(ex)ex.remove();return;}
+    var host=$('eve-setup');
+    if(!host){host=document.createElement('div');host.id='eve-setup';host.style.cssText='position:fixed;left:14px;bottom:14px;z-index:9998;width:330px;background:rgba(12,24,33,.97);border:1px solid rgba(120,150,170,.35);border-radius:8px;padding:12px 14px;font-size:.82rem;box-shadow:0 4px 18px rgba(0,0,0,.5)';document.body.appendChild(host);}
+    var h='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b>\ud83d\ude80 Setup</b><span id="eve-setup-x" style="cursor:pointer;color:#7fb0c8" title="dismiss">\u00d7</span></div>';
+    h+=row(mOK,'System map',(busy.map?'':'set-map'),busy.map?'\u2026':'Build',busy.map?('building '+mapProgress()):(mOK?'':'needed for routes &amp; cost finder'));
+    h+=row(cOK,'Category index','set-cat',busy.cat?'\u2026':'Build',busy.cat?'building\u2026':(cOK?'':'needed for Profit Watch'));
+    h+=row(lOK,'Character connected','set-login','Log in',lOK?'':'unlocks Account features');
+    if(lOK&&sc&&missing.length){h+='<div style="padding:4px 0;color:#e3b341;font-size:.78rem">\u26a0 Missing scopes: '+missing.map(function(s){return s.split('.')[1]||s;}).join(', ')+'<br><span class="muted">Enable at developers.eveonline.com \u2192 your app, then log out &amp; back in.</span></div>';}
+    h+='<div class="muted" style="font-size:.72rem;margin-top:4px">Builds run in the background \u2014 you can keep using the app.</div>';
+    host.innerHTML=h;
+    var x=$('eve-setup-x');if(x)x.onclick=function(){try{localStorage.setItem('eveSetupDismiss','1');}catch(e){}host.remove();};
+    var bm=$('set-map');if(bm)bm.onclick=function(){startMap();};
+    var bc=$('set-cat');if(bc)bc.onclick=function(){startCat();};
+    var bl=$('set-login');if(bl)bl.onclick=function(){var tb=document.querySelector('.tab[data-tab="sso"]');if(tb)tb.click();var li=$('sso-login');if(li)setTimeout(function(){li.click();},400);};
+  }
+  setInterval(function(){inlineFix();render();},1500);
+  setTimeout(render,1200);
+})();
+</script>
 </body>
 </html>
