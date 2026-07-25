@@ -3835,7 +3835,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       var shown;
       if(need){
         st.textContent='Checking facilities\u2026';
-        var cand=rows.slice(0,120);
+        var cand=rows.slice(0,400);
         SVC=svcCache();
         await pool(cand.map(function(r){return function(){return svcFor(r.id).then(function(sv){r.svc=sv;r.hasFac=(sv||[]).indexOf(need)>=0;});};}),6);
         saveSvc();
