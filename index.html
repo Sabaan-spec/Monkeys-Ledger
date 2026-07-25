@@ -4342,7 +4342,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 (function(){
   function $(id){return document.getElementById(id);}
   var ESI='https://esi.evetech.net/latest';
-  var last=0,running=false,boms=null;
+  var last=0,running=false,boms=null,doneAt=0;
   function isk(n){return window.eveISK(n);}
   function ldBom(){if(boms)return boms;try{boms=JSON.parse(localStorage.getItem('eveBpBomV1')||'{}');}catch(e){boms={};}return boms;}
   function svBom(){try{localStorage.setItem('eveBpBomV1',JSON.stringify(boms));}catch(e){}}
@@ -4353,7 +4353,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   function host(){var h=$('acc-ranker');if(h)return h;var t=$('tab-sso');if(!t)return null;var sb=$('sso-body');h=document.createElement('div');h.id='acc-ranker';if(sb&&sb.parentNode){sb.parentNode.insertBefore(h,sb.nextSibling);}else{t.appendChild(h);}return h;}
   async function run(force){
     if(!window.EVEAPI||!EVEAPI.loggedIn())return;
-    if(running)return;if(!force&&Date.now()-last<180000&&$('acc-ranker')&&$('acc-ranker').innerHTML&&$('acc-ranker').innerHTML.indexOf('acc-rk-status')<0)return;
+    if(running)return;if(!force&&doneAt&&Date.now()-doneAt<300000)return;
     running=true;last=Date.now();stub();
     try{
       var ch=EVEAPI.getChar();var cid=ch.id;
@@ -4381,7 +4381,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
         rows.push({name:NM[prod.type_id]||('#'+prod.type_id),me:bp.me,cost:matCost,rev:revenue,profit:profit,margin:margin});
       });
       rows.sort(function(a,b){return b.profit-a.profit;});
-      render(rows);
+      render(rows);doneAt=Date.now();
     }catch(e){setStatus('Could not compute.');}
     running=false;
   }
@@ -4395,7 +4395,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       inner+='</tbody></table><div class="muted small" style="margin-top:4px">Per-unit, your ME applied, Jita average prices, 4.5% sales tax, job fees excluded. <a href="#" id="acc-rk-refresh" style="color:#7fb0c8">refresh prices</a></div>';
     }
     h.innerHTML='<section class="panel" style="padding:14px;margin-bottom:12px"><div style="font-weight:700;margin-bottom:8px">\ud83d\udd28 What to build now <span id="acc-rk-status" class="muted small" style="font-weight:400"></span></div>'+inner+'</section>';
-    var rf=$('acc-rk-refresh');if(rf)rf.addEventListener('click',function(ev){ev.preventDefault();run(true);});
+    var rf=$('acc-rk-refresh');if(rf)rf.addEventListener('click',function(ev){ev.preventDefault();doneAt=0;run(true);});
   }
   setInterval(function(){var st=$('tab-sso');if(st&&!st.hidden&&st.offsetParent!==null)run(false);},2500);
 })();
@@ -4445,7 +4445,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 (function(){
   function $(id){return document.getElementById(id);}
   var ESI='https://esi.evetech.net/latest';
-  var last=0,running=false,types=null;
+  var last=0,running=false,types=null,doneAt2=0;
   function isk(n){return window.eveISK(n);}
   function ldTypes(){if(types)return types;try{types=JSON.parse(localStorage.getItem('eveTypeMatV2')||'{}');}catch(e){types={};}return types;}
   function svTypes(){try{localStorage.setItem('eveTypeMatV2',JSON.stringify(types));}catch(e){}}
@@ -4457,7 +4457,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   function stub(){var h=host();if(h&&!h.innerHTML){h.innerHTML='<section class="panel" style="padding:14px;margin-bottom:12px"><div style="font-weight:700">\u267b\ufe0f Reprocess scanner</div><div class="muted small" id="acc-rp-status">Scanning your ore / ice / gas\u2026</div></section>';}}
   async function run(force){
     if(!window.EVEAPI||!EVEAPI.loggedIn())return;
-    if(running)return;if(!force&&Date.now()-last<180000&&$('acc-repro')&&$('acc-repro').innerHTML&&$('acc-repro').innerHTML.indexOf('acc-rp-status')<0)return;
+    if(running)return;if(!force&&doneAt2&&Date.now()-doneAt2<300000)return;
     running=true;last=Date.now();stub();
     try{
       var byId=(window.EVEACC&&EVEACC.byId)||{};var ids=Object.keys(byId).map(Number);
@@ -4481,7 +4481,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
         rows.push({id:id,name:(nm[id]||('#'+id)),qty:qty,sellT:sellT,repT:repT,better:repT>sellT?'REPROCESS':'SELL',gain:Math.abs(repT-sellT)});
       });
       rows.sort(function(a,b){var ar=a.better==='REPROCESS'?1:0,br=b.better==='REPROCESS'?1:0;if(ar!==br)return br-ar;return b.gain-a.gain;});
-      render(rows,yld);
+      render(rows,yld);doneAt2=Date.now();
     }catch(e){setStatus('Could not scan.');}
     running=false;
   }
@@ -4495,7 +4495,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       inner+='</tbody></table><div class="muted small" style="margin-top:4px">Ore &amp; ice only (gas doesn\u2019t reprocess). Value at your Reprocess-tab yield ('+Math.round(yld*100)+'%), Jita avg prices. <a href="#" id="acc-rp-refresh" style="color:#7fb0c8">rescan</a></div>';
     }
     h.innerHTML='<section class="panel" style="padding:14px;margin-bottom:12px"><div style="font-weight:700;margin-bottom:8px">\u267b\ufe0f Reprocess scanner <span id="acc-rp-status" class="muted small" style="font-weight:400"></span></div>'+inner+'</section>';
-    var rf=$('acc-rp-refresh');if(rf)rf.addEventListener('click',function(ev){ev.preventDefault();run(true);});
+    var rf=$('acc-rp-refresh');if(rf)rf.addEventListener('click',function(ev){ev.preventDefault();doneAt2=0;run(true);});
   }
   document.addEventListener('click',function(ev){if(!ev.target.closest)return;var tr=ev.target.closest('.rp-scan-row');if(!tr)return;var id=+tr.getAttribute('data-id');var name=tr.getAttribute('data-name');if(window.rpSelect){try{rpSelect({id:id,name:name});}catch(e){}}var tb=document.querySelector('.tab[data-tab="repro"]');if(tb)tb.click();try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){}});
   setInterval(function(){var st=$('tab-sso');if(st&&!st.hidden&&st.offsetParent!==null)run(false);},3000);
