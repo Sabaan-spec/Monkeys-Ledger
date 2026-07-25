@@ -4798,10 +4798,10 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   function extras(){
     var host=$('pw-minvol');if(!host||$('pw-depth'))return;
     var wrap=host.parentNode;
-    var d=document.createElement('div');d.className='field narrow';d.style.display='inline-block';
+    var d=document.createElement('div');d.className='field narrow';
     d.innerHTML='<label>DEPTH (UNITS)</label><input id="pw-depth" type="number" min="0" value="0" title="Units you actually want to trade. 0 = auto (5% of daily volume).">';
-    var h2=document.createElement('div');h2.className='field';h2.style.display='inline-block';
-    h2.innerHTML='<label>SCOPE</label><label style="font-size:.78rem;display:flex;align-items:center;gap:5px"><input id="pw-hubonly" type="checkbox" checked> hub system only</label>';
+    var h2=document.createElement('div');h2.className='field narrow';
+    h2.innerHTML='<label>SCOPE</label><label style="display:flex;align-items:center;gap:6px;font-size:.78rem;white-space:nowrap;min-height:34px"><input id="pw-hubonly" type="checkbox" checked style="margin:0"> hub only</label>';
     if(wrap&&wrap.parentNode){wrap.parentNode.insertBefore(d,wrap.nextSibling);wrap.parentNode.insertBefore(h2,d.nextSibling);}
   }
   async function idsFor(kind){
