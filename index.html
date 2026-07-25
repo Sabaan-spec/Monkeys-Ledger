@@ -4666,7 +4666,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   if(window.__esiWrap)return;window.__esiWrap=1;
   var orig=window.fetch.bind(window);
   var st={remain:100,resetAt:0};
-  var active=0,MAXC=6,q=[];
+  var active=0,MAXC=20,q=[];
   function isEsi(u){return typeof u==='string'&&u.indexOf('esi.evetech.net')>=0;}
   function sleep(ms){return new Promise(function(r){setTimeout(r,Math.max(0,ms));});}
   function acquire(){return new Promise(function(res){if(active<MAXC){active++;res();}else q.push(res);});}
