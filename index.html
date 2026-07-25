@@ -196,7 +196,7 @@ nav.tabs{gap:6px;flex-wrap:nowrap;overflow-x:auto;justify-content:safe center}na
 (function(){
   function pref(){try{return localStorage.getItem('eveNumFmt')||'compact';}catch(e){return 'compact';}}
   function setPref(v){try{localStorage.setItem('eveNumFmt',v);}catch(e){}}
-  function exact(n){var neg=n<0?'-':'';var a=Math.abs(n);var s=(a>=1000||a===Math.round(a))?Math.round(a).toLocaleString():a.toLocaleString(undefined,{maximumFractionDigits:2});return neg+s;}
+  function exact(n){return Number(n).toLocaleString(undefined,{maximumFractionDigits:2});}
   function compact(n){var neg=n<0?'-':'';var a=Math.abs(n);
     if(a>=1e12)return neg+(a/1e12).toFixed(2)+'T';
     if(a>=1e9)return neg+(a/1e9).toFixed(2)+'B';
