@@ -191,6 +191,39 @@ table.materials tr.grp-head td{background:rgba(84,194,218,.07);color:var(--accen
 nav.tabs{gap:6px;flex-wrap:nowrap;overflow-x:auto;justify-content:safe center}nav.tabs .tab{padding:9px 12px;font-size:.8rem;white-space:nowrap;flex:0 0 auto}#audio-toggle{display:none}</style>
 </head>
 <body>
+<script>
+/* Number format v1 */
+(function(){
+  function pref(){try{return localStorage.getItem('eveNumFmt')||'compact';}catch(e){return 'compact';}}
+  function setPref(v){try{localStorage.setItem('eveNumFmt',v);}catch(e){}}
+  function exact(n){var neg=n<0?'-':'';var a=Math.abs(n);var s=(a>=1000||a===Math.round(a))?Math.round(a).toLocaleString():a.toLocaleString(undefined,{maximumFractionDigits:2});return neg+s;}
+  function compact(n){var neg=n<0?'-':'';var a=Math.abs(n);
+    if(a>=1e12)return neg+(a/1e12).toFixed(2)+'T';
+    if(a>=1e9)return neg+(a/1e9).toFixed(2)+'B';
+    if(a>=1e6)return neg+(a/1e6).toFixed(2)+'M';
+    if(a>=1e3)return neg+(a/1e3).toFixed(1)+'K';
+    return neg+(a===Math.round(a)?Math.round(a).toString():a.toFixed(2));}
+  window.eveISK=function(n){
+    if(n==null||n===''||isNaN(n))return '\u2014';
+    n=Number(n);
+    return pref()==='exact'?exact(n):compact(n);
+  };
+  window.eveISKexact=exact;
+  function mount(){
+    if(document.getElementById('eve-fmt-toggle'))return;
+    var foot=document.querySelector('footer')||document.querySelector('.foot')||null;
+    if(!foot){var cands=[].slice.call(document.querySelectorAll('div,p'));foot=cands.find(function(el){return el.children.length<4&&/Prices &amp; cost indices|Prices & cost indices/i.test(el.textContent||'');});}
+    if(!foot)return;
+    var s=document.createElement('span');s.id='eve-fmt-toggle';s.style.cssText='margin-left:10px;cursor:pointer;color:#7fb0c8;border:1px solid rgba(120,150,170,.35);border-radius:4px;padding:1px 7px;font-size:.75rem;white-space:nowrap';
+    function label(){s.textContent='Numbers: '+(pref()==='exact'?'1,234,567':'1.23M');s.title='Click to switch between compact and exact number display';}
+    label();
+    s.onclick=function(){setPref(pref()==='exact'?'compact':'exact');label();};
+    foot.appendChild(s);
+  }
+  setInterval(mount,1500);
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount);else mount();
+})();
+</script>
 <canvas id="space-bg"></canvas>
 <div id="vignette"></div>
 <div id="scanline"></div>
@@ -2371,7 +2404,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       });
     });
 
-    function isk(n){try{return iskShort(n);}catch(e){return Math.round(n).toLocaleString();}}
+    function isk(n){return window.eveISK(n);}
     function ago(t){var s=(Date.now()-new Date(t).getTime())/1000; if(s<60)return Math.max(0,Math.floor(s))+'s ago'; if(s<3600)return Math.floor(s/60)+'m ago'; if(s<86400)return Math.floor(s/3600)+'h ago'; return Math.floor(s/86400)+'d ago';}
     function setStatus(t){var s=$('kl-status'); if(s)s.textContent=t;}
     async function resolveNames(ids){
@@ -3890,7 +3923,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   var ACC=null;
   function $(id){return document.getElementById(id);}
   function b64u(bytes){var s='';for(var i=0;i<bytes.length;i++)s+=String.fromCharCode(bytes[i]);return btoa(s).split('+').join('-').split('/').join('_').replace(/=+$/,'');}
-  function isk(n){if(n==null||isNaN(n))return '\u2014';var a=Math.abs(n);if(a>=1e9)return (n/1e9).toFixed(2)+'B';if(a>=1e6)return (n/1e6).toFixed(2)+'M';if(a>=1e3)return (n/1e3).toFixed(1)+'K';return Math.round(n).toString();}
+  function isk(n){return window.eveISK(n);}
   function jwtPl(t){try{var b=t.split('.')[1].split('-').join('+').split('_').join('/');return JSON.parse(decodeURIComponent(escape(atob(b))));}catch(e){return {};}}
   function getChar(){try{return JSON.parse(localStorage.getItem('eveSsoChar')||'null');}catch(e){return null;}}
   function saveTok(j){var pl=jwtPl(j.access_token);ACC={tok:j.access_token,exp:Date.now()+((j.expires_in||1140)*1000)};if(j.refresh_token)localStorage.setItem('eveSsoRefresh',j.refresh_token);if(pl.sub)localStorage.setItem('eveSsoChar',JSON.stringify({id:String(pl.sub).split(':').pop(),name:pl.name||'Capsuleer'}));}
@@ -3982,7 +4015,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 (function(){
   function $(id){return document.getElementById(id);}
   function firstText(el){var n=el&&el.childNodes[0];return ((n&&n.textContent)||(el&&el.textContent)||'').trim();}
-  function isk(n){if(n==null||isNaN(n))return '\u2014';var a=Math.abs(n);if(a>=1e9)return (n/1e9).toFixed(2)+'B';if(a>=1e6)return (n/1e6).toFixed(2)+'M';if(a>=1e3)return (n/1e3).toFixed(1)+'K';return Math.round(n).toString();}
+  function isk(n){return window.eveISK(n);}
   function ownFmt(n){if(n>=1e6)return (n/1e6).toFixed(1)+'M';if(n>=1e3)return (n/1e3).toFixed(1)+'K';return n.toString();}
   var CTX={byId:{},byName:{},orders:[],NM:{},ready:false,ts:0};
   window.EVEACC=CTX;
@@ -4104,7 +4137,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   function $(id){return document.getElementById(id);}
   var ESI='https://esi.evetech.net/latest';
   var lastLoad=0, loading=false;
-  function isk(n){if(n==null||isNaN(n))return '\u2014';var a=Math.abs(n);var s=n<0?'-':'';if(a>=1e12)return s+(a/1e12).toFixed(2)+'T';if(a>=1e9)return s+(a/1e9).toFixed(2)+'B';if(a>=1e6)return s+(a/1e6).toFixed(2)+'M';if(a>=1e3)return s+(a/1e3).toFixed(1)+'K';return s+Math.round(a);}
+  function isk(n){return window.eveISK(n);}
   function skLvl(sk,id){if(!sk||!sk.skills)return 0;var f=sk.skills.find(function(s){return s.skill_id===id;});return f?f.active_skill_level:0;}
   function host(){var h=$('acc-extras');if(h)return h;var sb=$('sso-body');var t=$('tab-sso');if(!t)return null;h=document.createElement('div');h.id='acc-extras';if(sb&&sb.parentNode){sb.parentNode.insertBefore(h,sb.nextSibling);}else{t.appendChild(h);}return h;}
   function card(title,inner){return '<section class="panel" style="padding:14px;margin-bottom:12px"><div style="font-weight:700;margin-bottom:8px">'+title+'</div>'+inner+'</section>';}
@@ -4259,7 +4292,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   var last=0,loading=false;
   var ACTS={1:'Manufacturing',3:'TE research',4:'ME research',5:'Copying',7:'Reverse eng',8:'Invention',9:'Reaction'};
   var ACOL={1:'#8ea6ff',3:'#7fb0c8',4:'#7fb0c8',5:'#7fb0c8',7:'#c88fe0',8:'#c88fe0',9:'#54c28a'};
-  function isk(n){if(n==null||isNaN(n))return '\u2014';var a=Math.abs(n);if(a>=1e9)return (a/1e9).toFixed(2)+'B';if(a>=1e6)return (a/1e6).toFixed(2)+'M';if(a>=1e3)return (a/1e3).toFixed(1)+'K';return Math.round(a).toString();}
+  function isk(n){return window.eveISK(n);}
   function tleft(ms){if(ms<=0)return 'ready';var h=Math.floor(ms/3.6e6),m=Math.floor(ms%3.6e6/6e4);if(h>=24)return Math.floor(h/24)+'d '+(h%24)+'h';return h+'h '+m+'m';}
   async function load(){
     if(!window.EVEAPI||!EVEAPI.loggedIn())return;
@@ -4304,7 +4337,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   function $(id){return document.getElementById(id);}
   var ESI='https://esi.evetech.net/latest';
   var last=0,running=false,boms=null;
-  function isk(n){if(n==null||isNaN(n))return '\u2014';var a=Math.abs(n);var s=n<0?'-':'';if(a>=1e9)return s+(a/1e9).toFixed(2)+'B';if(a>=1e6)return s+(a/1e6).toFixed(2)+'M';if(a>=1e3)return s+(a/1e3).toFixed(1)+'K';return s+Math.round(a);}
+  function isk(n){return window.eveISK(n);}
   function ldBom(){if(boms)return boms;try{boms=JSON.parse(localStorage.getItem('eveBpBomV1')||'{}');}catch(e){boms={};}return boms;}
   function svBom(){try{localStorage.setItem('eveBpBomV1',JSON.stringify(boms));}catch(e){}}
   async function pool(tasks,limit){var i=0;async function w(){while(i<tasks.length){var idx=i++;await tasks[idx]();}}var ws=[];for(var k=0;k<limit;k++)ws.push(w());await Promise.all(ws);}
@@ -4366,7 +4399,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 (function(){
   function $(id){return document.getElementById(id);}
   var last=0,loading=false,jnet=null,jdays=30;
-  function isk(n){if(n==null||isNaN(n))return '\u2014';var a=Math.abs(n);var s=n<0?'-':'';if(a>=1e9)return s+(a/1e9).toFixed(2)+'B';if(a>=1e6)return s+(a/1e6).toFixed(2)+'M';if(a>=1e3)return s+(a/1e3).toFixed(1)+'K';return s+Math.round(a);}
+  function isk(n){return window.eveISK(n);}
   function host(){var h=$('acc-burn');if(h)return h;var t=$('tab-sso');if(!t)return null;var sb=$('sso-body');h=document.createElement('div');h.id='acc-burn';if(sb&&sb.parentNode){sb.parentNode.insertBefore(h,sb.nextSibling);}else{t.appendChild(h);}return h;}
   async function load(){
     if(!window.EVEAPI||!EVEAPI.loggedIn())return;
@@ -4407,7 +4440,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   function $(id){return document.getElementById(id);}
   var ESI='https://esi.evetech.net/latest';
   var last=0,running=false,types=null;
-  function isk(n){if(n==null||isNaN(n))return '\u2014';var a=Math.abs(n);if(a>=1e9)return (a/1e9).toFixed(2)+'B';if(a>=1e6)return (a/1e6).toFixed(2)+'M';if(a>=1e3)return (a/1e3).toFixed(1)+'K';return Math.round(a).toString();}
+  function isk(n){return window.eveISK(n);}
   function ldTypes(){if(types)return types;try{types=JSON.parse(localStorage.getItem('eveTypeMatV2')||'{}');}catch(e){types={};}return types;}
   function svTypes(){try{localStorage.setItem('eveTypeMatV2',JSON.stringify(types));}catch(e){}}
   async function pool(tasks,limit){var i=0;async function w(){while(i<tasks.length){var idx=i++;await tasks[idx]();}}var ws=[];for(var k=0;k<limit;k++)ws.push(w());await Promise.all(ws);}
@@ -4469,7 +4502,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   var ESI='https://esi.evetech.net/latest';
   var last=0,loading=false,MAP=null;
   var ICON={barren:'\ud83c\udf11',temperate:'\ud83c\udf0d',oceanic:'\ud83c\udf0a',gas:'\ud83c\udf00',ice:'\u2744\ufe0f',lava:'\ud83c\udf0b',plasma:'\u26a1',storm:'\ud83c\udf29\ufe0f'};
-  function isk(n){if(n==null||isNaN(n))return '\u2014';var a=Math.abs(n);if(a>=1e9)return (a/1e9).toFixed(2)+'B';if(a>=1e6)return (a/1e6).toFixed(2)+'M';if(a>=1e3)return (a/1e3).toFixed(1)+'K';return Math.round(a).toString();}
+  function isk(n){return window.eveISK(n);}
   function sysInfo(sid){if(!MAP){try{MAP=JSON.parse(localStorage.getItem('eveMapV2')||'null');}catch(e){}}if(MAP&&MAP.sys&&MAP.sys[sid])return {name:MAP.sys[sid][2],sec:MAP.sys[sid][0]/10};return {name:'#'+sid,sec:null};}
   function secCol(s){if(s==null)return '#9fb2c0';return s>=0.5?'#54c28a':(s>0?'#e3b341':'#e0555a');}
   function tleft(ts){var ms=new Date(ts).getTime()-Date.now();if(ms<=0)return null;var h=Math.floor(ms/3.6e6),m=Math.floor(ms%3.6e6/6e4);if(h>=24)return Math.floor(h/24)+'d '+(h%24)+'h';return h+'h '+m+'m';}
@@ -4546,7 +4579,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   var TOKEN='https://login.eveonline.com/v2/oauth/token';
   var ESI='https://esi.evetech.net/latest';
   var aggLast=0,aggRunning=false;
-  function isk(n){if(n==null||isNaN(n))return '\u2014';var a=Math.abs(n);if(a>=1e12)return (a/1e12).toFixed(2)+'T';if(a>=1e9)return (a/1e9).toFixed(2)+'B';if(a>=1e6)return (a/1e6).toFixed(2)+'M';if(a>=1e3)return (a/1e3).toFixed(1)+'K';return Math.round(a).toString();}
+  function isk(n){return window.eveISK(n);}
   function accounts(){try{return JSON.parse(localStorage.getItem('eveSsoAccounts')||'[]');}catch(e){return [];}}
   function saveAccounts(a){try{localStorage.setItem('eveSsoAccounts',JSON.stringify(a));}catch(e){}}
   function activeChar(){try{return JSON.parse(localStorage.getItem('eveSsoChar')||'null');}catch(e){return null;}}
@@ -4770,7 +4803,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 (function(){
   function $(id){return document.getElementById(id);}
   var ESI='https://esi.evetech.net/latest';
-  function isk(n){if(n==null||isNaN(n))return '\u2014';var a=Math.abs(n);if(a>=1e9)return (a/1e9).toFixed(2)+'B';if(a>=1e6)return (a/1e6).toFixed(2)+'M';if(a>=1e3)return (a/1e3).toFixed(1)+'K';return Math.round(a).toString();}
+  function isk(n){return window.eveISK(n);}
   function program(qtyPerHour,cycleSec,totalSec){
     var f1=1/12,f2=1/5,f3=1/2,decay=0.012,noise=0.8;
     var barWidth=cycleSec/900.0;
