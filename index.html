@@ -4766,7 +4766,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 })();
 </script>
 <script>
-/* Profit watch raw v4 */
+/* Profit watch v5 */
 (function(){
   function $(id){return document.getElementById(id);}
   var ESI='https://esi.evetech.net/latest';
@@ -4774,46 +4774,55 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   var HUBSYS={jita:30000142,amarr:30002187,dodixie:30002659,rens:30002510,hek:30002053};
   var ICE_ORES=['Blue Ice','Clear Icicle','Glacial Mass','White Glaze','Dark Glitter','Gelidus','Glare Crust','Krystallos','Enriched Clear Icicle','Pristine White Glaze','Smooth Glacial Mass','Thick Blue Ice'];
   var GAS=['Fullerite-C28','Fullerite-C32','Fullerite-C50','Fullerite-C60','Fullerite-C70','Fullerite-C72','Fullerite-C84','Fullerite-C320','Fullerite-C540'];
-  var LIST={min:null,ice:null,gas:null},building=false,rawActive=null,myWrite=false,reTimer=null;
+  var LIST={min:null,ice:null,gas:null},building=false,active=null,myWrite=false,reTimer=null,PRICES=null;
+  var CAP=700;
   function catidx(){try{var c=JSON.parse(localStorage.getItem('eveCatIdxV1')||'null');return Array.isArray(c)?c:(c&&c.groups);}catch(e){return null;}}
   function grpTypes(gid){var g=catidx();if(!g)return [];var f=g.find(function(x){return x.gid===gid;});return f?(f.types||[]):[];}
-  function median(arr){if(!arr||!arr.length)return 0;var s=arr.slice().sort(function(a,b){return a-b;});var m=Math.floor(s.length/2);return s.length%2?s[m]:(s[m-1]+s[m])/2;}
+  function catTypes(catId){var g=catidx();if(!g)return [];var out=[],seen={};g.forEach(function(x){if(String(x.cat)!==String(catId))return;(x.types||[]).forEach(function(t){if(!seen[t]){seen[t]=1;out.push(t);}});});return out;}
+  function median(a){if(!a||!a.length)return 0;var s=a.slice().sort(function(x,y){return x-y;});var m=Math.floor(s.length/2);return s.length%2?s[m]:(s[m-1]+s[m])/2;}
   async function resolveNames(nms){var ids=[];try{var r=await fetch(ESI+'/universe/ids/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(nms)});var j=await r.json();(j.inventory_types||[]).forEach(function(t){ids.push(t.id);});}catch(e){}return ids;}
   async function buildLists(){
     if(!LIST.min)LIST.min=grpTypes(18).concat(grpTypes(4932));
     if(!LIST.ice)LIST.ice=(await resolveNames(ICE_ORES)).concat(grpTypes(423));
     if(!LIST.gas)LIST.gas=await resolveNames(GAS);
   }
+  async function prices(){if(PRICES)return PRICES;try{var r=await fetch(ESI+'/markets/prices/');var j=await r.json();var m={};(j||[]).forEach(function(e){var v=e.average_price||e.adjusted_price||0;if(v>0)m[e.type_id]=v;});PRICES=m;}catch(e){PRICES={};}return PRICES;}
   async function pool(tasks,limit){var i=0;async function w(){while(i<tasks.length){var idx=i++;await tasks[idx]();}}var ws=[];for(var k=0;k<limit;k++)ws.push(w());await Promise.all(ws);}
   async function names(ids){var m={};for(var i=0;i<ids.length;i+=900){var ch=ids.slice(i,i+900);try{var r=await fetch(ESI+'/universe/names/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(ch)});var j=await r.json();(j||[]).forEach(function(e){m[e.id]=e.name;});}catch(e){}}return m;}
   function iskF(n){return Math.round(n).toLocaleString();}
   function spark(vals){var w=88,h=24,min=Math.min.apply(null,vals),max=Math.max.apply(null,vals),rng=(max-min)||1;var pts=vals.map(function(v,i){var x=(i/(Math.max(1,vals.length-1))*w).toFixed(1);var y=(h-((v-min)/rng)*(h-2)-1).toFixed(1);return x+','+y;}).join(' ');return '<svg width="88" height="24" viewBox="0 0 88 24" style="display:block"><polyline points="'+pts+'" fill="none" stroke="'+(vals[vals.length-1]>=vals[0]?'#54c28a':'#e0555a')+'" stroke-width="1.5"/></svg>';}
   function setStatus(m){var s=$('pw-status');if(s)s.textContent=m;}
   function hideCatCol(){var c=$('pw-th-cat');if(c)c.style.display='none';}
-  function vwap(list,qty){var cum=0,cost=0;for(var i=0;i<list.length&&cum<qty;i++){var take=Math.min(list[i].volume_remain,qty-cum);cost+=take*list[i].price;cum+=take;}return cum>0?{price:cost/cum,filled:cum}:null;}
-  async function allOrders(region,id){
-    var out=[];
-    try{var r=await fetch(ESI+'/markets/'+region+'/orders/?order_type=all&type_id='+id);if(!r.ok)return out;out=await r.json();var pg=+(r.headers.get('x-pages')||1);
-      for(var p=2;p<=Math.min(pg,4);p++){var rp=await fetch(ESI+'/markets/'+region+'/orders/?order_type=all&type_id='+id+'&page='+p);if(rp.ok)out=out.concat(await rp.json());}
-    }catch(e){}
-    return out;
-  }
+  function vwap(list,qty){var cum=0,cost=0;for(var i=0;i<list.length&&cum<qty;i++){var t=Math.min(list[i].volume_remain,qty-cum);cost+=t*list[i].price;cum+=t;}return cum>0?{price:cost/cum,filled:cum}:null;}
+  async function allOrders(region,id){var out=[];try{var r=await fetch(ESI+'/markets/'+region+'/orders/?order_type=all&type_id='+id);if(!r.ok)return out;out=await r.json();var pg=+(r.headers.get('x-pages')||1);for(var p=2;p<=Math.min(pg,3);p++){var rp=await fetch(ESI+'/markets/'+region+'/orders/?order_type=all&type_id='+id+'&page='+p);if(rp.ok)out=out.concat(await rp.json());}}catch(e){}return out;}
   function extras(){
     var host=$('pw-minvol');if(!host||$('pw-depth'))return;
     var wrap=host.parentNode;
     var d=document.createElement('div');d.className='field narrow';d.style.display='inline-block';
-    d.innerHTML='<label>DEPTH (UNITS)</label><input id="pw-depth" type="number" min="0" value="0" title="Units you actually want to trade. 0 = auto (5% of daily volume). Price shown is the average to fill this many units.">';
+    d.innerHTML='<label>DEPTH (UNITS)</label><input id="pw-depth" type="number" min="0" value="0" title="Units you actually want to trade. 0 = auto (5% of daily volume).">';
     var h2=document.createElement('div');h2.className='field';h2.style.display='inline-block';
     h2.innerHTML='<label>SCOPE</label><label style="font-size:.78rem;display:flex;align-items:center;gap:5px"><input id="pw-hubonly" type="checkbox" checked> hub system only</label>';
     if(wrap&&wrap.parentNode){wrap.parentNode.insertBefore(d,wrap.nextSibling);wrap.parentNode.insertBefore(h2,d.nextSibling);}
   }
-  async function runRaw(kind){
-    building=true;myWrite=true;rawActive=kind;hideCatCol();
+  async function idsFor(kind){
+    if(kind.indexOf('raw:')===0){await buildLists();return (LIST[kind.slice(4)]||[]).slice();}
+    return catTypes(kind);
+  }
+  function label(kind){
+    if(kind==='raw:min')return 'Minerals';if(kind==='raw:ice')return 'Ice';if(kind==='raw:gas')return 'Gas';
+    var sel=$('pw-group');if(sel){var o=[].slice.call(sel.options).find(function(x){return x.value===kind;});if(o)return o.textContent.replace(/\s*\(\d+\)\s*$/,'').trim();}
+    return 'Category';
+  }
+  async function runScan(kind){
+    building=true;myWrite=true;active=kind;hideCatCol();
     var _w=$('pw-wrap');if(_w){_w.hidden=false;if(getComputedStyle(_w).display==='none')_w.style.display='block';}
     var _e=$('pw-empty');if(_e)_e.style.display='none';
-    setStatus('Loading item list\u2026');
-    await buildLists();
-    var ids=(LIST[kind]||[]).filter(function(x){return x;});
+    setStatus('Preparing item list\u2026');
+    var ids=await idsFor(kind);
+    var pm=await prices();
+    ids=ids.filter(function(id){return pm[id]>0;});
+    var truncated=false;
+    if(ids.length>CAP){ids=ids.slice(0,CAP);truncated=true;}
     var hubKey=($('pw-hub')||{}).value||'jita';
     var reg=REG[hubKey]||10000002;var hubSys=HUBSYS[hubKey];
     var hubOnly=!$('pw-hubonly')||$('pw-hubonly').checked;
@@ -4822,21 +4831,22 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     var minvol=+(($('pw-minvol')||{}).value)||0;
     var wantQty=+(($('pw-depth')||{}).value)||0;
     var body=$('pw-body');if(body)body.innerHTML='';
-    setStatus('Scanning '+ids.length+' items (depth-aware)\u2026');
+    if(!ids.length){setStatus('No market-listed items in that category.');building=false;myWrite=false;return;}
     var NM=await names(ids);
-    var rows=[],skipped=0;
+    var rows=[],skipped=0,done=0;
+    setStatus('Scanning '+ids.length+' items\u2026');
     await pool(ids.map(function(id){return function(){
       return Promise.all([
         fetch(ESI+'/markets/'+reg+'/history/?type_id='+id).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;}),
         allOrders(reg,id)
       ]).then(function(res){
+        done++;if(done%25===0)setStatus('Scanning '+done+'/'+ids.length+'\u2026');
         var h=res[0],ords=res[1]||[];
         if(!h||h.length<10){skipped++;return;}
         var hh=h.slice(-30);
         var avgs=hh.map(function(x){return x.average;});
         var vols=hh.map(function(x){return x.volume||0;});
-        var daysTraded=vols.filter(function(v){return v>0;}).length;
-        if(daysTraded<15){skipped++;return;}
+        if(vols.filter(function(v){return v>0;}).length<15){skipped++;return;}
         var avg30=median(avgs);if(!(avg30>0)){skipped++;return;}
         var dailyVol=median(vols);
         if(dailyVol<minvol){skipped++;return;}
@@ -4850,35 +4860,35 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
         var qty=wantQty>0?wantQty:Math.max(1,Math.round(dailyVol*0.05));
         var ask=vwap(sells,qty),bid=vwap(buys,qty);
         if(!ask||!bid||ask.filled<qty*0.9||bid.filled<qty*0.9){skipped++;return;}
-        var sig,now,depth;
         var buyEdge=(avg30-ask.price)/avg30*100;
         var sellEdge=(bid.price-avg30)/avg30*100;
-        if(buyEdge>=sellEdge){sig='buy';now=ask.price;depth=ask.filled;}
-        else{sig='sell';now=bid.price;depth=bid.filled;}
+        var sig=null,now=null;
+        if(buyEdge>=minpct&&buyEdge>=sellEdge){sig='buy';now=ask.price;}
+        else if(sellEdge>=minpct){sig='sell';now=bid.price;}
+        if(!sig){skipped++;return;}
         var vs=(now-avg30)/avg30*100;
         if(Math.abs(vs)>200){skipped++;return;}
-        rows.push({id:id,name:NM[id]||('#'+id),now:now,avg:avg30,vs:vs,tr:tr,vol:dailyVol,sig:sig,spark:avgs,depth:depth,qty:qty});
+        rows.push({name:NM[id]||('#'+id),now:now,avg:avg30,vs:vs,tr:tr,vol:dailyVol,sig:sig,spark:avgs,qty:qty});
       }).catch(function(){});
     };}),6);
-    rows=rows.filter(function(r){return Math.abs(r.vs)>=minpct&&(sigSel==='both'||sigSel===r.sig);});
+    rows=rows.filter(function(r){return sigSel==='both'||sigSel===r.sig;});
     rows.sort(function(a,b){return Math.abs(b.vs)-Math.abs(a.vs);});
     hideCatCol();
     if(body){body.innerHTML='';rows.forEach(function(r){
-      var tr=document.createElement('tr');tr.setAttribute('data-raw','1');
+      var tr2=document.createElement('tr');tr2.setAttribute('data-raw','1');
       var trend=(r.tr==null)?'<td class="num">\u2014</td>':('<td class="num '+(r.tr>=0?'up':'down')+'">'+(r.tr>=0?'\u25b2 +':'\u25bc ')+r.tr.toFixed(1)+'%</td>');
-      tr.innerHTML='<td>'+r.name+'</td><td class="'+(r.sig==='sell'?'sig-sell':'sig-buy')+'">'+(r.sig==='sell'?'SELL':'BUY')+'</td>'
-        +'<td class="num" title="Average price to '+(r.sig==='sell'?'sell':'buy')+' '+r.qty.toLocaleString()+' units in the hub">'+iskF(r.now)+' ISK<div class="muted" style="font-size:.68rem">for '+r.qty.toLocaleString()+'u</div></td>'
-        +'<td class="num">'+iskF(r.avg)+' ISK</td><td class="num">'+(r.vs>=0?'+':'')+r.vs.toFixed(1)+'%</td>'+trend
+      tr2.innerHTML='<td>'+r.name+'</td><td class="'+(r.sig==='sell'?'sig-sell':'sig-buy')+'">'+(r.sig==='sell'?'SELL':'BUY')+'</td>'
+        +'<td class="num" title="Average price to '+(r.sig==='sell'?'sell into buy orders':'buy from sell orders')+' for '+r.qty.toLocaleString()+' units">'+iskF(r.now)+' ISK<div class="muted" style="font-size:.68rem">for '+r.qty.toLocaleString()+'u</div></td>'
+        +'<td class="num">'+iskF(r.avg)+' ISK</td><td class="num '+(r.sig==='sell'?'up':'down')+'">'+(r.vs>=0?'+':'')+r.vs.toFixed(1)+'%</td>'+trend
         +'<td>'+spark(r.spark)+'</td><td class="num">'+Math.round(r.vol).toLocaleString()+'</td>';
-      body.appendChild(tr);});}
-    setStatus(rows.length+' tradeable \u00b7 '+({min:'Minerals',ice:'Ice',gas:'Gas'}[kind])+' @ '+hubKey+(hubOnly?' (hub only)':' (region)')+' \u00b7 '+skipped+' skipped as illiquid');
+      body.appendChild(tr2);});}
+    setStatus(rows.length+' signals \u00b7 '+label(kind)+' @ '+hubKey+(hubOnly?' (hub only)':' (region)')+' \u00b7 '+skipped+' skipped'+(truncated?(' \u00b7 capped at '+CAP+' items'):''));
     building=false;setTimeout(function(){myWrite=false;},600);
   }
   function addOpts(){var grp=$('pw-group');if(!grp)return;if(grp.options.length<4)return;if([].some.call(grp.options,function(o){return o.value==='raw:min';}))return;[['raw:min','\u26cf\ufe0f Minerals'],['raw:ice','\u2744\ufe0f Ice'],['raw:gas','\u2601\ufe0f Gas']].forEach(function(p){var op=document.createElement('option');op.value=p[0];op.textContent=p[1];grp.appendChild(op);});}
-  document.addEventListener('click',function(ev){if(!ev.target.closest)return;var b=ev.target.closest('#pw-go');if(!b)return;var grp=$('pw-group');if(!grp)return;if(String(grp.value).indexOf('raw:')===0){ev.stopImmediatePropagation();ev.preventDefault();if(!building)runRaw(grp.value.slice(4));}else{rawActive=null;}},true);
-  document.addEventListener('change',function(ev){if(ev.target&&ev.target.id==='pw-group'){if(String(ev.target.value).indexOf('raw:')!==0)rawActive=null;}},true);
-  function watchBody(){var body=$('pw-body');if(!body||body._rawObs)return;body._rawObs=1;new MutationObserver(function(){if(rawActive&&!myWrite){if(reTimer)clearTimeout(reTimer);reTimer=setTimeout(function(){if(rawActive&&!building)runRaw(rawActive);},450);}}).observe(body,{childList:true});}
-  setInterval(function(){var t=$('tab-top');if(!(t&&!t.hidden&&t.offsetParent!==null))return;addOpts();extras();watchBody();var grp=$('pw-group');if(rawActive&&grp&&grp.value===''&&[].some.call(grp.options,function(o){return o.value==='raw:'+rawActive;})){grp.value='raw:'+rawActive;}},900);
+  document.addEventListener('click',function(ev){if(!ev.target.closest)return;var b=ev.target.closest('#pw-go');if(!b)return;var grp=$('pw-group');if(!grp||!grp.value)return;ev.stopImmediatePropagation();ev.preventDefault();if(!building)runScan(grp.value);},true);
+  function watchBody(){var body=$('pw-body');if(!body||body._rawObs)return;body._rawObs=1;new MutationObserver(function(){if(active&&!myWrite){if(reTimer)clearTimeout(reTimer);reTimer=setTimeout(function(){if(active&&!building)runScan(active);},450);}}).observe(body,{childList:true});}
+  setInterval(function(){var t=$('tab-top');if(!(t&&!t.hidden&&t.offsetParent!==null))return;addOpts();extras();watchBody();var grp=$('pw-group');if(active&&grp&&grp.value===''&&[].some.call(grp.options,function(o){return o.value===active;})){grp.value=active;}},900);
 })();
 </script>
 <script>
