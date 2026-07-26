@@ -5423,7 +5423,6 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   async function syncSci(){
     try{
       var el=$('mf-sys');var sysName=el&&el.value?el.value.trim():'';if(!sysName)return;
-      if(sciDone===sysName.toLowerCase())return;
       if(localStorage.getItem('eveSciOverride')==='1')return;
       var map=null;try{map=JSON.parse(localStorage.getItem('eveMapV2')||'null');}catch(e){}
       if(!map||!map.sys)return;
@@ -5436,8 +5435,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       var f=$('f-sci');if(!f)return;
       var pctv=Math.round(v*10000)/100;
       if(parseFloat(f.value)!==pctv){f.value=pctv;f.dispatchEvent(new Event('input',{bubbles:true}));f.dispatchEvent(new Event('change',{bubbles:true}));}
-      sciDone=sysName.toLowerCase();
-      var n=$('tax-skill-note');if(n)n.innerHTML+=' <br>System cost index set to <b>'+pctv+'%</b> from live ESI for <b>'+sysName+'</b>.';
+      if(sciDone!==sysName.toLowerCase()){sciDone=sysName.toLowerCase();var n=$('tax-skill-note');if(n&&n.innerHTML.indexOf('System cost index')<0)n.innerHTML+=' <br>System cost index <b>'+pctv+'%</b> from live ESI for <b>'+sysName+'</b> (your build system, not the market hub).';}
     }catch(e){}
   }
   async function sync(){
@@ -5467,7 +5465,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       note('Taxes from your skills: Accounting '+acct+' \u2192 sales '+(Math.round(sales*100)/100)+'%, Broker Relations '+br+' \u2192 broker '+(Math.round(broker*100)/100)+'%.'+(over?' <b>Using your manual values.</b>':' Faction/corp standings can lower broker further \u2014 edit to override.'));
     }catch(e){done=false;}
   }
-  setInterval(function(){var t=$('tab-calc');if(t&&!t.hidden&&t.offsetParent!==null)sync();},2500);
+  setInterval(function(){var t=$('tab-calc');if(t&&!t.hidden&&t.offsetParent!==null){sync();syncSci();}},2500);
 })();
 </script>
 </body>
