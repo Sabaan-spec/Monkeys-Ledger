@@ -5503,7 +5503,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       +'<button id="cb-oop" class="btn" style="font-size:.72rem;padding:2px 9px">Only what I still need</button>'
       +'<span id="cb-state" style="font-weight:600"></span>';
     host.parentNode.insertBefore(w,host.nextSibling);
-    $('cb-market').addEventListener('click',function(){setMode('market');paintBtns();var r=$('refresh');if(r)r.click();});
+    $('cb-market').addEventListener('click',function(){setMode('market');paintBtns();try{var lbl=function(id,txt){var e=$(id);if(!e)return;var p=e.parentElement;if(!p)return;var s=p.querySelector('.stat-label');if(s)s.textContent=txt;};lbl('s-matcost','Total cost');lbl('s-profit','Net profit');lbl('s-margin','Net margin');}catch(e){}var r=$('refresh');if(r)r.click();});
     $('cb-oop').addEventListener('click',function(){setMode('oop');paintBtns();apply(true);});
     paintBtns();
   }
@@ -5540,6 +5540,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     var pf=$('s-profit');if(pf&&pf.textContent!==tPro)pf.textContent=tPro;
     var mg=$('s-margin');if(mg&&mg.textContent!==tMar)mg.textContent=tMar;
     setTimeout(function(){writing=false;},40);
+    try{var lbl=function(id,txt){var e=$(id);if(!e)return;var p=e.parentElement;if(!p)return;var s=p.querySelector('.stat-label');if(s&&s.textContent!==txt)s.textContent=txt;};lbl('s-matcost','Cash out-of-pocket');lbl('s-profit','Profit on cash spent');lbl('s-margin','Return on cash');}catch(e){}
     var note=$('cb-note');
     if(!note){var host=$('cb-toggle');if(host){note=document.createElement('div');note.id='cb-note';note.className='muted small';note.style.cssText='margin-top:4px';host.parentNode.insertBefore(note,host.nextSibling);}}
     if(note){
