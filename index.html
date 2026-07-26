@@ -5402,6 +5402,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     return {'Accounting':16622,'Broker Relations':3446};
   }
   function markOverride(){
+    var sciEl=$('f-sci');if(sciEl&&!sciEl._w){sciEl._w=1;sciEl.addEventListener('change',function(){try{localStorage.setItem('eveSciOverride','1');}catch(e){}});}
     ['f-sales','f-broker'].forEach(function(id){
       var el=$(id);if(!el||el._taxWatch)return;el._taxWatch=1;
       el.addEventListener('change',function(){
@@ -5417,6 +5418,27 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     var n=$('tax-skill-note');
     if(!n){n=document.createElement('div');n.id='tax-skill-note';n.className='muted small';n.style.cssText='flex-basis:100%;margin-top:2px';host.parentNode.appendChild(n);}
     n.innerHTML=txt;
+  }
+  var sciDone='';
+  async function syncSci(){
+    try{
+      var el=$('mf-sys');var sysName=el&&el.value?el.value.trim():'';if(!sysName)return;
+      if(sciDone===sysName.toLowerCase())return;
+      if(localStorage.getItem('eveSciOverride')==='1')return;
+      var map=null;try{map=JSON.parse(localStorage.getItem('eveMapV2')||'null');}catch(e){}
+      if(!map||!map.sys)return;
+      var sid=null;for(var id in map.sys){if((map.sys[id][2]||'').toLowerCase()===sysName.toLowerCase()){sid=+id;break;}}
+      if(!sid)return;
+      var idx=window.__sciIdx;if(!idx){var r=await fetch(ESI+'/industry/systems/');if(!r.ok)return;idx=await r.json();window.__sciIdx=idx;}
+      var row=idx.find(function(s){return s.solar_system_id===sid;});if(!row)return;
+      var v=null;(row.cost_indices||[]).forEach(function(c){if(c.activity==='manufacturing')v=c.cost_index;});
+      if(v==null)return;
+      var f=$('f-sci');if(!f)return;
+      var pctv=Math.round(v*10000)/100;
+      if(parseFloat(f.value)!==pctv){f.value=pctv;f.dispatchEvent(new Event('input',{bubbles:true}));f.dispatchEvent(new Event('change',{bubbles:true}));}
+      sciDone=sysName.toLowerCase();
+      var n=$('tax-skill-note');if(n)n.innerHTML+=' <br>System cost index set to <b>'+pctv+'%</b> from live ESI for <b>'+sysName+'</b>.';
+    }catch(e){}
   }
   async function sync(){
     if(done)return;
@@ -5439,6 +5461,9 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
         b.dispatchEvent(new Event('input',{bubbles:true}));b.dispatchEvent(new Event('change',{bubbles:true}));
         sv('eveTaxAuto',s.value+'/'+b.value);
       }
+      // one-time migration: CCP raised the SCC surcharge above the old 1.5%
+      try{if(localStorage.getItem('eveSccMigratedV1')!=='1'){var sc=$('f-scc');if(sc&&parseFloat(sc.value)===1.5){sc.value='4';sc.dispatchEvent(new Event('input',{bubbles:true}));sc.dispatchEvent(new Event('change',{bubbles:true}));}localStorage.setItem('eveSccMigratedV1','1');}}catch(e){}
+      syncSci();
       note('Taxes from your skills: Accounting '+acct+' \u2192 sales '+(Math.round(sales*100)/100)+'%, Broker Relations '+br+' \u2192 broker '+(Math.round(broker*100)/100)+'%.'+(over?' <b>Using your manual values.</b>':' Faction/corp standings can lower broker further \u2014 edit to override.'));
     }catch(e){done=false;}
   }
