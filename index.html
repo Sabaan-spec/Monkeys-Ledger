@@ -300,8 +300,8 @@ nav.tabs{gap:6px;flex-wrap:nowrap;overflow-x:auto;justify-content:safe center}na
     <div class="field narrow"><label for="f-sci" title="Pulled live from ESI per hub system">System cost index %</label><input id="f-sci" type="number" min="0" step="0.01" value="0" /></div>
     <div class="field narrow"><label for="f-facility" title="Structure/station job tax">Facility tax %</label><input id="f-facility" type="number" min="0" step="0.01" value="0.25" /></div>
     <div class="field narrow"><label for="f-scc" title="Flat CCP SCC surcharge on EIV">SCC surcharge %</label><input id="f-scc" type="number" min="0" step="0.01" value="4" /></div>
-    <div class="field narrow"><label for="f-sales" title="Depends on Accounting skill">Sales tax %</label><input id="f-sales" type="number" min="0" step="0.01" value="4.5" /></div>
-    <div class="field narrow"><label for="f-broker" title="Sell-order fee; Broker Relations skill + standings">Broker fee %</label><input id="f-broker" type="number" min="0" step="0.01" value="2.5" /></div>
+    <div class="field narrow"><label for="f-sales" title="Depends on Accounting skill">Sales tax %</label><input id="f-sales" type="number" min="0" step="0.01" value="3.37" /></div>
+    <div class="field narrow"><label for="f-broker" title="Sell-order fee; Broker Relations skill + standings">Broker fee %</label><input id="f-broker" type="number" min="0" step="0.01" value="1.38" /></div>
     <div class="field"><label>&nbsp;</label><button id="sci-refresh" class="btn" type="button">↻ Live system index</button></div>
   </section>
 
@@ -5222,8 +5222,8 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   function isk(n){return window.eveISK?window.eveISK(n):Math.round(n||0).toLocaleString();}
   function pct(n){return (n>=0?'+':'')+n.toFixed(1)+'%';}
   function taxes(){
-    var s=parseFloat((($('f-sales')||{}).value))||4.5;
-    var b=parseFloat((($('f-broker')||{}).value))||2.5;
+    var s=parseFloat((($('f-sales')||{}).value));if(!isFinite(s))s=3.37;
+    var b=parseFloat((($('f-broker')||{}).value));if(!isFinite(b))b=1.38;
     return {sales:s,broker:b};
   }
   function ldTx(){try{return JSON.parse(localStorage.getItem('eveTxStoreV1')||'{}');}catch(e){return {};}}
@@ -5380,6 +5380,69 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     running=false;
   }
   setInterval(function(){var t=$('tab-sso');if(t&&!t.hidden&&t.offsetParent!==null)run(false);},3000);
+})();
+</script>
+<script>
+/* Tax from skills v1 */
+(function(){
+  function $(id){return document.getElementById(id);}
+  var ESI='https://esi.evetech.net/latest';
+  var done=false,noteAdded=false;
+  function ld(k,d){try{var v=localStorage.getItem(k);return v==null?d:v;}catch(e){return d;}}
+  function sv(k,v){try{localStorage.setItem(k,v);}catch(e){}}
+  async function skillIds(){
+    var c=ld('eveSkillIdsV1',null);
+    if(c){try{return JSON.parse(c);}catch(e){}}
+    try{
+      var r=await fetch(ESI+'/universe/ids/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(['Accounting','Broker Relations'])});
+      var j=await r.json();var m={};
+      (j.inventory_types||[]).forEach(function(t){m[t.name]=t.id;});
+      if(m['Accounting']&&m['Broker Relations']){sv('eveSkillIdsV1',JSON.stringify(m));return m;}
+    }catch(e){}
+    return {'Accounting':16622,'Broker Relations':3446};
+  }
+  function markOverride(){
+    ['f-sales','f-broker'].forEach(function(id){
+      var el=$(id);if(!el||el._taxWatch)return;el._taxWatch=1;
+      el.addEventListener('change',function(){
+        var auto=ld('eveTaxAuto','');
+        var cur=(($('f-sales')||{}).value)+'/'+(($('f-broker')||{}).value);
+        if(cur!==auto)sv('eveTaxOverride','1');
+      });
+    });
+  }
+  function note(txt){
+    var b=$('f-broker');if(!b)return;
+    var host=b.closest('.field');if(!host||!host.parentNode)return;
+    var n=$('tax-skill-note');
+    if(!n){n=document.createElement('div');n.id='tax-skill-note';n.className='muted small';n.style.cssText='flex-basis:100%;margin-top:2px';host.parentNode.appendChild(n);}
+    n.innerHTML=txt;
+  }
+  async function sync(){
+    if(done)return;
+    if(!(window.EVEAPI&&EVEAPI.loggedIn()))return;
+    if(!$('f-sales')||!$('f-broker'))return;
+    done=true;markOverride();
+    try{
+      var ch=EVEAPI.getChar();var r=await EVEAPI.esi('/characters/'+ch.id+'/skills/');
+      var sk=r&&r.data&&r.data.skills?r.data.skills:null;if(!sk){done=false;return;}
+      var ids=await skillIds();
+      function lvl(id){var f=sk.find(function(s){return s.skill_id===id;});return f?(f.active_skill_level||0):0;}
+      var acct=lvl(ids['Accounting']),br=lvl(ids['Broker Relations']);
+      var sales=7.5*(1-0.11*acct);
+      var broker=Math.max(0,3-0.3*br);
+      var over=ld('eveTaxOverride','')==='1';
+      if(!over){
+        var s=$('f-sales'),b=$('f-broker');
+        s.value=(Math.round(sales*100)/100);b.value=(Math.round(broker*100)/100);
+        s.dispatchEvent(new Event('input',{bubbles:true}));s.dispatchEvent(new Event('change',{bubbles:true}));
+        b.dispatchEvent(new Event('input',{bubbles:true}));b.dispatchEvent(new Event('change',{bubbles:true}));
+        sv('eveTaxAuto',s.value+'/'+b.value);
+      }
+      note('Taxes from your skills: Accounting '+acct+' \u2192 sales '+(Math.round(sales*100)/100)+'%, Broker Relations '+br+' \u2192 broker '+(Math.round(broker*100)/100)+'%.'+(over?' <b>Using your manual values.</b>':' Faction/corp standings can lower broker further \u2014 edit to override.'));
+    }catch(e){done=false;}
+  }
+  setInterval(function(){var t=$('tab-calc');if(t&&!t.hidden&&t.offsetParent!==null)sync();},2500);
 })();
 </script>
 </body>
