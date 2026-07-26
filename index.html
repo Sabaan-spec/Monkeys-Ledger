@@ -5134,8 +5134,8 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   function svBom(o){try{localStorage.setItem('eveBpBomV1',JSON.stringify(o));}catch(e){}}
   async function pool(t,l){var i=0;async function w(){while(i<t.length){var x=i++;await t[x]();}}var ws=[];for(var k=0;k<l;k++)ws.push(w());await Promise.all(ws);}
   async function pages(path,max){var all=[];var r=await EVEAPI.esi(path);if(!r)return all;all=(r.data||[]).slice();var pg=Math.min(r.pages||1,max||3);for(var p=2;p<=pg;p++){var rp=await EVEAPI.esi(path+(path.indexOf('?')>=0?'&':'?')+'page='+p);if(rp)all=all.concat(rp.data||[]);}return all;}
-  var PRICES=null;
-  async function prices(){if(PRICES)return PRICES;try{var r=await fetch(ESI+'/markets/prices/');var j=await r.json();var m={};(j||[]).forEach(function(e){var v=e.average_price||e.adjusted_price||0;if(v>0)m[e.type_id]=v;});PRICES=m;}catch(e){PRICES={};}return PRICES;}
+  var PRICES=null,ADJP={};
+  async function prices(){if(PRICES)return PRICES;try{var r=await fetch(ESI+'/markets/prices/');var j=await r.json();var m={};(j||[]).forEach(function(e){var v=e.average_price||e.adjusted_price||0;if(v>0)m[e.type_id]=v;var a=e.adjusted_price||e.average_price||0;if(a>0)ADJP[e.type_id]=a;});PRICES=m;}catch(e){PRICES={};}return PRICES;}
   async function bomFor(bpId){var b=ldBom();if(b[bpId])return b[bpId];try{var r=await fetch('https://ref-data.everef.net/blueprints/'+bpId);if(!r.ok){b[bpId]={none:true};svBom(b);return b[bpId];}var j=await r.json();var m=j.activities&&j.activities.manufacturing;if(!m||!m.products){b[bpId]={none:true};}else{b[bpId]={mats:m.materials||{},prod:m.products||{}};}svBom(b);return b[bpId];}catch(e){return {none:true};}}
   var MATP={};
   var HUBMAP={jita:[10000002,30000142],amarr:[10000043,30002187],dodixie:[10000032,30002659],rens:[10000030,30002510],hek:[10000042,30002053]};
@@ -5196,7 +5196,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
             var pk=Object.keys(bom.prod)[0];if(!pk)return;
             var outQty=(bom.prod[pk].quantity)||1;
             var mats=bom.mats||{};var keys=Object.keys(mats);var cost=0,eiv=0;
-            return (async function(){for(var i=0;i<keys.length;i++){var m=mats[keys[i]];var base=m.quantity||0;var q=Math.max(1,Math.ceil(base*(1-(rec.me||0)/100)));var up=await matPrice(m.type_id,pm[m.type_id]||0);cost+=q*up;eiv+=base*(pm[m.type_id]||0);}var jf=eiv*jobFeePct();window.__bcDbg=window.__bcDbg||{};window.__bcDbg[o.type_id]={mats:cost,eiv:eiv,fee:jf,pct:jobFeePct(),me:(rec.me||0),n:keys.length};cost+=jf;if(cost>0)buildCost[o.type_id]=cost/outQty;})();
+            return (async function(){for(var i=0;i<keys.length;i++){var m=mats[keys[i]];var base=m.quantity||0;var q=Math.max(1,Math.ceil(base*(1-(rec.me||0)/100)));var up=await matPrice(m.type_id,pm[m.type_id]||0);cost+=q*up;eiv+=base*(ADJP[m.type_id]||pm[m.type_id]||0);}var jf=eiv*jobFeePct();window.__bcDbg=window.__bcDbg||{};window.__bcDbg[o.type_id]={mats:cost,eiv:eiv,fee:jf,pct:jobFeePct(),me:(rec.me||0),n:keys.length};cost+=jf;if(cost>0)buildCost[o.type_id]=cost/outQty;})();
           });});
         }
       });
