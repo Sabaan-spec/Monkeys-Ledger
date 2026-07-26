@@ -5235,6 +5235,11 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   var PRICES=null;
   async function prices(){if(PRICES)return PRICES;try{var r=await fetch(ESI+'/markets/prices/');var j=await r.json();var m={};(j||[]).forEach(function(e){var v=e.average_price||e.adjusted_price||0;if(v>0)m[e.type_id]=v;});PRICES=m;}catch(e){PRICES={};}return PRICES;}
   async function bomFor(bpId){var b=ldBom();if(b[bpId])return b[bpId];try{var r=await fetch('https://ref-data.everef.net/blueprints/'+bpId);if(!r.ok){b[bpId]={none:true};svBom(b);return b[bpId];}var j=await r.json();var m=j.activities&&j.activities.manufacturing;if(!m||!m.products){b[bpId]={none:true};}else{b[bpId]={mats:m.materials||{},prod:m.products||{}};}svBom(b);return b[bpId];}catch(e){return {none:true};}}
+  var MATP={};
+  var HUBMAP={jita:[10000002,30000142],amarr:[10000043,30002187],dodixie:[10000032,30002659],rens:[10000030,30002510],hek:[10000042,30002053]};
+  function mfgHub(){var h=$('hub');var v=h&&h.value?String(h.value).toLowerCase():'jita';for(var k in HUBMAP){if(v.indexOf(k)>=0)return HUBMAP[k];}return HUBMAP.jita;}
+  async function matPrice(id,fallback){if(MATP[id]!=null)return MATP[id];try{var hb=mfgHub();var r=await fetch(ESI+'/markets/'+hb[0]+'/orders/?order_type=sell&type_id='+id);if(r.ok){var o=await r.json();o=o.filter(function(x){return x.system_id===hb[1];});if(o.length){MATP[id]=Math.min.apply(null,o.map(function(x){return x.price;}));return MATP[id];}}}catch(e){}MATP[id]=fallback||0;return MATP[id];}
+  function jobFeePct(){var s=parseFloat((($('f-sci')||{}).value))||0;var f=parseFloat((($('f-facility')||{}).value))||0;var c=parseFloat((($('f-scc')||{}).value))||0;return (s+f+c)/100;}
   async function history(id){try{var r=await fetch(ESI+'/markets/'+HUBREG+'/history/?type_id='+id);if(!r.ok)return null;return await r.json();}catch(e){return null;}}
   async function bookFor(id){try{var r=await fetch(ESI+'/markets/'+HUBREG+'/orders/?order_type=sell&type_id='+id);if(!r.ok)return null;var o=await r.json();o=o.filter(function(x){return x.system_id===HUBSYS;});o.sort(function(a,b){return a.price-b.price;});return o;}catch(e){return null;}}
   function host(id,pos){var t=$('tab-sso');if(!t)return null;var h=$(id);if(h)return h;var sb=$('sso-body');h=document.createElement('div');h.id=id;if(sb&&sb.parentNode){sb.parentNode.insertBefore(h,sb.nextSibling);}else{t.appendChild(h);}return h;}
@@ -5279,14 +5284,13 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       sells.forEach(function(o){
         var nm=NM[o.type_id];if(!nm)return;
         var rec=BP[String(nm).toLowerCase()];
-        if(rec&&rec.bpId&&basis[o.type_id]==null){
+        if(rec&&rec.bpId){
           bpTasks.push(function(){return bomFor(rec.bpId).then(function(bom){
             if(!bom||bom.none||!bom.prod)return;
             var pk=Object.keys(bom.prod)[0];if(!pk)return;
             var outQty=(bom.prod[pk].quantity)||1;
-            var cost=0;var mats=bom.mats||{};
-            Object.keys(mats).forEach(function(mk){var m=mats[mk];var q=Math.max(1,Math.ceil((m.quantity||0)*(1-(rec.me||0)/100)));cost+=q*(pm[m.type_id]||0);});
-            if(cost>0)buildCost[o.type_id]=cost/outQty;
+            var mats=bom.mats||{};var keys=Object.keys(mats);var cost=0,eiv=0;
+            return (async function(){for(var i=0;i<keys.length;i++){var m=mats[keys[i]];var base=m.quantity||0;var q=Math.max(1,Math.ceil(base*(1-(rec.me||0)/100)));var up=await matPrice(m.type_id,pm[m.type_id]||0);cost+=q*up;eiv+=base*(pm[m.type_id]||0);}cost+=eiv*jobFeePct();if(cost>0)buildCost[o.type_id]=cost/outQty;})();
           });});
         }
       });
@@ -5295,8 +5299,9 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       var books={};
       await pool(sells.map(function(o){return function(){return bookFor(o.type_id).then(function(b){books[o.type_id]=b;});};}),5);
       var rows=sells.map(function(o){
-        var cost=basis[o.type_id];var src=cost!=null?'bought':null;
-        if(cost==null&&buildCost[o.type_id]!=null){cost=buildCost[o.type_id];src='built';}
+        var cost=null,src=null;
+        if(buildCost[o.type_id]!=null){cost=buildCost[o.type_id];src='built';}
+        else if(basis[o.type_id]!=null){cost=basis[o.type_id];src='bought';}
         var be=cost!=null?cost/(1-feeTotal):null;
         var book=books[o.type_id]||[];
         var mine=o.price;
