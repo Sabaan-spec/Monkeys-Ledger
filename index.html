@@ -5196,7 +5196,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
             var pk=Object.keys(bom.prod)[0];if(!pk)return;
             var outQty=(bom.prod[pk].quantity)||1;
             var mats=bom.mats||{};var keys=Object.keys(mats);var cost=0,eiv=0;
-            return (async function(){for(var i=0;i<keys.length;i++){var m=mats[keys[i]];var base=m.quantity||0;var q=Math.max(1,Math.ceil(base*(1-(rec.me||0)/100)));var up=await matPrice(m.type_id,pm[m.type_id]||0);cost+=q*up;eiv+=base*(pm[m.type_id]||0);}cost+=eiv*jobFeePct();if(cost>0)buildCost[o.type_id]=cost/outQty;})();
+            return (async function(){for(var i=0;i<keys.length;i++){var m=mats[keys[i]];var base=m.quantity||0;var q=Math.max(1,Math.ceil(base*(1-(rec.me||0)/100)));var up=await matPrice(m.type_id,pm[m.type_id]||0);cost+=q*up;eiv+=base*(pm[m.type_id]||0);}var jf=eiv*jobFeePct();window.__bcDbg=window.__bcDbg||{};window.__bcDbg[o.type_id]={mats:cost,eiv:eiv,fee:jf,pct:jobFeePct(),me:(rec.me||0),n:keys.length};cost+=jf;if(cost>0)buildCost[o.type_id]=cost/outQty;})();
           });});
         }
       });
