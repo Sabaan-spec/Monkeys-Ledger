@@ -5254,17 +5254,17 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       svTx(store);
       var all=Object.keys(store).map(function(k){return store[k];}).sort(function(a,b){return new Date(a.d)-new Date(b.d);});
       // moving-average cost basis + realized P&L
-      var pos={},realized={},soldQty={},noBasisRev={};
+      var pos={},realized={},soldQty={},noBasisRev={},lastBuy={};
       all.forEach(function(t){
         var p=pos[t.t]||(pos[t.t]={q:0,c:0});
-        if(t.b){p.q+=t.q;p.c+=t.q*t.p;}
+        if(t.b){p.q+=t.q;p.c+=t.q*t.p;lastBuy[t.t]=t.p;}
         else{
           var net=t.q*t.p*(1-T.sales/100);
           if(p.q>0){var avg=p.c/p.q;var use=Math.min(t.q,p.q);realized[t.t]=(realized[t.t]||0)+(net*(use/t.q))-avg*use;p.c-=avg*use;p.q-=use;soldQty[t.t]=(soldQty[t.t]||0)+use;}
           else{noBasisRev[t.t]=(noBasisRev[t.t]||0)+net;}
         }
       });
-      var basis={};Object.keys(pos).forEach(function(id){if(pos[id].q>0)basis[id]=pos[id].c/pos[id].q;});
+      var basis={};Object.keys(pos).forEach(function(id){if(pos[id].q>0)basis[id]=pos[id].c/pos[id].q;});Object.keys(lastBuy).forEach(function(id){if(basis[id]==null)basis[id]=lastBuy[id];});
       // ---- orders ----
       var orders=await pages('/characters/'+cid+'/orders/',2);
       var sells=orders.filter(function(o){return !o.is_buy_order;});
