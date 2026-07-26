@@ -5422,7 +5422,10 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   var sciDone='';
   async function syncSci(){
     try{
-      var el=$('mf-sys');var sysName=el&&el.value?el.value.trim():'';if(!sysName)return;
+      var HUBSYSNAME={jita:'Jita',amarr:'Amarr',dodixie:'Dodixie',rens:'Rens',hek:'Hek'};
+      var el=$('mf-sys');var sysName=el&&el.value?el.value.trim():'';var usedHub=false;
+      if(!sysName){var hb=$('hub');var hv=hb&&hb.value?String(hb.value).toLowerCase():'';for(var k in HUBSYSNAME){if(hv.indexOf(k)>=0){sysName=HUBSYSNAME[k];usedHub=true;break;}}}
+      if(!sysName)return;
       if(localStorage.getItem('eveSciOverride')==='1')return;
       var map=null;try{map=JSON.parse(localStorage.getItem('eveMapV2')||'null');}catch(e){}
       if(!map||!map.sys)return;
@@ -5435,7 +5438,8 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       var f=$('f-sci');if(!f)return;
       var pctv=Math.round(v*10000)/100;
       if(parseFloat(f.value)!==pctv){f.value=pctv;f.dispatchEvent(new Event('input',{bubbles:true}));f.dispatchEvent(new Event('change',{bubbles:true}));}
-      if(sciDone!==sysName.toLowerCase()){sciDone=sysName.toLowerCase();var n=$('tax-skill-note');if(n&&n.innerHTML.indexOf('System cost index')<0)n.innerHTML+=' <br>System cost index <b>'+pctv+'%</b> from live ESI for <b>'+sysName+'</b> (your build system, not the market hub).';}
+      var tagKey=sysName.toLowerCase()+(usedHub?'|hub':'');
+      if(sciDone!==tagKey){sciDone=tagKey;var n=$('tax-skill-note');if(n){n.innerHTML=n.innerHTML.replace(/ <br>System cost index[^<]*(<b>[^<]*<\/b>)?[^<]*(<b>[^<]*<\/b>)?[^<]*/,'');n.innerHTML+=' <br>System cost index <b>'+pctv+'%</b> for <b>'+sysName+'</b>'+(usedHub?' (no build system set \u2014 using your market hub)':' (your build system)')+'.';}}
     }catch(e){}
   }
   async function sync(){
