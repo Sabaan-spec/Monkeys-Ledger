@@ -5535,9 +5535,10 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     var key=[newTotal,rev,profit].join('|');
     if(!force&&key===lastKey)return;lastKey=key;
     writing=true;
-    var tc=$('s-matcost');if(tc)tc.textContent=fmt(newTotal);
-    var pf=$('s-profit');if(pf)pf.textContent=fmt(profit);
-    var mg=$('s-margin');if(mg)mg.textContent=(margin>=0?'+':'')+margin.toFixed(1)+'%';
+    var tTot=fmt(newTotal),tPro=fmt(profit),tMar=(margin>=0?'+':'')+margin.toFixed(1)+'%';
+    var tc=$('s-matcost');if(tc&&tc.textContent!==tTot)tc.textContent=tTot;
+    var pf=$('s-profit');if(pf&&pf.textContent!==tPro)pf.textContent=tPro;
+    var mg=$('s-margin');if(mg&&mg.textContent!==tMar)mg.textContent=tMar;
     setTimeout(function(){writing=false;},40);
     var note=$('cb-note');
     if(!note){var host=$('cb-toggle');if(host){note=document.createElement('div');note.id='cb-note';note.className='muted small';note.style.cssText='margin-top:4px';host.parentNode.insertBefore(note,host.nextSibling);}}
@@ -5549,7 +5550,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   }
   var obsSet=false,pend=false;
   function watchTiles(){if(obsSet)return;var ids=['s-matcost','s-profit','s-margin'];var els=ids.map($).filter(Boolean);if(els.length<3)return;obsSet=true;var mo=new MutationObserver(function(){if(writing||mode()!=='oop')return;if(pend)return;pend=true;requestAnimationFrame(function(){pend=false;apply(true);});});els.forEach(function(e){mo.observe(e,{childList:true,characterData:true,subtree:true});});}
-  setInterval(function(){var t=$('tab-calc');if(t&&!t.hidden&&t.offsetParent!==null){watchTiles();apply(false);}},1200);
+  setInterval(function(){var t=$('tab-calc');if(t&&!t.hidden&&t.offsetParent!==null){apply(mode()==='oop');}},300);
 })();
 </script>
 </body>
