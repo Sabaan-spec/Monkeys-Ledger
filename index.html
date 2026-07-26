@@ -5113,6 +5113,105 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   }
 })();
 </script>
+<script>
+/* Market income v1 */
+(function(){
+  function $(id){return document.getElementById(id);}
+  var doneAt=0,running=false,DAYS=30;
+  function isk(n){return window.eveISK?window.eveISK(n):Math.round(n).toLocaleString();}
+  function dayKey(d){return new Date(d).toISOString().slice(0,10);}
+  function host(){var t=$('tab-sso');if(!t)return null;var h=$('acc-mkt');if(h)return h;var sb=$('sso-body');h=document.createElement('div');h.id='acc-mkt';if(sb&&sb.parentNode){sb.parentNode.insertBefore(h,sb.nextSibling);}else{t.appendChild(h);}return h;}
+  function stub(){var h=host();if(h&&!h.innerHTML)h.innerHTML='<section class="panel" style="padding:14px;margin-bottom:12px"><div style="font-weight:700">\ud83d\udcca Market income</div><div class="muted small" id="acc-mkt-status">Loading transactions\u2026</div></section>';}
+  async function pages(path,max){
+    var all=[];
+    var r=await EVEAPI.esi(path);
+    if(!r)return all;
+    all=(r.data||[]).slice();
+    var pg=Math.min(r.pages||1,max||3);
+    for(var p=2;p<=pg;p++){var rp=await EVEAPI.esi(path+(path.indexOf('?')>=0?'&':'?')+'page='+p);if(rp)all=all.concat(rp.data||[]);}
+    return all;
+  }
+  async function load(force){
+    if(!window.EVEAPI||!EVEAPI.loggedIn())return;
+    if(running)return;
+    if(!force&&doneAt&&Date.now()-doneAt<300000)return;
+    running=true;stub();
+    try{
+      var ch=EVEAPI.getChar();var cid=ch.id;
+      var tx=await pages('/characters/'+cid+'/wallet/transactions/',3);
+      var jr=await pages('/characters/'+cid+'/wallet/journal/',4);
+      var cutoff=Date.now()-DAYS*86400000;
+      tx=tx.filter(function(t){return new Date(t.date).getTime()>=cutoff;});
+      var feeTypes={brokers_fee:1,transaction_tax:1,market_provider_tax:1};
+      var feesByDay={};
+      jr.forEach(function(e){
+        if(!feeTypes[e.ref_type])return;
+        var d=new Date(e.date).getTime();if(d<cutoff)return;
+        var k=dayKey(e.date);feesByDay[k]=(feesByDay[k]||0)+Math.abs(e.amount||0);
+      });
+      var byDay={},buyCost={},buyQty={},soldRev={},soldQty={},nameIds={};
+      tx.forEach(function(t){
+        var k=dayKey(t.date);var val=(t.quantity||0)*(t.unit_price||0);
+        var d=byDay[k]||(byDay[k]={sales:0,buys:0});
+        if(t.is_buy){d.buys+=val;buyCost[t.type_id]=(buyCost[t.type_id]||0)+val;buyQty[t.type_id]=(buyQty[t.type_id]||0)+(t.quantity||0);}
+        else{d.sales+=val;soldRev[t.type_id]=(soldRev[t.type_id]||0)+val;soldQty[t.type_id]=(soldQty[t.type_id]||0)+(t.quantity||0);}
+        nameIds[t.type_id]=1;
+      });
+      var ids=Object.keys(nameIds).map(Number);
+      var NM=ids.length?await EVEAPI.names(ids.slice(0,900)):{};
+      render({byDay:byDay,feesByDay:feesByDay,buyCost:buyCost,buyQty:buyQty,soldRev:soldRev,soldQty:soldQty,NM:NM,txCount:tx.length});
+      doneAt=Date.now();
+    }catch(e){var s=$('acc-mkt-status');if(s)s.textContent='Could not load transactions.';}
+    running=false;
+  }
+  function render(d){
+    var h=host();if(!h)return;
+    var keys=[];for(var i=DAYS-1;i>=0;i--){keys.push(dayKey(Date.now()-i*86400000));}
+    var today=keys[keys.length-1];
+    function dayNet(k){var e=d.byDay[k]||{sales:0,buys:0};return e.sales-e.buys-(d.feesByDay[k]||0);}
+    var tSales=(d.byDay[today]||{}).sales||0,tBuys=(d.byDay[today]||{}).buys||0,tFees=d.feesByDay[today]||0;
+    var sum=function(n,f){var s=0;for(var i=keys.length-n;i<keys.length;i++){if(i>=0)s+=f(keys[i]);}return s;};
+    var sales7=sum(7,function(k){return (d.byDay[k]||{}).sales||0;});
+    var sales30=sum(30,function(k){return (d.byDay[k]||{}).sales||0;});
+    var net7=sum(7,dayNet),net30=sum(30,dayNet);
+    var fees30=sum(30,function(k){return d.feesByDay[k]||0;});
+    // estimated trading profit: sales matched to average buy cost of same item
+    var matched=0,unmatched=0;
+    Object.keys(d.soldRev).forEach(function(id){
+      var q=d.soldQty[id]||0,rev=d.soldRev[id]||0;
+      if(d.buyQty[id]>0){var avgCost=d.buyCost[id]/d.buyQty[id];matched+=rev-avgCost*q;}
+      else unmatched+=rev;
+    });
+    var vals=keys.slice(-14).map(dayNet);
+    var maxAbs=Math.max.apply(null,vals.map(function(v){return Math.abs(v);}).concat([1]));
+    var bars=vals.map(function(v){var hgt=Math.max(1,Math.round(Math.abs(v)/maxAbs*28));var up=v>=0;return '<div title="'+isk(v)+'" style="flex:1;display:flex;flex-direction:column;justify-content:'+(up?'flex-end':'flex-start')+';height:32px"><div style="height:'+hgt+'px;background:'+(up?'#54c28a':'#e0555a')+';border-radius:2px"></div></div>';}).join('');
+    var top=Object.keys(d.soldRev).map(function(id){return {id:id,rev:d.soldRev[id]};}).sort(function(a,b){return b.rev-a.rev;}).slice(0,5);
+    function tile(l,v,c){return '<div style="min-width:104px"><div class="muted small">'+l+'</div><div style="font-weight:800;font-size:1.05rem'+(c?';color:'+c:'')+'">'+v+'</div></div>';}
+    var inner='<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:8px">'
+      +tile('Sales today',isk(tSales),'#54c28a')
+      +tile('Bought today',isk(tBuys),'#e3b341')
+      +tile('Fees today',isk(tFees),'#e0555a')
+      +tile('Net today',isk(tSales-tBuys-tFees),(tSales-tBuys-tFees)>=0?'#54c28a':'#e0555a')
+      +'</div>';
+    inner+='<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:8px">'
+      +tile('Sales 7d',isk(sales7))+tile('Sales 30d',isk(sales30))
+      +tile('Net 7d',isk(net7),net7>=0?'#54c28a':'#e0555a')
+      +tile('Net 30d',isk(net30),net30>=0?'#54c28a':'#e0555a')
+      +tile('Fees 30d',isk(fees30))
+      +'</div>';
+    inner+='<div class="muted small" style="margin-bottom:2px">Daily net, last 14 days</div><div style="display:flex;gap:2px;align-items:stretch;margin-bottom:8px">'+bars+'</div>';
+    inner+='<div style="padding:6px 0;border-top:1px solid rgba(120,150,170,.14)"><div class="muted small">Estimated trading profit (30d)</div><div style="font-weight:800;font-size:1.1rem;color:'+(matched>=0?'#54c28a':'#e0555a')+'">'+isk(matched)+'</div><div class="muted small">on items you both bought and sold. '+(unmatched>0?('<b style="color:#cfe3f0">'+isk(unmatched)+'</b> of sales had no matching purchase (built or long-held) \u2014 profit on those needs your build cost.'):'')+'</div></div>';
+    if(top.length){
+      inner+='<div class="muted small" style="margin-top:6px;margin-bottom:2px">Top sellers (30d revenue)</div>';
+      top.forEach(function(x){inner+='<div style="display:flex;justify-content:space-between;font-size:.82rem;padding:1px 0"><span>'+(d.NM[x.id]||('#'+x.id))+'</span><span style="color:#54c28a">'+isk(x.rev)+'</span></div>';});
+    }
+    inner+='<div class="muted small" style="margin-top:6px">'+d.txCount.toLocaleString()+' transactions in the last '+DAYS+' days \u00b7 <a href="#" id="acc-mkt-refresh" style="color:#7fb0c8">refresh</a></div>';
+    h.innerHTML='<section class="panel" style="padding:14px;margin-bottom:12px"><div style="font-weight:700;margin-bottom:8px">\ud83d\udcca Market income</div>'+inner+'</section>';
+    var rf=$('acc-mkt-refresh');if(rf)rf.addEventListener('click',function(ev){ev.preventDefault();doneAt=0;load(true);});
+  }
+  setInterval(function(){var t=$('tab-sso');if(t&&!t.hidden&&t.offsetParent!==null)load(false);},2500);
+})();
+</script>
 </body>
 </html>
 
