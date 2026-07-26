@@ -5141,7 +5141,10 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   var HUBMAP={jita:[10000002,30000142],amarr:[10000043,30002187],dodixie:[10000032,30002659],rens:[10000030,30002510],hek:[10000042,30002053]};
   function mfgHub(){var h=$('hub');var v=h&&h.value?String(h.value).toLowerCase():'jita';for(var k in HUBMAP){if(v.indexOf(k)>=0)return HUBMAP[k];}return HUBMAP.jita;}
   async function matPrice(id,fallback){if(MATP[id]!=null)return MATP[id];try{var hb=mfgHub();var r=await fetch(ESI+'/markets/'+hb[0]+'/orders/?order_type=sell&type_id='+id);if(r.ok){var o=await r.json();o=o.filter(function(x){return x.system_id===hb[1];});if(o.length){MATP[id]=Math.min.apply(null,o.map(function(x){return x.price;}));return MATP[id];}}}catch(e){}MATP[id]=fallback||0;return MATP[id];}
-  function jobFeePct(){var s=parseFloat((($('f-sci')||{}).value))||0;var f=parseFloat((($('f-facility')||{}).value))||0;var c=parseFloat((($('f-scc')||{}).value));if(!isFinite(c))c=4;return (s+f+c)/100;}
+  var BUILDIDX=null,BUILDSYS='';
+  function pnlBuildSysName(){try{var v=localStorage.getItem('evePnlBuildSys');if(v)return v;}catch(e){}var el=$('mf-sys');if(el&&el.value)return el.value.trim();var h=$('hub');var m={jita:'Jita',amarr:'Amarr',dodixie:'Dodixie',rens:'Rens',hek:'Hek'};var hv=h&&h.value?String(h.value).toLowerCase():'';for(var k in m){if(hv.indexOf(k)>=0)return m[k];}return 'Jita';}
+  async function resolveBuildIndex(){var nm=pnlBuildSysName();BUILDSYS=nm;var map=null;try{map=JSON.parse(localStorage.getItem('eveMapV2')||'null');}catch(e){}if(!map||!map.sys){BUILDIDX=null;return null;}var sid=null;for(var id in map.sys){if((map.sys[id][2]||'').toLowerCase()===nm.toLowerCase()){sid=+id;break;}}if(!sid){BUILDIDX=null;return null;}var idx=window.__sciIdx;if(!idx){try{var r=await fetch(ESI+'/industry/systems/');if(!r.ok){BUILDIDX=null;return null;}idx=await r.json();window.__sciIdx=idx;}catch(e){BUILDIDX=null;return null;}}var row=idx.find(function(s){return s.solar_system_id===sid;});if(!row){BUILDIDX=null;return null;}var v=null;(row.cost_indices||[]).forEach(function(c){if(c.activity==='manufacturing')v=c.cost_index;});BUILDIDX=(v==null?null:v*100);return BUILDIDX;}
+  function jobFeePct(){var s=(BUILDIDX!=null)?BUILDIDX:(parseFloat((($('f-sci')||{}).value))||0);var f=parseFloat((($('f-facility')||{}).value))||0;var c=parseFloat((($('f-scc')||{}).value));if(!isFinite(c))c=4;return (s+f+c)/100;}
   async function history(id){try{var r=await fetch(ESI+'/markets/'+HUBREG+'/history/?type_id='+id);if(!r.ok)return null;return await r.json();}catch(e){return null;}}
   async function bookFor(id){try{var r=await fetch(ESI+'/markets/'+HUBREG+'/orders/?order_type=sell&type_id='+id);if(!r.ok)return null;var o=await r.json();o=o.filter(function(x){return x.system_id===HUBSYS;});o.sort(function(a,b){return a.price-b.price;});return o;}catch(e){return null;}}
   function host(id,pos){var t=$('tab-sso');if(!t)return null;var h=$(id);if(h)return h;var sb=$('sso-body');h=document.createElement('div');h.id=id;if(sb&&sb.parentNode){sb.parentNode.insertBefore(h,sb.nextSibling);}else{t.appendChild(h);}return h;}
@@ -5154,6 +5157,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     try{
       var ch=EVEAPI.getChar(),cid=ch.id;
       var T=taxes(),feeTotal=(T.sales+T.broker)/100;
+      await resolveBuildIndex();
       // ---- persistent transaction store ----
       var store=ldTx();
       var tx=await pages('/characters/'+cid+'/wallet/transactions/',3);
@@ -5219,7 +5223,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
         else if(undercut){advice='RELIST \u2192 '+ (best-0.01).toLocaleString(undefined,{maximumFractionDigits:2});color='#8ea6ff';}
         else if(be==null){advice='no cost basis';color='#9fb2c0';}
         else {advice='OK \u00b7 margin '+pct(margin);color='#54c28a';}
-        return {name:NM[o.type_id]||('#'+o.type_id),price:mine,be:be,src:src,margin:margin,undercut:undercut,gapPct:gapPct,advice:advice,color:color,qty:o.volume_remain};
+        return {name:NM[o.type_id]||('#'+o.type_id),price:mine,be:be,cost:cost,src:src,margin:margin,undercut:undercut,gapPct:gapPct,advice:advice,color:color,qty:o.volume_remain};
       });
       var loss=rows.filter(function(r){return r.be!=null&&r.price<r.be;});
       var hold=rows.filter(function(r){return r.color==='#e3b341';});
@@ -5227,14 +5231,15 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       var inner='';
       if(!rows.length)inner='<div class="muted small">No active sell orders.</div>';
       else{
-        inner='<div class="muted small" style="margin-bottom:4px">'+rows.length+' sell orders \u00b7 <b style="color:'+(loss.length?'#e0555a':'#54c28a')+'">'+loss.length+' below break-even</b>'+(hold.length?(' \u00b7 <b style="color:#e3b341">'+hold.length+' not worth chasing</b>'):'')+'</div>';
+        inner='<div class="muted small" style="margin-bottom:4px">Break-even uses build system <b>'+BUILDSYS+'</b>'+(BUILDIDX!=null?(' (index '+BUILDIDX.toFixed(2)+'%)'):'')+' \u00b7 <a href="#" id="pnl-setsys" style="color:#7fb0c8">change</a></div><div class="muted small" style="margin-bottom:4px">'+rows.length+' sell orders \u00b7 <b style="color:'+(loss.length?'#e0555a':'#54c28a')+'">'+loss.length+' below break-even</b>'+(hold.length?(' \u00b7 <b style="color:#e3b341">'+hold.length+' not worth chasing</b>'):'')+'</div>';
         inner+='<table style="width:100%;border-collapse:collapse;font-size:.82rem"><thead><tr class="muted small"><th style="text-align:left;padding:2px 6px">Item</th><th style="text-align:right;padding:2px 6px">Your price</th><th style="text-align:right;padding:2px 6px">Break-even</th><th style="text-align:right;padding:2px 6px">Margin</th><th style="text-align:left;padding:2px 6px">Advice</th></tr></thead><tbody>';
         rows.slice(0,30).forEach(function(r){
-          inner+='<tr style="border-bottom:1px solid rgba(120,150,170,.08)"><td style="padding:2px 6px">'+r.name+' <span class="muted" style="font-size:.7rem">x'+r.qty+(r.src?(' \u00b7 '+r.src):'')+'</span></td><td class="num" style="text-align:right;padding:2px 6px">'+isk(r.price)+'</td><td class="num" style="text-align:right;padding:2px 6px">'+(r.be!=null?isk(r.be):'\u2014')+'</td><td class="num" style="text-align:right;padding:2px 6px;color:'+(r.margin==null?'#9fb2c0':(r.margin>=0?'#54c28a':'#e0555a'))+'">'+(r.margin==null?'\u2014':pct(r.margin))+'</td><td style="padding:2px 6px;color:'+r.color+';font-weight:600">'+r.advice+'</td></tr>';
+          inner+='<tr style="border-bottom:1px solid rgba(120,150,170,.08)"><td style="padding:2px 6px">'+r.name+' <span class="muted" style="font-size:.7rem">x'+r.qty+(r.src?(' \u00b7 '+r.src):'')+'</span></td><td class="num" style="text-align:right;padding:2px 6px">'+isk(r.price)+'</td><td class="num" style="text-align:right;padding:2px 6px" title="'+(r.be!=null?('cost '+isk(r.cost)+' ('+(r.src||'')+') \u00f7 (1 - '+((T.sales+T.broker).toFixed(2))+'% fees) \u00b7 build index '+(BUILDIDX!=null?BUILDIDX.toFixed(2)+'% in '+BUILDSYS:'from Manufacturing tab')):'no cost basis')+'">'+(r.be!=null?isk(r.be):'\u2014')+'</td><td class="num" style="text-align:right;padding:2px 6px;color:'+(r.margin==null?'#9fb2c0':(r.margin>=0?'#54c28a':'#e0555a'))+'">'+(r.margin==null?'\u2014':pct(r.margin))+'</td><td style="padding:2px 6px;color:'+r.color+';font-weight:600">'+r.advice+'</td></tr>';
         });
         inner+='</tbody></table><div class="muted small" style="margin-top:4px">Break-even includes '+T.sales+'% sales tax + '+T.broker+'% broker fee (from the Manufacturing tab). Cost basis = your average purchase price, else ME-adjusted build cost.</div>';
       }
       card('acc-risk','\ud83d\udee1\ufe0f Orders at risk',inner);
+      (function(){var lk=$('pnl-setsys');if(!lk)return;lk.addEventListener('click',function(ev){ev.preventDefault();var cur=BUILDSYS||'';var v=window.prompt('Which system do you build in? (used for the job cost index in break-even)',cur);if(v==null)return;v=String(v).trim();try{if(v)localStorage.setItem('evePnlBuildSys',v);else localStorage.removeItem('evePnlBuildSys');}catch(e){}doneAt=0;run(true);});})();
       // ---- dead stock ----
       var byId=(window.EVEACC&&EVEACC.byId)||{};
       var held=Object.keys(byId).map(Number).filter(function(id){return pm[id]>0;});
