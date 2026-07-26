@@ -5513,7 +5513,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     if(b)b.style.opacity=m==='oop'?'1':'.5';
     if(s){s.textContent=m==='oop'?'\u2022 showing out-of-pocket cost':'\u2022 showing full market cost';s.style.color=m==='oop'?'#e3b341':'#54c28a';}
   }
-  var lastKey='';
+  var lastKey='';var writing=false;
   function apply(force){
     ui();paintBtns();
     if(mode()!=='oop')return;
@@ -5534,9 +5534,11 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     var margin=newTotal>0?(profit/newTotal*100):0;
     var key=[newTotal,rev,profit].join('|');
     if(!force&&key===lastKey)return;lastKey=key;
+    writing=true;
     var tc=$('s-matcost');if(tc)tc.textContent=fmt(newTotal);
     var pf=$('s-profit');if(pf)pf.textContent=fmt(profit);
     var mg=$('s-margin');if(mg)mg.textContent=(margin>=0?'+':'')+margin.toFixed(1)+'%';
+    setTimeout(function(){writing=false;},40);
     var note=$('cb-note');
     if(!note){var host=$('cb-toggle');if(host){note=document.createElement('div');note.id='cb-note';note.className='muted small';note.style.cssText='margin-top:4px';host.parentNode.insertBefore(note,host.nextSibling);}}
     if(note){
@@ -5545,7 +5547,9 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
         : 'Out-of-pocket mode needs your assets \u2014 connect your character on the Account tab. Showing full market cost until then.';
     }
   }
-  setInterval(function(){var t=$('tab-calc');if(t&&!t.hidden&&t.offsetParent!==null)apply(false);},1200);
+  var obsSet=false,pend=false;
+  function watchTiles(){if(obsSet)return;var ids=['s-matcost','s-profit','s-margin'];var els=ids.map($).filter(Boolean);if(els.length<3)return;obsSet=true;var mo=new MutationObserver(function(){if(writing||mode()!=='oop')return;if(pend)return;pend=true;requestAnimationFrame(function(){pend=false;apply(true);});});els.forEach(function(e){mo.observe(e,{childList:true,characterData:true,subtree:true});});}
+  setInterval(function(){var t=$('tab-calc');if(t&&!t.hidden&&t.offsetParent!==null){watchTiles();apply(false);}},1200);
 })();
 </script>
 </body>
