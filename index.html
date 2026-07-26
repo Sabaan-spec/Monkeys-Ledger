@@ -5553,6 +5553,20 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   setInterval(function(){var t=$('tab-calc');if(t&&!t.hidden&&t.offsetParent!==null){apply(mode()==='oop');}},300);
 })();
 </script>
+<script>
+/* Summary sync v1 */
+(function(){
+  function $(id){return document.getElementById(id);}
+  var IDS=["runs","me","hub","mf-sys","buystrat","sellstrat","f-sci","f-facility","f-scc","f-sales","f-broker"];
+  var t=null,stale=false;
+  function tiles(){return ["s-matcost","s-revenue","s-profit","s-margin"].map($).filter(Boolean);}
+  function markStale(){if(stale)return;stale=true;tiles().forEach(function(e){e.style.opacity="0.35";});}
+  function clearStale(){stale=false;tiles().forEach(function(e){e.style.opacity="";});}
+  function schedule(){markStale();if(t)clearTimeout(t);t=setTimeout(function(){t=null;var r=$("refresh");if(r)r.click();setTimeout(clearStale,2500);},700);}
+  function wire(){IDS.forEach(function(id){var el=$(id);if(!el||el._syncW)return;el._syncW=1;el.addEventListener("change",schedule);if(el.tagName==="INPUT")el.addEventListener("input",schedule);});}
+  setInterval(function(){var tab=$("tab-calc");if(tab&&!tab.hidden&&tab.offsetParent!==null)wire();},1200);
+})();
+</script>
 </body>
 </html>
 
