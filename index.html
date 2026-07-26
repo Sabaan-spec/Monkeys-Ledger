@@ -5472,88 +5472,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   setInterval(function(){var t=$('tab-calc');if(t&&!t.hidden&&t.offsetParent!==null){sync();syncSci();}},2500);
 })();
 </script>
-<script>
-/* Cost basis toggle v1 */
-(function(){
-  function $(id){return document.getElementById(id);}
-  function mode(){try{return localStorage.getItem('eveCostBasis')||'market';}catch(e){return 'market';}}
-  function setMode(v){try{localStorage.setItem('eveCostBasis',v);}catch(e){}}
-  function num(s){var m=String(s||'').replace(/[^0-9.]/g,'');var v=parseFloat(m);return isFinite(v)?v:0;}
-  function fmt(n){return Number(n).toLocaleString(undefined,{maximumFractionDigits:2})+' ISK';}
-  function firstText(el){var n=el&&el.childNodes[0];return ((n&&n.textContent)||(el&&el.textContent)||'').trim();}
-  function owned(name){var acc=(window.EVEACC&&EVEACC.byName)||{};return acc[String(name||'').trim().toLowerCase()]||0;}
-  function parseBreakdown(){
-    var el=$('fee-breakdown');if(!el)return null;
-    var t=el.textContent||'';
-    var mm=t.match(/materials\s+([0-9,\.]+)\s*ISK/i);
-    var jf=t.match(/job install fee\s+([0-9,\.]+)\s*ISK/i);
-    if(!mm)return null;
-    return {materials:num(mm[1]),jobFee:jf?num(jf[1]):0};
-  }
-  function taxes(){
-    var s=parseFloat((($('f-sales')||{}).value));if(!isFinite(s))s=3.37;
-    var b=parseFloat((($('f-broker')||{}).value));if(!isFinite(b))b=1.38;
-    return (s+b)/100;
-  }
-  function ui(){
-    var host=$('fee-breakdown');if(!host||$('cb-toggle'))return;
-    var w=document.createElement('div');w.id='cb-toggle';w.className='muted small';w.style.cssText='margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap';
-    w.innerHTML='<span>Value materials at:</span>'
-      +'<button id="cb-market" class="btn" style="font-size:.72rem;padding:2px 9px">Market price</button>'
-      +'<button id="cb-oop" class="btn" style="font-size:.72rem;padding:2px 9px">Only what I still need</button>'
-      +'<span id="cb-state" style="font-weight:600"></span>';
-    host.parentNode.insertBefore(w,host.nextSibling);
-    $('cb-market').addEventListener('click',function(){setMode('market');paintBtns();try{var lbl=function(id,txt){var e=$(id);if(!e)return;var p=e.parentElement;if(!p)return;var s=p.querySelector('.stat-label');if(s)s.textContent=txt;};lbl('s-matcost','Total cost');lbl('s-profit','Net profit');lbl('s-margin','Net margin');}catch(e){}var r=$('refresh');if(r)r.click();});
-    $('cb-oop').addEventListener('click',function(){setMode('oop');paintBtns();apply(true);});
-    paintBtns();
-  }
-  function paintBtns(){
-    var m=mode();var a=$('cb-market'),b=$('cb-oop'),s=$('cb-state');
-    if(a)a.style.opacity=m==='market'?'1':'.5';
-    if(b)b.style.opacity=m==='oop'?'1':'.5';
-    if(s){s.textContent=m==='oop'?'\u2022 showing out-of-pocket cost':'\u2022 showing full market cost';s.style.color=m==='oop'?'#e3b341':'#54c28a';}
-  }
-  var lastKey='';var writing=false;
-  function apply(force){
-    ui();paintBtns();
-    if(mode()!=='oop')return;
-    var bd=parseBreakdown();if(!bd)return;
-    var mb=$('mat-body');if(!mb||!mb.querySelector('tr'))return;
-    var acc=(window.EVEACC&&EVEACC.ready);
-    var oopMat=0,haveN=0,total=0,savings=0;
-    [].forEach.call(mb.querySelectorAll('tr'),function(tr){
-      var td=tr.querySelectorAll('td');if(td.length<4)return;
-      var name=firstText(td[0]);var qty=num(firstText(td[1]));var unit=num(td[2].textContent);
-      var own=acc?owned(name):0;var need=Math.max(0,qty-own);
-      oopMat+=need*unit;savings+=Math.min(own,qty)*unit;total++;if(own>0)haveN++;
-    });
-    var newTotal=oopMat+bd.jobFee;
-    var rev=num((($('s-revenue')||{}).textContent));
-    if(!(rev>0))return;
-    var profit=rev*(1-taxes())-newTotal;
-    var margin=newTotal>0?(profit/newTotal*100):0;
-    var key=[newTotal,rev,profit].join('|');
-    if(!force&&key===lastKey)return;lastKey=key;
-    writing=true;
-    var tTot=fmt(newTotal),tPro=fmt(profit),tMar=(margin>=0?'+':'')+margin.toFixed(1)+'%';
-    var tc=$('s-matcost');if(tc&&tc.textContent!==tTot)tc.textContent=tTot;
-    var pf=$('s-profit');if(pf&&pf.textContent!==tPro)pf.textContent=tPro;
-    var mg=$('s-margin');if(mg&&mg.textContent!==tMar)mg.textContent=tMar;
-    setTimeout(function(){writing=false;},40);
-    try{var lbl=function(id,txt){var e=$(id);if(!e)return;var p=e.parentElement;if(!p)return;var s=p.querySelector('.stat-label');if(s&&s.textContent!==txt)s.textContent=txt;};lbl('s-matcost','Cash out-of-pocket');lbl('s-profit','Profit on cash spent');lbl('s-margin','Return on cash');}catch(e){}
-    var note=$('cb-note');
-    if(!note){var host=$('cb-toggle');if(host){note=document.createElement('div');note.id='cb-note';note.className='muted small';note.style.cssText='margin-top:4px';host.parentNode.insertBefore(note,host.nextSibling);}}
-    if(note){
-      note.innerHTML=acc
-        ? ('Out-of-pocket: you already hold materials on <b>'+haveN+'/'+total+'</b> lines worth <b>'+fmt(savings)+'</b>. Tiles show cash you still spend ('+fmt(oopMat)+' materials + '+fmt(bd.jobFee)+' job fee). Market-cost view: '+fmt(bd.materials+bd.jobFee)+'.')
-        : 'Out-of-pocket mode needs your assets \u2014 connect your character on the Account tab. Showing full market cost until then.';
-    }
-  }
-  var obsSet=false,pend=false;
-  function watchTiles(){if(obsSet)return;var ids=['s-matcost','s-profit','s-margin'];var els=ids.map($).filter(Boolean);if(els.length<3)return;obsSet=true;var mo=new MutationObserver(function(){if(writing||mode()!=='oop')return;if(pend)return;pend=true;requestAnimationFrame(function(){pend=false;apply(true);});});els.forEach(function(e){mo.observe(e,{childList:true,characterData:true,subtree:true});});}
-  setInterval(function(){var t=$('tab-calc');if(t&&!t.hidden&&t.offsetParent!==null){apply(mode()==='oop');}},300);
-})();
-</script>
+
 <script>
 /* Summary sync v1 */
 (function(){
@@ -5566,6 +5485,51 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   function schedule(){markStale();if(t)clearTimeout(t);t=setTimeout(function(){t=null;var r=$("refresh");if(r)r.click();setTimeout(clearStale,2500);},700);}
   function wire(){IDS.forEach(function(id){var el=$(id);if(!el||el._syncW)return;el._syncW=1;el.addEventListener("change",schedule);if(el.tagName==="INPUT")el.addEventListener("input",schedule);});}
   setInterval(function(){var tab=$("tab-calc");if(tab&&!tab.hidden&&tab.offsetParent!==null)wire();},1200);
+})();
+</script>
+<script>
+/* Dual cost view v1 */
+(function(){
+  function $(id){return document.getElementById(id);}
+  function num(s){var v=parseFloat(String(s||'').replace(/[^0-9.\-]/g,''));return isFinite(v)?v:0;}
+  function fmt(n){return Number(n).toLocaleString(undefined,{maximumFractionDigits:2})+' ISK';}
+  function firstText(el){var n=el&&el.childNodes[0];return ((n&&n.textContent)||(el&&el.textContent)||'').trim();}
+  function owned(name){var acc=(window.EVEACC&&EVEACC.byName)||{};return acc[String(name||'').trim().toLowerCase()]||0;}
+  function taxes(){var s=parseFloat((($('f-sales')||{}).value));if(!isFinite(s))s=3.37;var b=parseFloat((($('f-broker')||{}).value));if(!isFinite(b))b=1.38;return (s+b)/100;}
+  function breakdown(){
+    var el=$('fee-breakdown');if(!el)return null;var t=el.textContent||'';
+    var mm=t.match(/materials\s+([0-9,\.]+)\s*ISK/i);var jf=t.match(/job install fee\s+([0-9,\.]+)\s*ISK/i);
+    if(!mm)return null;return {materials:num(mm[1]),jobFee:jf?num(jf[1]):0};
+  }
+  function sub(id){
+    var host=$(id);if(!host)return null;var p=host.parentElement;if(!p)return null;
+    var e=p.querySelector('.dual-sub');
+    if(!e){e=document.createElement('span');e.className='dual-sub';e.style.cssText='display:block;font-size:.72rem;opacity:.75;margin-top:2px;line-height:1.25';p.appendChild(e);}
+    return e;
+  }
+  function clearSubs(){['s-matcost','s-profit','s-margin'].forEach(function(id){var e=sub(id);if(e&&e.textContent){e.textContent='';}});}
+  function tick(){
+    var mb=$('mat-body');if(!mb||!mb.querySelector('tr')){clearSubs();return;}
+    var bd=breakdown();if(!bd){clearSubs();return;}
+    var acc=(window.EVEACC&&EVEACC.ready);
+    if(!acc){var e0=sub('s-matcost');if(e0&&!e0.textContent)e0.textContent='connect character to see cash out-of-pocket';return;}
+    var oopMat=0,haveN=0,total=0,savings=0;
+    [].forEach.call(mb.querySelectorAll('tr'),function(tr){
+      var td=tr.querySelectorAll('td');if(td.length<4)return;
+      var name=firstText(td[0]);var qty=num(firstText(td[1]));var unit=num(td[2].textContent);
+      var own=owned(name);var need=Math.max(0,qty-own);
+      oopMat+=need*unit;savings+=Math.min(own,qty)*unit;total++;if(own>0)haveN++;
+    });
+    if(savings<=0){['s-matcost','s-profit','s-margin'].forEach(function(id){var e=sub(id);if(e)e.textContent='';});return;}
+    var cash=oopMat+bd.jobFee;
+    var rev=num(($('s-revenue')||{}).textContent);if(!(rev>0))return;
+    var cashProfit=rev*(1-taxes())-cash;
+    var cashRet=cash>0?(cashProfit/cash*100):0;
+    var a=sub('s-matcost');if(a)a.innerHTML='cash out-of-pocket <b style="color:#e3b341">'+fmt(cash)+'</b><br>('+haveN+'/'+total+' lines owned, '+fmt(savings)+' from stock)';
+    var b=sub('s-profit');if(b)b.innerHTML='profit on cash spent <b style="color:#e3b341">'+fmt(cashProfit)+'</b>';
+    var c=sub('s-margin');if(c)c.innerHTML='return on cash <b style="color:#e3b341">'+(cashRet>=0?'+':'')+cashRet.toFixed(1)+'%</b>';
+  }
+  setInterval(function(){var t=$('tab-calc');if(t&&!t.hidden&&t.offsetParent!==null)tick();},1000);
 })();
 </script>
 </body>
