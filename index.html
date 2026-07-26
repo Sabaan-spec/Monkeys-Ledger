@@ -5472,6 +5472,82 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   setInterval(function(){var t=$('tab-calc');if(t&&!t.hidden&&t.offsetParent!==null){sync();syncSci();}},2500);
 })();
 </script>
+<script>
+/* Cost basis toggle v1 */
+(function(){
+  function $(id){return document.getElementById(id);}
+  function mode(){try{return localStorage.getItem('eveCostBasis')||'market';}catch(e){return 'market';}}
+  function setMode(v){try{localStorage.setItem('eveCostBasis',v);}catch(e){}}
+  function num(s){var m=String(s||'').replace(/[^0-9.]/g,'');var v=parseFloat(m);return isFinite(v)?v:0;}
+  function fmt(n){return Number(n).toLocaleString(undefined,{maximumFractionDigits:2})+' ISK';}
+  function firstText(el){var n=el&&el.childNodes[0];return ((n&&n.textContent)||(el&&el.textContent)||'').trim();}
+  function owned(name){var acc=(window.EVEACC&&EVEACC.byName)||{};return acc[String(name||'').trim().toLowerCase()]||0;}
+  function parseBreakdown(){
+    var el=$('fee-breakdown');if(!el)return null;
+    var t=el.textContent||'';
+    var mm=t.match(/materials\s+([0-9,\.]+)\s*ISK/i);
+    var jf=t.match(/job install fee\s+([0-9,\.]+)\s*ISK/i);
+    if(!mm)return null;
+    return {materials:num(mm[1]),jobFee:jf?num(jf[1]):0};
+  }
+  function taxes(){
+    var s=parseFloat((($('f-sales')||{}).value));if(!isFinite(s))s=3.37;
+    var b=parseFloat((($('f-broker')||{}).value));if(!isFinite(b))b=1.38;
+    return (s+b)/100;
+  }
+  function ui(){
+    var host=$('fee-breakdown');if(!host||$('cb-toggle'))return;
+    var w=document.createElement('div');w.id='cb-toggle';w.className='muted small';w.style.cssText='margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap';
+    w.innerHTML='<span>Value materials at:</span>'
+      +'<button id="cb-market" class="btn" style="font-size:.72rem;padding:2px 9px">Market price</button>'
+      +'<button id="cb-oop" class="btn" style="font-size:.72rem;padding:2px 9px">Only what I still need</button>'
+      +'<span id="cb-state" style="font-weight:600"></span>';
+    host.parentNode.insertBefore(w,host.nextSibling);
+    $('cb-market').addEventListener('click',function(){setMode('market');paintBtns();var r=$('refresh');if(r)r.click();});
+    $('cb-oop').addEventListener('click',function(){setMode('oop');paintBtns();apply(true);});
+    paintBtns();
+  }
+  function paintBtns(){
+    var m=mode();var a=$('cb-market'),b=$('cb-oop'),s=$('cb-state');
+    if(a)a.style.opacity=m==='market'?'1':'.5';
+    if(b)b.style.opacity=m==='oop'?'1':'.5';
+    if(s){s.textContent=m==='oop'?'\u2022 showing out-of-pocket cost':'\u2022 showing full market cost';s.style.color=m==='oop'?'#e3b341':'#54c28a';}
+  }
+  var lastKey='';
+  function apply(force){
+    ui();paintBtns();
+    if(mode()!=='oop')return;
+    var bd=parseBreakdown();if(!bd)return;
+    var mb=$('mat-body');if(!mb||!mb.querySelector('tr'))return;
+    var acc=(window.EVEACC&&EVEACC.ready);
+    var oopMat=0,haveN=0,total=0,savings=0;
+    [].forEach.call(mb.querySelectorAll('tr'),function(tr){
+      var td=tr.querySelectorAll('td');if(td.length<4)return;
+      var name=firstText(td[0]);var qty=num(firstText(td[1]));var unit=num(td[2].textContent);
+      var own=acc?owned(name):0;var need=Math.max(0,qty-own);
+      oopMat+=need*unit;savings+=Math.min(own,qty)*unit;total++;if(own>0)haveN++;
+    });
+    var newTotal=oopMat+bd.jobFee;
+    var rev=num((($('s-revenue')||{}).textContent));
+    if(!(rev>0))return;
+    var profit=rev*(1-taxes())-newTotal;
+    var margin=newTotal>0?(profit/newTotal*100):0;
+    var key=[newTotal,rev,profit].join('|');
+    if(!force&&key===lastKey)return;lastKey=key;
+    var tc=$('s-matcost');if(tc)tc.textContent=fmt(newTotal);
+    var pf=$('s-profit');if(pf)pf.textContent=fmt(profit);
+    var mg=$('s-margin');if(mg)mg.textContent=(margin>=0?'+':'')+margin.toFixed(1)+'%';
+    var note=$('cb-note');
+    if(!note){var host=$('cb-toggle');if(host){note=document.createElement('div');note.id='cb-note';note.className='muted small';note.style.cssText='margin-top:4px';host.parentNode.insertBefore(note,host.nextSibling);}}
+    if(note){
+      note.innerHTML=acc
+        ? ('Out-of-pocket: you already hold materials on <b>'+haveN+'/'+total+'</b> lines worth <b>'+fmt(savings)+'</b>. Tiles show cash you still spend ('+fmt(oopMat)+' materials + '+fmt(bd.jobFee)+' job fee). Market-cost view: '+fmt(bd.materials+bd.jobFee)+'.')
+        : 'Out-of-pocket mode needs your assets \u2014 connect your character on the Account tab. Showing full market cost until then.';
+    }
+  }
+  setInterval(function(){var t=$('tab-calc');if(t&&!t.hidden&&t.offsetParent!==null)apply(false);},1200);
+})();
+</script>
 </body>
 </html>
 
