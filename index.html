@@ -299,7 +299,7 @@ nav.tabs{gap:6px;flex-wrap:nowrap;overflow-x:auto;justify-content:safe center}na
     <div class="section-label">Industry costs &amp; taxes — folded into net profit on both tabs</div>
     <div class="field narrow"><label for="f-sci" title="Pulled live from ESI per hub system">System cost index %</label><input id="f-sci" type="number" min="0" step="0.01" value="0" /></div>
     <div class="field narrow"><label for="f-facility" title="Structure/station job tax">Facility tax %</label><input id="f-facility" type="number" min="0" step="0.01" value="0.25" /></div>
-    <div class="field narrow"><label for="f-scc" title="Flat CCP SCC surcharge on EIV">SCC surcharge %</label><input id="f-scc" type="number" min="0" step="0.01" value="1.5" /></div>
+    <div class="field narrow"><label for="f-scc" title="Flat CCP SCC surcharge on EIV">SCC surcharge %</label><input id="f-scc" type="number" min="0" step="0.01" value="4" /></div>
     <div class="field narrow"><label for="f-sales" title="Depends on Accounting skill">Sales tax %</label><input id="f-sales" type="number" min="0" step="0.01" value="4.5" /></div>
     <div class="field narrow"><label for="f-broker" title="Sell-order fee; Broker Relations skill + standings">Broker fee %</label><input id="f-broker" type="number" min="0" step="0.01" value="2.5" /></div>
     <div class="field"><label>&nbsp;</label><button id="sci-refresh" class="btn" type="button">↻ Live system index</button></div>
@@ -5239,7 +5239,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   var HUBMAP={jita:[10000002,30000142],amarr:[10000043,30002187],dodixie:[10000032,30002659],rens:[10000030,30002510],hek:[10000042,30002053]};
   function mfgHub(){var h=$('hub');var v=h&&h.value?String(h.value).toLowerCase():'jita';for(var k in HUBMAP){if(v.indexOf(k)>=0)return HUBMAP[k];}return HUBMAP.jita;}
   async function matPrice(id,fallback){if(MATP[id]!=null)return MATP[id];try{var hb=mfgHub();var r=await fetch(ESI+'/markets/'+hb[0]+'/orders/?order_type=sell&type_id='+id);if(r.ok){var o=await r.json();o=o.filter(function(x){return x.system_id===hb[1];});if(o.length){MATP[id]=Math.min.apply(null,o.map(function(x){return x.price;}));return MATP[id];}}}catch(e){}MATP[id]=fallback||0;return MATP[id];}
-  function jobFeePct(){var s=parseFloat((($('f-sci')||{}).value))||0;var f=parseFloat((($('f-facility')||{}).value))||0;var c=parseFloat((($('f-scc')||{}).value))||0;return (s+f+c)/100;}
+  function jobFeePct(){var s=parseFloat((($('f-sci')||{}).value))||0;var f=parseFloat((($('f-facility')||{}).value))||0;var c=parseFloat((($('f-scc')||{}).value));if(!isFinite(c))c=4;return (s+f+c)/100;}
   async function history(id){try{var r=await fetch(ESI+'/markets/'+HUBREG+'/history/?type_id='+id);if(!r.ok)return null;return await r.json();}catch(e){return null;}}
   async function bookFor(id){try{var r=await fetch(ESI+'/markets/'+HUBREG+'/orders/?order_type=sell&type_id='+id);if(!r.ok)return null;var o=await r.json();o=o.filter(function(x){return x.system_id===HUBSYS;});o.sort(function(a,b){return a.price-b.price;});return o;}catch(e){return null;}}
   function host(id,pos){var t=$('tab-sso');if(!t)return null;var h=$(id);if(h)return h;var sb=$('sso-body');h=document.createElement('div');h.id=id;if(sb&&sb.parentNode){sb.parentNode.insertBefore(h,sb.nextSibling);}else{t.appendChild(h);}return h;}
