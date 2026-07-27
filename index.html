@@ -3922,7 +3922,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 (function(){
   var CID='338120aa23d64fbabc5185ed10ddcd89';
   var REDIR='https://www.kaalakiotaforge.com/index.html';
-  var SCOPES='publicData esi-wallet.read_character_wallet.v1 esi-skills.read_skills.v1 esi-industry.read_character_jobs.v1 esi-assets.read_assets.v1 esi-markets.read_character_orders.v1 esi-characters.read_blueprints.v1 esi-planets.manage_planets.v1';
+  var SCOPES='publicData esi-wallet.read_character_wallet.v1 esi-skills.read_skills.v1 esi-industry.read_character_jobs.v1 esi-assets.read_assets.v1 esi-markets.read_character_orders.v1 esi-characters.read_blueprints.v1 esi-planets.manage_planets.v1 esi-industry.read_character_mining.v1';
   var AUTHZ='https://login.eveonline.com/v2/oauth/authorize/';
   var TOKEN='https://login.eveonline.com/v2/oauth/token';
   var ESI='https://esi.evetech.net/latest';
@@ -5558,6 +5558,83 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     var rf=$('acc-mkt-refresh');if(rf)rf.addEventListener('click',function(ev){ev.preventDefault();doneAt=0;load(true);});
   }
   setInterval(function(){var t=$('tab-sso');if(t&&!t.hidden&&t.offsetParent!==null)load(false);},2500);
+})();
+</script>
+<script>
+/* Mining ledger v1 */
+(function(){
+  function $(id){return document.getElementById(id);}
+  var ESI='https://esi.evetech.net/latest';
+  var doneAt=0,running=false,PRICE={},MAP=null;
+  function isk(n){return window.eveISK?window.eveISK(n):Math.round(n||0).toLocaleString();}
+  function hub(){var H={jita:[10000002,30000142],amarr:[10000043,30002187],dodixie:[10000032,30002659],rens:[10000030,30002510],hek:[10000042,30002053]};
+    var h=$('hub');var v=h&&h.value?String(h.value).toLowerCase():'jita';for(var k in H){if(v.indexOf(k)>=0)return H[k];}return H.jita;}
+  function sysName(id){if(!MAP){try{MAP=JSON.parse(localStorage.getItem('eveMapV2')||'null');}catch(e){}}return (MAP&&MAP.sys&&MAP.sys[id])?MAP.sys[id][2]:('#'+id);}
+  async function pool(t,l){var i=0;async function w(){while(i<t.length){var x=i++;await t[x]();}}var ws=[];for(var k=0;k<l;k++)ws.push(w());await Promise.all(ws);}
+  function host(){var t=$('tab-sso');if(!t)return null;var h=$('acc-mine');if(h)return h;var sb=$('sso-body');h=document.createElement('div');h.id='acc-mine';if(sb&&sb.parentNode){sb.parentNode.insertBefore(h,sb.nextSibling);}else{t.appendChild(h);}return h;}
+  function card(inner){var h=host();if(!h)return;h.innerHTML='<section class="panel" style="padding:14px;margin-bottom:12px"><div style="font-weight:700;margin-bottom:8px">\u26cf\ufe0f Mining ledger</div>'+inner+'</section>';}
+  async function priceFor(id,fallback){
+    if(PRICE[id]!=null)return PRICE[id];
+    var hb=hub();
+    try{var r=await fetch(ESI+'/markets/'+hb[0]+'/orders/?order_type=sell&type_id='+id);
+      if(r.ok){var o=await r.json();o=o.filter(function(x){return x.system_id===hb[1];});
+        if(o.length){PRICE[id]=Math.min.apply(null,o.map(function(x){return x.price;}));return PRICE[id];}}
+    }catch(e){}
+    PRICE[id]=fallback||0;return PRICE[id];
+  }
+  async function load(force){
+    if(!window.EVEAPI||!EVEAPI.loggedIn())return;
+    if(running)return;if(!force&&doneAt&&Date.now()-doneAt<300000)return;
+    running=true;
+    if(!$('acc-mine'))card('<div class="muted small">Loading mining ledger\u2026</div>');
+    try{
+      var ch=EVEAPI.getChar();var cid=ch.id;
+      var rows=[];var r=await EVEAPI.esi('/characters/'+cid+'/mining/');
+      if(!r){card('<div class="muted small">Mining ledger unavailable \u2014 enable <b>esi-industry.read_character_mining.v1</b> on your app at developers.eveonline.com, then log out and back in.</div>');running=false;return;}
+      rows=(r.data||[]).slice();
+      var pg=Math.min(r.pages||1,5);
+      for(var p=2;p<=pg;p++){var rp=await EVEAPI.esi('/characters/'+cid+'/mining/?page='+p);if(rp)rows=rows.concat(rp.data||[]);}
+      if(!rows.length){card('<div class="muted small">No mining recorded in the last 30 days.</div>');doneAt=Date.now();running=false;return;}
+      var mk={};try{var pj=await (await fetch(ESI+'/markets/prices/')).json();(pj||[]).forEach(function(e){var v=e.average_price||e.adjusted_price||0;if(v>0)mk[e.type_id]=v;});}catch(e){}
+      var ids=[];rows.forEach(function(x){if(ids.indexOf(x.type_id)<0)ids.push(x.type_id);});
+      await pool(ids.map(function(id){return function(){return priceFor(id,mk[id]||0);};}),6);
+      var NM=await EVEAPI.names(ids.slice(0,900));
+      render(rows,NM);
+      doneAt=Date.now();
+    }catch(e){card('<div class="muted small">Could not load mining ledger.</div>');}
+    running=false;
+  }
+  function render(rows,NM){
+    var now=Date.now();
+    function val(x){return (x.quantity||0)*(PRICE[x.type_id]||0);}
+    function within(days){var a=now-days*86400000;var v=0,q=0;rows.forEach(function(x){var t=new Date(x.date+'T00:00:00Z').getTime();if(t>=a){v+=val(x);q+=x.quantity||0;}});return {v:v,q:q};}
+    var d1=within(1),d7=within(7),d30=within(30);
+    var byType={},bySys={},byDay={};
+    rows.forEach(function(x){
+      byType[x.type_id]=byType[x.type_id]||{q:0,v:0};byType[x.type_id].q+=x.quantity||0;byType[x.type_id].v+=val(x);
+      bySys[x.solar_system_id]=(bySys[x.solar_system_id]||0)+val(x);
+      byDay[x.date]=(byDay[x.date]||0)+val(x);
+    });
+    var keys=[];for(var i=13;i>=0;i--){keys.push(new Date(now-i*86400000).toISOString().slice(0,10));}
+    var vals=keys.map(function(k){return byDay[k]||0;});
+    var mx=Math.max.apply(null,vals.concat([1]));
+    var bars=vals.map(function(v,i){var h=Math.max(2,Math.round(v/mx*30));return '<div title="'+keys[i]+': '+isk(v)+'" style="flex:1;display:flex;align-items:flex-end;height:34px"><div style="width:100%;height:'+h+'px;background:#54c28a;border-radius:2px"></div></div>';}).join('');
+    var tops=Object.keys(byType).map(function(k){return {id:+k,q:byType[k].q,v:byType[k].v};}).sort(function(a,b){return b.v-a.v;});
+    var syss=Object.keys(bySys).map(function(k){return {id:+k,v:bySys[k]};}).sort(function(a,b){return b.v-a.v;}).slice(0,4);
+    function tile(l,v,c){return '<div style="min-width:104px"><div class="muted small">'+l+'</div><div style="font-weight:800;font-size:1.05rem'+(c?';color:'+c:'')+'">'+v+'</div></div>';}
+    var inner='<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:8px">'
+      +tile('Mined 24h',isk(d1.v),'#54c28a')+tile('Mined 7d',isk(d7.v),'#54c28a')
+      +tile('Mined 30d',isk(d30.v),'#54c28a')+tile('Units 30d',Math.round(d30.q).toLocaleString())+'</div>';
+    inner+='<div class="muted small" style="margin-bottom:2px">Daily mined value, last 14 days</div><div style="display:flex;gap:2px;align-items:flex-end;margin-bottom:8px">'+bars+'</div>';
+    inner+='<table style="width:100%;border-collapse:collapse;font-size:.82rem"><thead><tr class="muted small"><th style="text-align:left;padding:2px 6px">Ore / ice / gas</th><th style="text-align:right;padding:2px 6px">Units</th><th style="text-align:right;padding:2px 6px">Est. value</th></tr></thead><tbody>';
+    tops.slice(0,12).forEach(function(x){inner+='<tr style="border-bottom:1px solid rgba(120,150,170,.08)"><td style="padding:2px 6px">'+(NM[x.id]||('#'+x.id))+'</td><td class="num" style="text-align:right;padding:2px 6px">'+Math.round(x.q).toLocaleString()+'</td><td class="num" style="text-align:right;padding:2px 6px;color:#54c28a">'+isk(x.v)+'</td></tr>';});
+    inner+='</tbody></table>';
+    if(syss.length){inner+='<div class="muted small" style="margin-top:6px">Top systems: '+syss.map(function(s){return sysName(s.id)+' ('+isk(s.v)+')';}).join(' \u00b7 ')+'</div>';}
+    inner+='<div class="muted small" style="margin-top:4px">Valued at your market hub\u2019s sell price (raw ore, unrefined). ESI keeps ~30 days and updates roughly hourly. <a href="#" id="acc-mine-refresh" style="color:#7fb0c8">refresh</a></div>';
+    card(inner);
+    var rf=$('acc-mine-refresh');if(rf)rf.addEventListener('click',function(ev){ev.preventDefault();doneAt=0;PRICE={};load(true);});
+  }
+  setInterval(function(){var t=$('tab-sso');if(t&&!t.hidden&&t.offsetParent!==null)load(false);},3000);
 })();
 </script>
 </body>
