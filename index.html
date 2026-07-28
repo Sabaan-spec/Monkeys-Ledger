@@ -5766,6 +5766,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   };
   window.EVESTRUCT=S;
   var HUB={jita:60003760,amarr:60008494,dodixie:60011866,rens:60004588,hek:60005686};
+  var HUBFAC={60003760:500001,60008494:500003,60011866:500004,60004588:500002,60005686:500002};
   var ST={adj:0,faction:null,corp:null,station:null,source:"pending",skillOnly:true};
   window.EVESTAND=ST;
   var standCache=null, standFor=null, corpFac={};
@@ -5789,7 +5790,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       var owner=st&&st.owner;
       if(!owner){ ST.adj=0; ST.source="no-owner"; return; }
       var fac=corpFac[owner];
-      if(fac===undefined){ var c=await pub("/corporations/"+owner+"/"); fac=(c&&c.faction_id)||null; corpFac[owner]=fac; }
+      if(fac===undefined){ var c=await pub("/corporations/"+owner+"/"); fac=(c&&c.faction_id)||HUBFAC[sid]||null; corpFac[owner]=fac; }
       var cs=m["npc_corp:"+owner]; if(cs==null) cs=0;
       var fs=(fac!=null)?m["faction:"+fac]:null; if(fs==null) fs=0;
       var adj=0.03*fs+0.02*cs;
@@ -5809,84 +5810,83 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 })();
 </script>
 
-<script>/* Broker explain v1 */
+<script>/* Broker explain v2 */
 (function(){
-  var BR=3446, lastTxt="", el=null, skillLvl=null, skillFor=null;
+  var BR=3446, lastKey="", el=null, sk={lvl:null,forId:null};
+  function row(){ var f=document.getElementById("f-broker"); return f?f.closest("section"):null; }
   function host(){
     if(el&&el.isConnected) return el;
-    var f=document.getElementById("f-broker"); if(!f) return null;
-    var p=f.parentElement; if(!p) return null;
-    var d=p.querySelector("#broker-why");
-    if(!d){ d=document.createElement("div"); d.id="broker-why"; d.style.cssText="font-size:11px;opacity:.72;margin-top:5px;line-height:1.35;max-width:340px"; p.appendChild(d); }
+    var sec=row(); if(!sec) return null;
+    var d=sec.querySelector("#fee-why");
+    if(!d){
+      d=document.createElement("div"); d.id="fee-why";
+      d.style.cssText="flex:0 0 100%;width:100%;font-size:12px;line-height:1.5;opacity:.75;margin-top:2px;order:99";
+      sec.appendChild(d);
+    }
+    var old=document.getElementById("broker-why"); if(old) old.remove();
     el=d; return d;
   }
   async function scopeList(){
-    try{
-      var t=await EVEAPI.getAccess(); if(!t) return null;
+    try{ var t=await EVEAPI.getAccess(); if(!t) return null;
       var p=JSON.parse(atob(t.split(".")[1].replace(/-/g,"+").replace(/_/g,"/")));
-      return [].concat(p.scp||[]);
-    }catch(e){ return null; }
+      return [].concat(p.scp||[]); }catch(e){ return null; }
   }
   async function brokerSkill(){
     var ch=(EVEAPI.getChar&&EVEAPI.getChar())||null; if(!ch||!ch.id) return null;
-    if(skillLvl!=null&&skillFor===ch.id) return skillLvl;
+    if(sk.lvl!=null&&sk.forId===ch.id) return sk.lvl;
     try{
       var r=await EVEAPI.esi("/characters/"+ch.id+"/skills/");
-      var d=(r&&r.data)?r.data:r;
-      var arr=(d&&d.skills)||[];
-      var hit=null;
-      arr.forEach(function(s){ if(s.skill_id===BR) hit=s.active_skill_level!=null?s.active_skill_level:s.trained_skill_level; });
-      skillFor=ch.id; skillLvl=(hit==null?null:hit); return skillLvl;
+      var d=(r&&r.data)?r.data:r; var arr=(d&&d.skills)||[]; var hit=null;
+      arr.forEach(function(s){ if(s.skill_id===BR) hit=(s.active_skill_level!=null?s.active_skill_level:s.trained_skill_level); });
+      sk.forId=ch.id; sk.lvl=(hit==null?null:hit); return sk.lvl;
     }catch(e){ return null; }
   }
-  function autoOn(){ try{ return localStorage.getItem("eveTaxOverride")!=="1"; }catch(e){ return true; } }
-  async function apply(){
-    try{
-      var S=window.EVESTAND||{};
-      if(S.source!=="standings") return;
-      var lvl=await brokerSkill(); if(lvl==null) return;
-      if(!autoOn()) return;
-      var want=Math.max(1, 3 - 0.3*lvl - (S.adj||0));
-      var f=document.getElementById("f-broker"); if(!f) return;
-      var cur=parseFloat(f.value);
-      if(!isFinite(cur)||Math.abs(cur-want)>0.005){
-        f.value=(Math.round(want*100)/100);
-        f.dispatchEvent(new Event("input",{bubbles:true}));
-        f.dispatchEvent(new Event("change",{bubbles:true}));
-      }
-    }catch(e){}
-  }
+  function pct(n){ return (Math.round(n*100)/100).toFixed(2); }
   async function paint(){
     var d=host(); if(!d) return;
     var S=window.EVESTAND||{};
-    var txt="";
+    var f=document.getElementById("f-broker");
+    var cur=f?parseFloat(f.value):NaN;
+    var key="", html2="";
     if(!(EVEAPI.loggedIn&&EVEAPI.loggedIn())){
-      txt="Connect a character for exact fees.";
+      key="out"; html2="Connect a character to compute exact broker fees from your standings.";
     } else {
       var sc=await scopeList();
       if(sc&&sc.indexOf("esi-characters.read_standings.v1")<0){
-        txt="Token has "+sc.length+" scopes but not read_standings — log out and back in.";
-      } else if(sc===null){
-        txt="Could not read the access token — try logging out and back in.";
+        key="noscope"; html2="Broker fee is skill-only \u2014 your sign-in is missing the standings permission. Log out and back in to fix.";
       } else if(S.source==="standings"){
-        var nm=(window.EVESTRUCT&&window.EVESTRUCT.name(S.station))||("station "+S.station);
         var lvl=await brokerSkill();
-        txt="At "+nm+": Broker Relations "+(lvl==null?"?":lvl)+", faction "+Number(S.faction||0).toFixed(2)+", corp "+Number(S.corp||0).toFixed(2)+" \u2192 standings save "+Number(S.adj||0).toFixed(2)+"%";
+        var nm=(window.EVESTRUCT&&window.EVESTRUCT.name(S.station))||("station "+S.station);
+        var want=Math.max(1,3-0.3*(lvl==null?0:lvl)-(S.adj||0));
+        key="ok|"+nm+"|"+pct(S.faction||0)+"|"+pct(S.corp||0)+"|"+pct(want)+"|"+(isFinite(cur)?pct(cur):"x");
+        html2="Broker fee at <b>"+nm+"</b>: 3.00% \u2212 "+pct(0.3*(lvl==null?0:lvl))+" (Broker Relations "+(lvl==null?"?":lvl)+") \u2212 "+pct(S.adj||0)+" (faction "+pct(S.faction||0)+", corp "+pct(S.corp||0)+") = <b>"+pct(want)+"%</b>";
+        if(isFinite(cur)&&Math.abs(cur-want)>0.005){
+          html2+=" \u00b7 <span id=\"fee-apply\" style=\"text-decoration:underline;cursor:pointer;opacity:.95\">use "+pct(want)+"%</span>";
+        }
       } else if(S.source==="no-standings"){
-        txt="Standings call returned nothing — using skills only.";
+        key="none"; html2="Standings came back empty \u2014 broker fee is skill-only for now.";
       } else if(S.source==="no-owner"){
-        txt="Could not read the hub station owner — using skills only.";
+        key="noowner"; html2="Could not identify the hub station owner \u2014 broker fee is skill-only.";
       } else if(S.source==="unknown-hub"){
-        txt="Hub not recognised for standings lookup.";
-      } else {
-        txt="Checking standings\u2026";
-      }
+        key="nohub"; html2="Standings discount only applies at the five NPC trade hubs.";
+      } else { key="wait"; html2="Checking standings\u2026"; }
     }
-    if(txt!==lastTxt){ lastTxt=txt; d.textContent=txt; }
+    if(key!==lastKey){
+      lastKey=key; d.innerHTML=html2;
+      var a=document.getElementById("fee-apply");
+      if(a) a.addEventListener("click",function(){
+        var m=/= <b>([0-9.]+)%/.exec(d.innerHTML); if(!m) return;
+        var ff=document.getElementById("f-broker"); if(!ff) return;
+        ff.value=m[1];
+        ff.dispatchEvent(new Event("input",{bubbles:true}));
+        ff.dispatchEvent(new Event("change",{bubbles:true}));
+        var r=document.getElementById("refresh"); if(r) r.click();
+        lastKey="";
+      });
+    }
   }
-  async function tick(){ await paint(); await apply(); }
-  setTimeout(tick,3500);
-  setInterval(tick,9000);
+  setTimeout(paint,3200);
+  setInterval(paint,6000);
 })();
 </script>
 </body>
