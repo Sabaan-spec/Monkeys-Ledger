@@ -5889,6 +5889,116 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   setInterval(paint,6000);
 })();
 </script>
+
+<script>/* Skill ROI v1 */
+(function(){
+  var ACC=16622, BRK=3446, RN=["0","I","II","III","IV","V"];
+  var doneAt=0, forChar=null, busy=false, cacheSales=null;
+  function host(){
+    var t=document.getElementById("tab-sso"); if(!t) return null;
+    var d=document.getElementById("acc-skill");
+    if(!d){ d=document.createElement("div"); d.id="acc-skill"; t.appendChild(d); }
+    return d;
+  }
+  function esc(s){ return String(s==null?"":s).replace(/[&<>]/g,function(c){ return c==="&"?"&amp;":(c==="<"?"&lt;":"&gt;"); }); }
+  function isk(n){ try{ return window.eveISK?window.eveISK(n):Math.round(n).toLocaleString(); }catch(e){ return Math.round(n).toLocaleString(); } }
+  function dur(ms){
+    if(!(ms>0)) return "now";
+    var d=Math.floor(ms/86400000), h=Math.floor((ms%86400000)/3600000), m=Math.floor((ms%3600000)/60000);
+    if(d>0) return d+"d "+h+"h";
+    if(h>0) return h+"h "+m+"m";
+    return m+"m";
+  }
+  async function esi(p){ try{ var r=await EVEAPI.esi(p); return (r&&r.data)?r.data:r; }catch(e){ return null; } }
+  async function sales30(cid){
+    if(cacheSales&&cacheSales.cid===cid&&(Date.now()-cacheSales.ts)<1800000) return cacheSales.v;
+    var since=Date.now()-2592000000, total=0, from=null, pages=0;
+    while(pages<6){
+      var d=await esi("/characters/"+cid+"/wallet/transactions/"+(from?("?from_id="+from):""));
+      if(!d||!d.length) break;
+      var stop=false, min=null;
+      for(var i=0;i<d.length;i++){
+        var t=d[i], ts=Date.parse(t.date);
+        if(ts<since){ stop=true; continue; }
+        if(!t.is_buy) total+=(t.unit_price||0)*(t.quantity||0);
+        if(min==null||t.transaction_id<min) min=t.transaction_id;
+      }
+      pages++;
+      if(stop||min==null) break;
+      from=min;
+    }
+    cacheSales={cid:cid,ts:Date.now(),v:total};
+    return total;
+  }
+  function lvlOf(skills,id){ var v=0; (skills||[]).forEach(function(s){ if(s.skill_id===id) v=(s.active_skill_level!=null?s.active_skill_level:s.trained_skill_level)||0; }); return v; }
+  function salesTax(l){ return 7.5*(1-0.11*l); }
+  function brokerFee(l,adj){ return Math.max(1, 3-0.3*l-(adj||0)); }
+  async function build(){
+    if(busy) return; 
+    var ch=(EVEAPI.getChar&&EVEAPI.getChar())||null;
+    if(!ch||!ch.id){ var hh=host(); if(hh) hh.innerHTML=""; return; }
+    if(forChar===ch.id && (Date.now()-doneAt)<300000) return;
+    busy=true;
+    try{
+      var d=host(); if(!d){ busy=false; return; }
+      var sq=await esi("/characters/"+ch.id+"/skillqueue/");
+      var sk=await esi("/characters/"+ch.id+"/skills/");
+      var skills=(sk&&sk.skills)||[];
+      var body="";
+      if(sq===null){
+        body="<div class=\"muted small\">Skill queue not available \u2014 sign in again to grant the skill queue permission.</div>";
+      } else {
+        var now=Date.now();
+        var live=(sq||[]).filter(function(q){ return q.finish_date && Date.parse(q.finish_date)>now; });
+        live.sort(function(a,b){ return Date.parse(a.finish_date)-Date.parse(b.finish_date); });
+        if(!live.length){
+          body+="<div style=\"color:var(--bad);font-weight:600\">Skill queue is empty</div>";
+          body+="<div class=\"muted small\">Nothing is training right now.</div>";
+        } else {
+          var cur=live[0], end=Date.parse(live[live.length-1].finish_date);
+          var ids=live.map(function(q){ return q.skill_id; });
+          var nm={};
+          try{ nm=await EVEAPI.names(ids)||{}; }catch(e){ nm={}; }
+          var cname=nm[cur.skill_id]||("Skill "+cur.skill_id);
+          body+="<div style=\"font-size:15px;font-weight:600\">"+esc(cname)+" "+(RN[cur.finished_level]||cur.finished_level)+"</div>";
+          body+="<div class=\"muted small\">finishes in "+dur(Date.parse(cur.finish_date)-now)+" \u00b7 "+live.length+" skill"+(live.length===1?"":"s")+" queued</div>";
+          var left=end-now;
+          if(left<86400000) body+="<div style=\"color:var(--bad);margin-top:4px\">Queue runs dry in "+dur(left)+"</div>";
+          else body+="<div class=\"muted small\" style=\"margin-top:4px\">Queue runs "+dur(left)+"</div>";
+        }
+      }
+      var vol=await sales30(ch.id);
+      var adj=(window.EVESTAND&&window.EVESTAND.source==="standings")?(window.EVESTAND.adj||0):0;
+      var la=lvlOf(skills,ACC), lb=lvlOf(skills,BRK);
+      var rows=[];
+      if(la<5){ var dA=salesTax(la)-salesTax(la+1); rows.push(["Accounting",RN[la],RN[la+1],vol*dA/100,dA]); }
+      if(lb<5){ var dB=brokerFee(lb,adj)-brokerFee(lb+1,adj); rows.push(["Broker Relations",RN[lb],RN[lb+1],vol*dB/100,dB]); }
+      body+="<div style=\"margin-top:10px;border-top:1px solid rgba(255,255,255,.08);padding-top:8px\">";
+      if(!vol){
+        body+="<div class=\"muted small\">No sales in the last 30 days, so there is nothing to base training value on.</div>";
+      } else if(!rows.length){
+        body+="<div class=\"muted small\">Accounting and Broker Relations are both at V \u2014 fees are as low as skills can take them.</div>";
+      } else {
+        body+="<div class=\"muted small\">Worth training next, valued against "+isk(vol)+" ISK sold in 30 days:</div>";
+        rows.sort(function(a,b){ return b[3]-a[3]; });
+        rows.forEach(function(r){
+          body+="<div style=\"display:flex;justify-content:space-between;gap:10px;margin-top:6px\">";
+          body+="<span>"+esc(r[0])+" <span class=\"muted small\">"+r[1]+" \u2192 "+r[2]+"</span></span>";
+          body+="<span class=\"num\" style=\"color:var(--good)\">"+isk(r[3])+" / mo</span>";
+          body+="</div>";
+          body+="<div class=\"muted small\">cuts "+(Math.round(r[4]*1000)/1000)+"% off every sale</div>";
+        });
+      }
+      body+="</div>";
+      d.innerHTML="<section class=\"panel\"><div><div style=\"font-weight:600;margin-bottom:6px\">\u23f3 Skill queue &amp; training value</div>"+body+"</div></section>";
+      forChar=ch.id; doneAt=Date.now();
+    }catch(e){}
+    busy=false;
+  }
+  setTimeout(build,5000);
+  setInterval(build,60000);
+})();
+</script>
 </body>
 </html>
 
