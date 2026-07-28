@@ -5693,18 +5693,18 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 
 <!-- Cloudflare Web Analytics --><script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "69a60f454f93454a8278d79622406451"}'></script><!-- End Cloudflare Web Analytics -->
 
-<script>/* Pilots online v1 */
+<script>/* Pilots online v2 */
 (function(){
   var EP="https://forge-presence.blaketbabin.workers.dev/online";
-  var id;
+  var VIS=30000, HID=120000, MAXHID=900000;
+  var id, timer=null, hiddenSince=0, fails=0, el=null;
   try{ id=sessionStorage.getItem("eveSessId"); if(!id){ id=Math.random().toString(36).slice(2,10)+Math.random().toString(36).slice(2,10); sessionStorage.setItem("eveSessId",id); } }catch(e){ id="x"+Math.random().toString(36).slice(2,10); }
-  var el=null,fails=0;
   function host(){
     if(el&&el.isConnected)return el;
     var t=document.querySelector("header .brand-text p.tag")||document.querySelector("header p.tag");
     if(!t)return null;
     var s=t.querySelector("#pilots-online");
-    if(!s){ s=document.createElement("span"); s.id="pilots-online"; s.style.cssText="margin-left:10px;opacity:.85;white-space:nowrap"; s.hidden=true; t.appendChild(s); }
+    if(!s){ s=document.createElement("span"); s.id="pilots-online"; s.style.cssText="margin-left:8px;opacity:.85;white-space:nowrap"; s.hidden=true; t.appendChild(s); }
     el=s; return s;
   }
   function paint(n){
@@ -5714,19 +5714,26 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     s.textContent="\u00b7 "+n+" pilot"+(n===1?"":"s")+" online";
   }
   function beat(bye){
-    if(fails>5&&!bye)return;
+    if(fails>8&&!bye)return;
     var u=EP+"?id="+encodeURIComponent(id)+(bye?"&bye=1":"");
     try{
       fetch(u,{keepalive:true,cache:"no-store"}).then(function(r){return r.json();}).then(function(o){
         fails=0; if(!bye) paint(o&&typeof o.online==="number"?o.online:null);
-      }).catch(function(){ fails++; paint(null); });
+      })["catch"](function(){ fails++; if(fails>2) paint(null); });
     }catch(e){ fails++; }
   }
-  function tick(){ if(!document.hidden) beat(false); }
-  setTimeout(tick,1500);
-  setInterval(tick,30000);
-  document.addEventListener("visibilitychange",function(){ if(!document.hidden) tick(); });
+  function schedule(){ if(timer)clearTimeout(timer); timer=setTimeout(run, document.hidden?HID:VIS); }
+  function run(){
+    if(document.hidden){
+      if(!hiddenSince) hiddenSince=Date.now();
+      if(Date.now()-hiddenSince>MAXHID){ schedule(); return; }
+    } else { hiddenSince=0; }
+    beat(false); schedule();
+  }
+  setTimeout(run,1200);
+  document.addEventListener("visibilitychange",function(){ if(!document.hidden){ hiddenSince=0; run(); } else { schedule(); } });
   window.addEventListener("pagehide",function(){ beat(true); });
+  window.__pilots=function(){ run(); };
 })();
 </script>
 </body>
