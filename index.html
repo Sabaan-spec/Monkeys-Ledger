@@ -5394,7 +5394,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       function lvl(id){var f=sk.find(function(s){return s.skill_id===id;});return f?(f.active_skill_level||0):0;}
       var acct=lvl(ids['Accounting']),br=lvl(ids['Broker Relations']);
       var sales=7.5*(1-0.11*acct);
-      var broker=Math.max(0,3-0.3*br);
+      var broker=Math.max(0,Math.max(1,3-0.3*br-((window.EVESTAND&&window.EVESTAND.adj)||0)));
       var over=ld('eveTaxOverride','')==='1';
       if(!over){
         var s=$('f-sales'),b=$('f-broker');
@@ -5734,6 +5734,78 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   document.addEventListener("visibilitychange",function(){ if(!document.hidden){ hiddenSince=0; run(); } else { schedule(); } });
   window.addEventListener("pagehide",function(){ beat(true); });
   window.__pilots=function(){ run(); };
+})();
+</script>
+
+<script>/* Structures & standings v1 */
+(function(){
+  var SKEY="eveStructV1", ESI="https://esi.evetech.net/latest";
+  var cache={}; try{ cache=JSON.parse(localStorage.getItem(SKEY)||"{}"); }catch(e){}
+  var saveT=null, pend={};
+  function save(){ if(saveT)return; saveT=setTimeout(function(){ saveT=null; try{ localStorage.setItem(SKEY,JSON.stringify(cache)); }catch(e){} },1200); }
+  function isStruct(id){ return Number(id)>=1000000000000; }
+  async function pub(path){ try{ var r=await fetch(ESI+path); if(!r.ok)return null; return await r.json(); }catch(e){ return null; } }
+  async function auth(path){ try{ var r=await EVEAPI.esi(path); return (r&&r.data)?r.data:r; }catch(e){ return null; } }
+  var S={
+    get:function(id){ return cache[String(id)]||null; },
+    name:function(id){ var r=cache[String(id)]; return (r&&r.name)?r.name:null; },
+    label:function(id){ var n=S.name(id); return n?n:("Location "+id); },
+    all:function(){ return cache; },
+    resolve:async function(id){
+      id=String(id);
+      var c=cache[id];
+      if(c&&(c.name||(Date.now()-(c.ts||0))<21600000)) return c;
+      if(pend[id]) return pend[id];
+      pend[id]=(async function(){
+        var d=isStruct(id)?await auth("/universe/structures/"+id+"/"):await pub("/universe/stations/"+id+"/");
+        var rec={ts:Date.now(),name:(d&&d.name)||null,sys:(d&&(d.solar_system_id||d.system_id))||null,owner:(d&&d.owner)||null,structure:isStruct(id)};
+        cache[id]=rec; save(); return rec;
+      })();
+      var out=await pend[id]; delete pend[id]; return out;
+    }
+  };
+  window.EVESTRUCT=S;
+  var HUB={jita:60003760,amarr:60008494,dodixie:60011866,rens:60004588,hek:60005686};
+  var ST={adj:0,faction:null,corp:null,station:null,source:"pending",skillOnly:true};
+  window.EVESTAND=ST;
+  var standCache=null, standFor=null, corpFac={};
+  async function standings(){
+    var ch=(EVEAPI.getChar&&EVEAPI.getChar())||null;
+    if(!ch||!ch.id) return null;
+    if(standCache&&standFor===ch.id) return standCache;
+    var d=await auth("/characters/"+ch.id+"/standings/");
+    if(!d||!d.length){ standFor=ch.id; standCache=null; return null; }
+    var m={}; d.forEach(function(x){ m[x.from_type+":"+x.from_id]=x.standing; });
+    standFor=ch.id; standCache=m; return m;
+  }
+  async function compute(){
+    try{
+      var sel=document.getElementById("hub"); if(!sel) return;
+      var sid=HUB[sel.value];
+      if(!sid){ ST.adj=0; ST.source="unknown-hub"; return; }
+      var m=await standings();
+      if(!m){ ST.adj=0; ST.source="no-standings"; ST.skillOnly=true; return; }
+      var st=await S.resolve(sid);
+      var owner=st&&st.owner;
+      if(!owner){ ST.adj=0; ST.source="no-owner"; return; }
+      var fac=corpFac[owner];
+      if(fac===undefined){ var c=await pub("/corporations/"+owner+"/"); fac=(c&&c.faction_id)||null; corpFac[owner]=fac; }
+      var cs=m["npc_corp:"+owner]; if(cs==null) cs=0;
+      var fs=(fac!=null)?m["faction:"+fac]:null; if(fs==null) fs=0;
+      var adj=0.03*fs+0.02*cs;
+      var changed=(Math.abs(adj-ST.adj)>0.0001)||ST.source!=="standings";
+      ST.corp=cs; ST.faction=fs; ST.station=sid; ST.adj=adj; ST.source="standings"; ST.skillOnly=false;
+      if(changed){
+        var f=document.getElementById("f-broker");
+        if(f) f.dispatchEvent(new Event("change",{bubbles:true}));
+        var r=document.getElementById("refresh"); if(r&&changed) r.click();
+      }
+    }catch(e){}
+  }
+  window.EVESTANDrefresh=compute;
+  setTimeout(compute,4500);
+  setInterval(compute,90000);
+  document.addEventListener("change",function(ev){ if(ev.target&&ev.target.id==="hub") setTimeout(compute,400); },true);
 })();
 </script>
 </body>
