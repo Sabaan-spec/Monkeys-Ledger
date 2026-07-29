@@ -4082,7 +4082,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     var orders=CTX.orders||[]; var NM=CTX.NM||{};
     if(!orders.length){$('ab-mo-body').innerHTML='<div class="muted small">No open market orders.</div>';return;}
     var rows=[];
-    for(var i=0;i<orders.length;i++){var o=orders[i];var mk=await esiPub('/markets/'+o.region_id+'/orders/?order_type=all&type_id='+o.type_id);var best=null,status='',gap=0;
+    for(var i=0;i<orders.length;i++){var o=orders[i];var mk=await (async function(){ var __b=null; try{ if(window.EVEMKT&&o&&o.location_id){ __b=await window.EVEMKT.bookFor(o.location_id,o.type_id); } }catch(e){ __b=null; } if(__b&&(__b.sell.length||__b.buy.length)){ window.__ucBook=1; return [].concat(__b.sell,__b.buy); } return await esiPub('/markets/'+o.region_id+'/orders/?order_type=all&type_id='+o.type_id); })();var best=null,status='',gap=0;
       if(Array.isArray(mk)){if(o.is_buy_order){var buys=mk.filter(function(x){return x.is_buy_order;}).map(function(x){return x.price;});var top=buys.length?Math.max.apply(null,buys):o.price;best=top;if(top>o.price+1e-6){status='outbid';gap=top-o.price;}else{status='top';}}else{var sells=mk.filter(function(x){return !x.is_buy_order;}).map(function(x){return x.price;});var low=sells.length?Math.min.apply(null,sells):o.price;best=low;if(low<o.price-1e-6){status='undercut';gap=o.price-low;}else{status='best';}}}
       rows.push({o:o,name:NM[o.type_id]||('#'+o.type_id),best:best,status:status,gap:gap});
     }
