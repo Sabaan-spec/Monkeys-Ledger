@@ -6091,6 +6091,90 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   setInterval(function(){ build(false); },120000);
 })();
 </script>
+
+<script>/* Structure markets v1 */
+(function(){
+  var ESI="https://esi.evetech.net/latest";
+  var sCache={}, rCache={};
+  var STRUCT_TTL=300000, REG_TTL=180000;
+  function isStructure(id){ return Number(id)>=1000000000000; }
+  async function auth(p){ try{ var r=await EVEAPI.esi(p); return (r&&r.data)?r.data:r; }catch(e){ return null; } }
+  async function pub(p){ try{ var r=await fetch(ESI+p); if(!r.ok) return null; return await r.json(); }catch(e){ return null; } }
+  async function structureBook(sid){
+    sid=String(sid);
+    var c=sCache[sid];
+    if(c&&(Date.now()-c.ts)<STRUCT_TTL) return c.orders;
+    if(c&&c.pending) return c.pending;
+    var p=(async function(){
+      var out=[], page=1;
+      while(page<=20){
+        var d=await auth("/markets/structures/"+sid+"/?page="+page);
+        if(!d||!d.length) break;
+        out=out.concat(d);
+        if(d.length<1000) break;
+        page++;
+      }
+      sCache[sid]={ts:Date.now(),orders:out};
+      return out;
+    })();
+    sCache[sid]={ts:0,orders:[],pending:p};
+    return await p;
+  }
+  function regionOf(sysId){
+    try{
+      var m=JSON.parse(localStorage.getItem("eveMapV2")||"null");
+      var e=m&&m.sys&&m.sys[sysId];
+      if(!e) return null;
+      var reg=null; e.forEach(function(x){ if(typeof x==="number"&&x>1000000) reg=x; });
+      return reg;
+    }catch(e){ return null; }
+  }
+  async function regionFor(locId){
+    if(!window.EVESTRUCT) return null;
+    var rec=await window.EVESTRUCT.resolve(locId);
+    if(!rec||!rec.sys) return null;
+    return regionOf(rec.sys);
+  }
+  async function regionBook(region,typeId){
+    var k=region+":"+typeId;
+    var c=rCache[k];
+    if(c&&(Date.now()-c.ts)<REG_TTL) return c.orders;
+    var d=await pub("/markets/"+region+"/orders/?order_type=all&type_id="+typeId);
+    var out=d||[];
+    rCache[k]={ts:Date.now(),orders:out};
+    return out;
+  }
+  async function bookFor(locId,typeId){
+    var sell=[], buy=[], source=null;
+    if(isStructure(locId)){
+      var all=await structureBook(locId);
+      (all||[]).forEach(function(o){ if(o.type_id!==typeId) return; (o.is_buy_order?buy:sell).push(o); });
+      source=(all&&all.length)?"structure":null;
+    } else {
+      var reg=await regionFor(locId);
+      if(reg){
+        var all2=await regionBook(reg,typeId);
+        (all2||[]).forEach(function(o){ if(String(o.location_id)!==String(locId)) return; (o.is_buy_order?buy:sell).push(o); });
+        source="station";
+      }
+    }
+    sell.sort(function(a,b){ return a.price-b.price; });
+    buy.sort(function(a,b){ return b.price-a.price; });
+    return {sell:sell,buy:buy,source:source};
+  }
+  async function best(locId,typeId){
+    var b=await bookFor(locId,typeId);
+    return {
+      sell:b.sell.length?b.sell[0].price:null,
+      buy:b.buy.length?b.buy[0].price:null,
+      sellQty:b.sell.length?b.sell[0].volume_remain:0,
+      source:b.source,
+      count:b.sell.length+b.buy.length
+    };
+  }
+  window.EVEMKT={ isStructure:isStructure, structureBook:structureBook, bookFor:bookFor, best:best, regionOf:regionOf, regionFor:regionFor };
+})();
+</script>
 </body>
 </html>
 
