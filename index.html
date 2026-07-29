@@ -6307,7 +6307,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 <script>/* Tab groups v2 */
 (function(){
   var GROUPS=[
-    {id:"ind",label:"Industry",tabs:["calc","tree","research","invent","react"]},
+    {id:"ind",label:"Industry",tabs:["calc","cheapsys","tree","research","invent","react"]},
     {id:"mat",label:"Materials",tabs:["ore","repro","pi"]},
     {id:"acct",label:"Account",tabs:["sso"]},
     {id:"trade",label:"Trade",tabs:["arb","top","plan"]},
@@ -6513,6 +6513,65 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 </script>
 
 <style>#kl-extra input,#kl-extra select{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:10px 12px!important;font-family:inherit;font-size:15.2px;line-height:1.2}#kl-extra input{min-width:240px!important}#kl-extra input::placeholder{color:var(--muted);opacity:1}#kl-extra input:focus,#kl-extra select:focus{outline:none;border-color:var(--accent-dim);box-shadow:0 0 0 1px var(--accent-dim)}#kl-extra select{cursor:pointer}#kl-stats{color:var(--muted);letter-spacing:.02em}</style>
+
+<script>/* Cheap system tab v1 */
+(function(){
+  var ID="cheapsys", LABEL="Cheapest System";
+  function calc(){ return document.getElementById("tab-calc"); }
+  function panel(){ return document.getElementById("tab-"+ID); }
+  function findSection(){
+    var c=calc(); if(!c) return null;
+    var list=[].slice.call(c.children);
+    for(var i=0;i<list.length;i++){
+      var e=list[i];
+      if(e.textContent.indexOf("Cheapest system to run jobs")>=0) return e;
+    }
+    return null;
+  }
+  function ensure(){
+    var c=calc(); if(!c) return null;
+    var p=panel();
+    if(!p){
+      p=document.createElement("div"); p.id="tab-"+ID; p.hidden=true; p.style.display="none";
+      c.parentElement.insertBefore(p,c.nextSibling);
+    }
+    var sec=findSection();
+    if(sec&&!p.contains(sec)) p.appendChild(sec);
+    var nav=document.querySelector("nav.tabs");
+    if(nav&&!nav.querySelector("button.tab[data-tab="+ID+"]")){
+      var b=document.createElement("button");
+      b.className="tab"; b.setAttribute("data-tab",ID); b.textContent=LABEL;
+      b.addEventListener("click",function(ev){ ev.stopPropagation(); if(window.switchTab) window.switchTab(ID); });
+      nav.appendChild(b);
+    }
+    return p;
+  }
+  function mark(){
+    var nav=document.querySelector("nav.tabs"); if(!nav) return;
+    [].slice.call(nav.querySelectorAll("button.tab[data-tab]")).forEach(function(b){
+      if(b.getAttribute("data-tab")===ID) b.classList.add("active"); else b.classList.remove("active");
+    });
+  }
+  function show(on){
+    var p=ensure(), c=calc(); if(!p||!c) return;
+    if(on){ c.hidden=true; c.style.display="none"; p.hidden=false; p.style.display=""; }
+    else { p.hidden=true; p.style.display="none"; c.style.display=""; }
+  }
+  function wrap(){
+    if(typeof window.switchTab!=="function"||window.switchTab.__cheapWrap) return;
+    var orig=window.switchTab;
+    var fn=function(id){
+      if(id===ID){ ensure(); orig("calc"); show(true); mark(); return; }
+      show(false);
+      return orig.apply(this,arguments);
+    };
+    fn.__cheapWrap=1;
+    window.switchTab=fn;
+  }
+  setTimeout(function(){ ensure(); wrap(); },1200);
+  setInterval(function(){ ensure(); wrap(); },1500);
+})();
+</script>
 </body>
 </html>
 
