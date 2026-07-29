@@ -6303,6 +6303,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 })();
 </script>
 
+<style>#tabs-groups,#tabs-sub{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center;margin:0 auto 8px;max-width:100%}#tabs-sub{opacity:.92}</style>
 <script>/* Tab groups v1 */
 (function(){
   var GROUPS=[
@@ -6325,8 +6326,8 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     origNav=document.querySelector("nav.tabs");
     if(!origNav||built) return;
     if(!origButtons().length) return;
-    gNav=document.createElement("nav"); gNav.className="tabs"; gNav.id="tabs-groups";
-    sNav=document.createElement("nav"); sNav.className="tabs"; sNav.id="tabs-sub";
+    gNav=document.createElement("nav"); gNav.className="tabgrp"; gNav.id="tabs-groups";
+    sNav=document.createElement("nav"); sNav.className="tabgrp"; sNav.id="tabs-sub";
     sNav.style.cssText="margin-top:-2px";
     GROUPS.forEach(function(g){
       var b=document.createElement("button");
@@ -6334,8 +6335,8 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       b.addEventListener("click",function(){ openGroup(g.id,true); });
       gNav.appendChild(b);
     });
-    origNav.parentElement.insertBefore(gNav,origNav);
-    origNav.parentElement.insertBefore(sNav,origNav);
+    origNav.parentElement.insertBefore(gNav,origNav.nextSibling);
+    origNav.parentElement.insertBefore(sNav,gNav.nextSibling);
     origNav.style.display="none";
     built=true;
   }
