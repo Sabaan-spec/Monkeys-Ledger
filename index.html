@@ -6302,6 +6302,97 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   window.__sugTick=tick;
 })();
 </script>
+
+<script>/* Tab groups v1 */
+(function(){
+  var GROUPS=[
+    {id:"ind",label:"Industry",tabs:["calc","tree","research","invent","react"]},
+    {id:"mat",label:"Materials",tabs:["ore","repro","pi"]},
+    {id:"trade",label:"Trade",tabs:["arb","top","plan"]},
+    {id:"intel",label:"Intel",tabs:["kills","fits"]},
+    {id:"acct",label:"Account",tabs:["sso"]}
+  ];
+  var KEY="eveTabGroupV1";
+  var origNav=null, gNav=null, sNav=null, curGroup=null, built=false;
+  function origButtons(){ return origNav?[].slice.call(origNav.querySelectorAll("button.tab")):[]; }
+  function btnFor(id){ var b=null; origButtons().forEach(function(x){ if(x.getAttribute("data-tab")===id) b=x; }); return b; }
+  function labelFor(id){ var b=btnFor(id); return b?b.textContent.trim():id; }
+  function groupOf(id){ for(var i=0;i<GROUPS.length;i++){ if(GROUPS[i].tabs.indexOf(id)>=0) return GROUPS[i]; } return null; }
+  function activeTabId(){ var a=null; origButtons().forEach(function(b){ if(/active/.test(b.className)) a=b.getAttribute("data-tab"); }); return a; }
+  function remember(gid,tid){ try{ var m=JSON.parse(localStorage.getItem(KEY)||"{}"); m[gid]=tid; localStorage.setItem(KEY,JSON.stringify(m)); }catch(e){} }
+  function recalled(gid){ try{ var m=JSON.parse(localStorage.getItem(KEY)||"{}"); return m[gid]||null; }catch(e){ return null; } }
+  function build(){
+    origNav=document.querySelector("nav.tabs");
+    if(!origNav||built) return;
+    if(!origButtons().length) return;
+    gNav=document.createElement("nav"); gNav.className="tabs"; gNav.id="tabs-groups";
+    sNav=document.createElement("nav"); sNav.className="tabs"; sNav.id="tabs-sub";
+    sNav.style.cssText="margin-top:-2px";
+    GROUPS.forEach(function(g){
+      var b=document.createElement("button");
+      b.className="tab"; b.setAttribute("data-group",g.id); b.textContent=g.label;
+      b.addEventListener("click",function(){ openGroup(g.id,true); });
+      gNav.appendChild(b);
+    });
+    origNav.parentElement.insertBefore(gNav,origNav);
+    origNav.parentElement.insertBefore(sNav,origNav);
+    origNav.style.display="none";
+    built=true;
+  }
+  function renderSub(g){
+    if(!sNav) return;
+    sNav.innerHTML="";
+    if(!g||g.tabs.length<2){ sNav.style.display="none"; return; }
+    sNav.style.display="";
+    var act=activeTabId();
+    g.tabs.forEach(function(tid){
+      var src=btnFor(tid); if(!src) return;
+      var b=document.createElement("button");
+      b.className="tab"+(tid===act?" active":"");
+      b.setAttribute("data-subtab",tid);
+      b.textContent=labelFor(tid);
+      b.style.cssText="font-size:.82em;padding-top:6px;padding-bottom:6px";
+      b.addEventListener("click",function(){ remember(g.id,tid); src.click(); });
+      sNav.appendChild(b);
+    });
+  }
+  function openGroup(gid,activateTab){
+    var g=null; GROUPS.forEach(function(x){ if(x.id===gid) g=x; });
+    if(!g) return;
+    curGroup=gid;
+    if(gNav) [].slice.call(gNav.children).forEach(function(b){
+      b.className="tab"+(b.getAttribute("data-group")===gid?" active":"");
+    });
+    if(activateTab){
+      var want=recalled(gid);
+      if(g.tabs.indexOf(want)<0) want=g.tabs[0];
+      var src=btnFor(want);
+      if(src&&activeTabId()!==want) src.click();
+    }
+    renderSub(g);
+  }
+  function sync(){
+    build();
+    if(!built) return;
+    var act=activeTabId();
+    var g=act?groupOf(act):null;
+    if(g&&g.id!==curGroup){ openGroup(g.id,false); remember(g.id,act); return; }
+    if(g){
+      remember(g.id,act);
+      if(sNav){
+        var kids=[].slice.call(sNav.children), changed=false;
+        kids.forEach(function(b){
+          var want="tab"+(b.getAttribute("data-subtab")===act?" active":"");
+          if(b.className!==want){ b.className=want; changed=true; }
+        });
+        if(kids.length!==(groupOf(act)||{tabs:[]}).tabs.length) renderSub(g);
+      }
+    }
+  }
+  setTimeout(function(){ build(); sync(); },300);
+  setInterval(sync,600);
+})();
+</script>
 </body>
 </html>
 
