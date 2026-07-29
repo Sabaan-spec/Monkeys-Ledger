@@ -5312,9 +5312,9 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       if(wins.length){li+='<div class="muted small">Best</div>';wins.forEach(function(x){li+='<div style="display:flex;justify-content:space-between;font-size:.82rem"><span>'+(NM2[x.id]||('#'+x.id))+'</span><span style="color:#54c28a">'+isk(x.pnl)+'</span></div>';});}
       if(losses.length){li+='<div class="muted small" style="margin-top:6px">Worst</div>';losses.forEach(function(x){li+='<div style="display:flex;justify-content:space-between;font-size:.82rem"><span>'+(NM2[x.id]||('#'+x.id))+'</span><span style="color:#e0555a">'+isk(x.pnl)+'</span></div>';});}
       if(nbTotal>0)li+='<div class="muted small" style="margin-top:6px">'+isk(nbTotal)+' of sales had no recorded purchase (built or bought before tracking began) \u2014 excluded from realized P&amp;L.</div>';
-      li+='<div class="muted small" style="margin-top:4px">'+Object.keys(store).length.toLocaleString()+' transactions stored locally (grows over time as ESI only keeps ~30 days). <a href="#" id="acc-pnl-refresh" style="color:#7fb0c8">refresh</a></div>';
-      card('acc-pnl','\ud83c\udfc6 Realized P&amp;L by item',li);
-      var rf=$('acc-pnl-refresh');if(rf)rf.addEventListener('click',function(ev){ev.preventDefault();doneAt=0;run(true);});
+      li+='<div class="muted small" style="margin-top:4px">'+Object.keys(store).length.toLocaleString()+' transactions stored locally (grows over time as ESI only keeps ~30 days). <a href="#" id="acc-pnl-off-refresh" style="color:#7fb0c8">refresh</a></div>';
+      card('acc-pnl-off','\ud83c\udfc6 Realized P&amp;L by item',li);
+      var rf=$('acc-pnl-off-refresh');if(rf)rf.addEventListener('click',function(ev){ev.preventDefault();doneAt=0;run(true);});
       doneAt=Date.now();
     }catch(e){card('acc-risk','\ud83d\udee1\ufe0f Orders at risk','<div class="muted small">Could not compute.</div>');}
     running=false;
@@ -5891,6 +5891,8 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 </script>
 
 
+
+<style>#acc-pnl-off{display:none!important}</style>
 </body>
 </html>
 
