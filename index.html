@@ -5925,6 +5925,172 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   setInterval(run,1200);
 })();
 </script>
+
+<script>/* Asset locations v1 */
+(function(){
+  var HUBREG={jita:10000002,amarr:10000043,dodixie:10000032,rens:10000030,hek:10000042};
+  var doneAt=0, forKey=null, busy=false, open={};
+  function $(id){ return document.getElementById(id); }
+  function host(){
+    var t=$("tab-sso"); if(!t) return null;
+    var d=$("acc-loc");
+    if(!d){ d=document.createElement("div"); d.id="acc-loc"; t.appendChild(d); }
+    return d;
+  }
+  function isk(n){ try{ return window.eveISK?window.eveISK(n):Math.round(n).toLocaleString(); }catch(e){ return Math.round(n).toLocaleString(); } }
+  function esc(s){ return String(s==null?"":s).replace(/[&<>]/g,function(c){ return c==="&"?"&amp;":(c==="<"?"&lt;":"&gt;"); }); }
+  async function esi(p){ try{ var r=await EVEAPI.esi(p); return (r&&r.data)?r.data:r; }catch(e){ return null; } }
+  async function allAssets(cid){
+    var out=[], page=1;
+    while(page<=25){
+      var d=await esi("/characters/"+cid+"/assets/?page="+page);
+      if(!d||!d.length) break;
+      out=out.concat(d);
+      if(d.length<1000) break;
+      page++;
+    }
+    return out;
+  }
+  async function fuzz(region, ids){
+    var px={};
+    for(var i=0;i<ids.length;i+=200){
+      var chunk=ids.slice(i,i+200);
+      try{
+        var r=await fetch("https://market.fuzzwork.co.uk/aggregates/?region="+region+"&types="+chunk.join(","));
+        if(!r.ok) continue;
+        var o=await r.json();
+        for(var k in o){
+          var s=o[k]&&o[k].sell;
+          if(!s) continue;
+          var v=parseFloat(s.percentile);
+          if(!(v>0)) v=parseFloat(s.min);
+          if(v>0) px[k]=v;
+        }
+      }catch(e){}
+    }
+    return px;
+  }
+  async function adjusted(){
+    try{
+      var r=await fetch("https://esi.evetech.net/latest/markets/prices/");
+      if(!r.ok) return {};
+      var a=await r.json(), m={};
+      a.forEach(function(x){ if(x.adjusted_price>0) m[x.type_id]=x.adjusted_price; });
+      return m;
+    }catch(e){ return {}; }
+  }
+  function sysInfo(id){
+    try{
+      var m=JSON.parse(localStorage.getItem("eveMapV2")||"null");
+      var e=m&&m.sys&&m.sys[id];
+      if(!e) return null;
+      var name=null, reg=null;
+      e.forEach(function(x){ if(typeof x==="string") name=x; else if(x>1000000) reg=x; });
+      return {name:name,region:reg};
+    }catch(e){ return null; }
+  }
+  async function build(force){
+    if(busy) return;
+    var ch=(EVEAPI.getChar&&EVEAPI.getChar())||null;
+    var sel=$("hub"); var hub=sel?sel.value:"jita";
+    if(!ch||!ch.id){ var h0=host(); if(h0) h0.innerHTML=""; return; }
+    var key=ch.id+"|"+hub;
+    if(!force && forKey===key && (Date.now()-doneAt)<900000) return;
+    busy=true;
+    var d=host();
+    try{
+      if(d&&!d.innerHTML) d.innerHTML="<section class=\"panel\"><div><div style=\"font-weight:600\">\ud83d\udccd Assets by location</div><div class=\"muted small\">Loading\u2026</div></div></section>";
+      var assets=await allAssets(ch.id);
+      if(!assets.length){
+        d.innerHTML="<section class=\"panel\"><div><div style=\"font-weight:600\">\ud83d\udccd Assets by location</div><div class=\"muted small\">No assets found, or asset access was not granted.</div></div></section>";
+        forKey=key; doneAt=Date.now(); busy=false; return;
+      }
+      var byId={};
+      assets.forEach(function(a){ byId[a.item_id]=a; });
+      function rootLoc(a){
+        var cur=a, n=0;
+        while(n++<40){ var p=byId[cur.location_id]; if(!p) return cur.location_id; cur=p; }
+        return cur.location_id;
+      }
+      var types={}, bpc=0;
+      var placed=[];
+      assets.forEach(function(a){
+        if(a.is_blueprint_copy){ bpc+=(a.quantity||1); return; }
+        var loc=rootLoc(a);
+        placed.push({loc:loc,t:a.type_id,q:a.quantity||1});
+        types[a.type_id]=1;
+      });
+      var ids=Object.keys(types);
+      var px=await fuzz(HUBREG[hub]||10000002, ids);
+      var missing=ids.filter(function(t){ return !px[t]; });
+      if(missing.length){ var adj=await adjusted(); missing.forEach(function(t){ if(adj[t]) px[t]=adj[t]; }); }
+      var locTotal={}, locQty={};
+      placed.forEach(function(p){
+        var v=(px[p.t]||0)*p.q;
+        locTotal[p.loc]=(locTotal[p.loc]||0)+v;
+        locQty[p.loc]=(locQty[p.loc]||0)+1;
+      });
+      var locs=Object.keys(locTotal);
+      await Promise.all(locs.slice(0,60).map(function(l){
+        var n=Number(l);
+        if(n>=30000000&&n<32000000) return null;
+        return window.EVESTRUCT?window.EVESTRUCT.resolve(l):null;
+      }));
+      var bySys={};
+      locs.forEach(function(l){
+        var n=Number(l), sysId=null, label=null;
+        if(n>=30000000&&n<32000000){ sysId=n; label="In space"; }
+        else {
+          var rec=window.EVESTRUCT?window.EVESTRUCT.get(l):null;
+          sysId=rec&&rec.sys?rec.sys:null;
+          label=(rec&&rec.name)?rec.name:("Location "+l);
+        }
+        var kk=sysId||("unknown-"+l);
+        if(!bySys[kk]) bySys[kk]={sys:sysId,total:0,rows:[]};
+        bySys[kk].total+=locTotal[l];
+        bySys[kk].rows.push({label:label,val:locTotal[l],n:locQty[l]});
+      });
+      var keys=Object.keys(bySys).sort(function(a,b){ return bySys[b].total-bySys[a].total; });
+      var grand=0; keys.forEach(function(k){ grand+=bySys[k].total; });
+      var body="";
+      body+="<div style=\"font-size:20px;font-weight:700\">"+isk(grand)+" ISK</div>";
+      body+="<div class=\"muted small\">across "+keys.length+" system"+(keys.length===1?"":"s")+" \u00b7 priced at "+esc(hub)+" sell</div>";
+      body+="<div style=\"margin-top:8px\">";
+      keys.slice(0,25).forEach(function(k){
+        var g=bySys[k];
+        var si=g.sys?sysInfo(g.sys):null;
+        var nm=si&&si.name?si.name:(g.sys?("System "+g.sys):"Unknown location");
+        var pctv=grand>0?(100*g.total/grand):0;
+        body+="<div class=\"loc-row\" data-k=\""+esc(k)+"\" style=\"display:flex;justify-content:space-between;gap:10px;cursor:pointer;padding:3px 0\">";
+        body+="<span>"+(open[k]?"\u25be ":"\u25b8 ")+esc(nm)+" <span class=\"muted small\">"+g.rows.length+" loc</span></span>";
+        body+="<span class=\"num\">"+isk(g.total)+" <span class=\"muted small\">"+pctv.toFixed(0)+"%</span></span>";
+        body+="</div>";
+        if(open[k]){
+          g.rows.sort(function(a,b){ return b.val-a.val; });
+          g.rows.forEach(function(r){
+            body+="<div style=\"display:flex;justify-content:space-between;gap:10px;padding:2px 0 2px 16px\" class=\"muted small\">";
+            body+="<span>"+esc(r.label)+"</span><span class=\"num\">"+isk(r.val)+"</span></div>";
+          });
+        }
+      });
+      body+="</div>";
+      if(bpc) body+="<div class=\"muted small\" style=\"margin-top:8px\">"+bpc+" blueprint cop"+(bpc===1?"y":"ies")+" excluded \u2014 BPCs cannot be sold on the market.</div>";
+      if(missing.length) body+="<div class=\"muted small\">"+missing.length+" item type"+(missing.length===1?"":"s")+" had no hub price; CCP adjusted price used where available.</div>";
+      body+="<div class=\"muted small\" style=\"margin-top:4px\"><span id=\"loc-refresh\" style=\"text-decoration:underline;cursor:pointer\">refresh</span></div>";
+      d.innerHTML="<section class=\"panel\"><div><div style=\"font-weight:600;margin-bottom:6px\">\ud83d\udccd Assets by location</div>"+body+"</div></section>";
+      var rows=d.querySelectorAll(".loc-row");
+      for(var i=0;i<rows.length;i++){
+        rows[i].addEventListener("click",function(){ var k=this.getAttribute("data-k"); open[k]=!open[k]; doneAt=0; build(true); });
+      }
+      var rf=$("loc-refresh"); if(rf) rf.addEventListener("click",function(){ doneAt=0; build(true); });
+      forKey=key; doneAt=Date.now();
+    }catch(e){}
+    busy=false;
+  }
+  setTimeout(function(){ build(false); },6000);
+  setInterval(function(){ build(false); },120000);
+})();
+</script>
 </body>
 </html>
 
