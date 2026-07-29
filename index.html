@@ -5893,6 +5893,38 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 
 
 <style>#acc-pnl-off{display:none!important}</style>
+
+<script>/* Hide skills card v1 */
+(function(){
+  var obs=null, bound=null;
+  function kill(root){
+    if(!root) return;
+    var ps=root.querySelectorAll("section.panel");
+    for(var i=0;i<ps.length;i++){
+      var p=ps[i];
+      if(p.textContent.indexOf("Total SP")<0) continue;
+      var w=p.parentElement;
+      p.remove();
+      if(w&&w!==root&&w.id!=="sso-body"&&w.id!=="tab-sso"&&!w.children.length) w.remove();
+    }
+  }
+  function sweep(){
+    var t=document.getElementById("tab-sso");
+    if(!t) return;
+    kill(t);
+    if(bound!==t){
+      if(obs) try{ obs.disconnect(); }catch(e){}
+      bound=t;
+      try{
+        obs=new MutationObserver(function(){ kill(t); });
+        obs.observe(t,{childList:true,subtree:true});
+      }catch(e){ obs=null; }
+    }
+  }
+  setTimeout(sweep,600);
+  setInterval(sweep,1000);
+})();
+</script>
 </body>
 </html>
 
