@@ -6303,8 +6303,8 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 })();
 </script>
 
-<style>#tabs-groups,#tabs-sub{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center;margin:0 auto 8px;max-width:100%}#tabs-sub{opacity:.92}</style>
-<script>/* Tab groups v1 */
+<style>#tabs-groups,#tabs-sub{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center;margin:0 auto 8px;max-width:100%}#tabs-sub{opacity:.95}</style>
+<script>/* Tab groups v2 */
 (function(){
   var GROUPS=[
     {id:"ind",label:"Industry",tabs:["calc","tree","research","invent","react"]},
@@ -6314,84 +6314,71 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     {id:"acct",label:"Account",tabs:["sso"]}
   ];
   var KEY="eveTabGroupV1";
-  var origNav=null, gNav=null, sNav=null, curGroup=null, built=false;
-  function origButtons(){ return origNav?[].slice.call(origNav.querySelectorAll("button.tab")):[]; }
-  function btnFor(id){ var b=null; origButtons().forEach(function(x){ if(x.getAttribute("data-tab")===id) b=x; }); return b; }
+  function origNav(){ return document.querySelector("nav.tabs"); }
+  function origButtons(){ var n=origNav(); return n?[].slice.call(n.querySelectorAll("button.tab[data-tab]")):[]; }
+  function btnFor(id){ var r=null; origButtons().forEach(function(b){ if(b.getAttribute("data-tab")===id) r=b; }); return r; }
   function labelFor(id){ var b=btnFor(id); return b?b.textContent.trim():id; }
   function groupOf(id){ for(var i=0;i<GROUPS.length;i++){ if(GROUPS[i].tabs.indexOf(id)>=0) return GROUPS[i]; } return null; }
-  function activeTabId(){ var a=null; origButtons().forEach(function(b){ if(/active/.test(b.className)) a=b.getAttribute("data-tab"); }); return a; }
-  function remember(gid,tid){ try{ var m=JSON.parse(localStorage.getItem(KEY)||"{}"); m[gid]=tid; localStorage.setItem(KEY,JSON.stringify(m)); }catch(e){} }
-  function recalled(gid){ try{ var m=JSON.parse(localStorage.getItem(KEY)||"{}"); return m[gid]||null; }catch(e){ return null; } }
-  function build(){
-    origNav=document.querySelector("nav.tabs");
-    if(!origNav||built) return;
-    if(!origButtons().length) return;
-    gNav=document.createElement("nav"); gNav.className="tabgrp"; gNav.id="tabs-groups";
-    sNav=document.createElement("nav"); sNav.className="tabgrp"; sNav.id="tabs-sub";
-    sNav.style.cssText="margin-top:-2px";
-    GROUPS.forEach(function(g){
-      var b=document.createElement("button");
-      b.className="tab"; b.setAttribute("data-group",g.id); b.textContent=g.label;
-      b.addEventListener("click",function(){ openGroup(g.id,true); });
-      gNav.appendChild(b);
-    });
-    origNav.parentElement.insertBefore(gNav,origNav.nextSibling);
-    origNav.parentElement.insertBefore(sNav,gNav.nextSibling);
-    origNav.style.display="none";
-    built=true;
-  }
-  function renderSub(g){
-    if(!sNav) return;
-    sNav.innerHTML="";
-    if(!g||g.tabs.length<2){ sNav.style.display="none"; return; }
-    sNav.style.display="";
-    var act=activeTabId();
-    g.tabs.forEach(function(tid){
-      var src=btnFor(tid); if(!src) return;
-      var b=document.createElement("button");
-      b.className="tab"+(tid===act?" active":"");
-      b.setAttribute("data-subtab",tid);
-      b.textContent=labelFor(tid);
-      b.style.cssText="font-size:.82em;padding-top:6px;padding-bottom:6px";
-      b.addEventListener("click",function(){ remember(g.id,tid); src.click(); });
-      sNav.appendChild(b);
-    });
-  }
-  function openGroup(gid,activateTab){
-    var g=null; GROUPS.forEach(function(x){ if(x.id===gid) g=x; });
-    if(!g) return;
-    curGroup=gid;
-    if(gNav) [].slice.call(gNav.children).forEach(function(b){
-      b.className="tab"+(b.getAttribute("data-group")===gid?" active":"");
-    });
-    if(activateTab){
-      var want=recalled(gid);
-      if(g.tabs.indexOf(want)<0) want=g.tabs[0];
-      var src=btnFor(want);
-      if(src&&activeTabId()!==want) src.click();
-    }
-    renderSub(g);
-  }
-  function sync(){
-    build();
-    if(!built) return;
-    var act=activeTabId();
-    var g=act?groupOf(act):null;
-    if(g&&g.id!==curGroup){ openGroup(g.id,false); remember(g.id,act); return; }
-    if(g){
-      remember(g.id,act);
-      if(sNav){
-        var kids=[].slice.call(sNav.children), changed=false;
-        kids.forEach(function(b){
-          var want="tab"+(b.getAttribute("data-subtab")===act?" active":"");
-          if(b.className!==want){ b.className=want; changed=true; }
+  function activeTab(){ var r=null; origButtons().forEach(function(b){ if(/\bactive\b/.test(b.className)) r=b.getAttribute("data-tab"); }); return r; }
+  function remember(g,t){ try{ var m=JSON.parse(localStorage.getItem(KEY)||"{}"); m[g]=t; localStorage.setItem(KEY,JSON.stringify(m)); }catch(e){} }
+  function recalled(g){ try{ return (JSON.parse(localStorage.getItem(KEY)||"{}"))[g]||null; }catch(e){ return null; } }
+  function ensureNavs(){
+    var on=origNav(); if(!on||!origButtons().length) return null;
+    var g=document.getElementById("tabs-groups"), s=document.getElementById("tabs-sub");
+    if(!g){
+      g=document.createElement("nav"); g.className="tabgrp"; g.id="tabs-groups";
+      GROUPS.forEach(function(grp){
+        var b=document.createElement("button");
+        b.className="tab"; b.setAttribute("data-group",grp.id); b.textContent=grp.label;
+        b.addEventListener("click",function(){
+          var want=recalled(grp.id);
+          if(grp.tabs.indexOf(want)<0) want=grp.tabs[0];
+          var src=btnFor(want); if(src) src.click();
         });
-        if(kids.length!==(groupOf(act)||{tabs:[]}).tabs.length) renderSub(g);
+        g.appendChild(b);
+      });
+      on.parentElement.insertBefore(g,on.nextSibling);
+    }
+    if(!s){
+      s=document.createElement("nav"); s.className="tabgrp"; s.id="tabs-sub";
+      g.parentElement.insertBefore(s,g.nextSibling);
+    }
+    on.style.display="none";
+    return {g:g,s:s};
+  }
+  function tick(){
+    var n=ensureNavs(); if(!n) return;
+    var act=activeTab();
+    var grp=act?groupOf(act):null;
+    if(!grp) grp=GROUPS[0];
+    if(act&&groupOf(act)) remember(grp.id,act);
+    [].slice.call(n.g.children).forEach(function(b){
+      var want="tab"+(b.getAttribute("data-group")===grp.id?" active":"");
+      if(b.className!==want) b.className=want;
+    });
+    var sig=grp.id+"|"+act+"|"+grp.tabs.join(",");
+    if(n.s.getAttribute("data-sig")!==sig){
+      n.s.setAttribute("data-sig",sig);
+      n.s.innerHTML="";
+      if(grp.tabs.length<2){ n.s.style.display="none"; }
+      else {
+        n.s.style.display="";
+        grp.tabs.forEach(function(tid){
+          var src=btnFor(tid); if(!src) return;
+          var b=document.createElement("button");
+          b.className="tab"+(tid===act?" active":"");
+          b.setAttribute("data-subtab",tid);
+          b.textContent=labelFor(tid);
+          b.style.cssText="font-size:.82em;padding-top:6px;padding-bottom:6px";
+          b.addEventListener("click",function(){ remember(grp.id,tid); var s2=btnFor(tid); if(s2) s2.click(); });
+          n.s.appendChild(b);
+        });
       }
     }
   }
-  setTimeout(function(){ build(); sync(); },300);
-  setInterval(sync,600);
+  setTimeout(tick,300);
+  setInterval(tick,500);
+  window.__tabTick=tick;
 })();
 </script>
 </body>
