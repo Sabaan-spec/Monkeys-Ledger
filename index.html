@@ -6175,6 +6175,81 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   window.EVEMKT={ isStructure:isStructure, structureBook:structureBook, bookFor:bookFor, best:best, regionOf:regionOf, regionFor:regionFor };
 })();
 </script>
+
+<script>/* Structure names v1 */
+(function(){
+  var SEEN="__locName";
+  var pending={}, busy=false;
+  function kind(n){
+    if(n>=1000000000000) return "structure";
+    if(n>=60000000&&n<64000000) return "station";
+    if(n>=30000000&&n<32000000) return "system";
+    return null;
+  }
+  function sysName(id){
+    try{
+      var m=JSON.parse(localStorage.getItem("eveMapV2")||"null");
+      var e=m&&m.sys&&m.sys[id];
+      if(!e) return null;
+      var nm=null; e.forEach(function(x){ if(typeof x==="string") nm=x; });
+      return nm;
+    }catch(e){ return null; }
+  }
+  function skip(el){
+    while(el){
+      var t=el.tagName;
+      if(t==="SCRIPT"||t==="STYLE"||t==="INPUT"||t==="TEXTAREA"||t==="SELECT"||t==="OPTION") return true;
+      if(el.isContentEditable) return true;
+      el=el.parentElement;
+    }
+    return false;
+  }
+  function nameFor(id,k){
+    if(k==="system") return sysName(id);
+    var rec=window.EVESTRUCT?window.EVESTRUCT.get(id):null;
+    return (rec&&rec.name)?rec.name:null;
+  }
+  function request(id,k){
+    if(k==="system"||pending[id]) return;
+    if(!window.EVESTRUCT) return;
+    pending[id]=1;
+    try{ window.EVESTRUCT.resolve(id); }catch(e){}
+  }
+  function sweep(){
+    if(busy) return; busy=true;
+    try{
+      var w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,null);
+      var jobs=[], node;
+      while((node=w.nextNode())){
+        if(node[SEEN]) continue;
+        var s=node.nodeValue;
+        if(!s) continue;
+        var t=s.trim();
+        if(t.length<8||t.length>20) continue;
+        if(!/^[0-9]+$/.test(t)) continue;
+        var n=Number(t);
+        var k=kind(n);
+        if(!k) continue;
+        if(skip(node.parentElement)) { node[SEEN]=1; continue; }
+        jobs.push({node:node,id:t,k:k,raw:s});
+      }
+      jobs.forEach(function(job){
+        var nm=nameFor(job.id,job.k);
+        if(nm){
+          job.node.nodeValue=job.raw.replace(job.id,nm);
+          job.node[SEEN]=1;
+        } else {
+          request(job.id,job.k);
+        }
+      });
+    }catch(e){}
+    busy=false;
+  }
+  setTimeout(sweep,2500);
+  setInterval(sweep,2500);
+  window.__locSweep=sweep;
+})();
+</script>
 </body>
 </html>
 
