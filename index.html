@@ -6055,21 +6055,21 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       var body="";
       body+="<div style=\"font-size:20px;font-weight:700\">"+isk(grand)+" ISK</div>";
       body+="<div class=\"muted small\">across "+keys.length+" system"+(keys.length===1?"":"s")+" \u00b7 priced at "+esc(hub)+" sell</div>";
-      body+="<div style=\"margin-top:8px\">";
-      keys.slice(0,25).forEach(function(k){
+      body+="<div style=\"margin-top:8px;max-height:330px;overflow-y:auto;overflow-x:hidden\">";
+      keys.forEach(function(k){
         var g=bySys[k];
         var si=g.sys?sysInfo(g.sys):null;
         var nm=si&&si.name?si.name:(g.sys?("System "+g.sys):"Unknown location");
         var pctv=grand>0?(100*g.total/grand):0;
-        body+="<div class=\"loc-row\" data-k=\""+esc(k)+"\" style=\"display:flex;justify-content:space-between;gap:10px;cursor:pointer;padding:3px 0\">";
-        body+="<span>"+(open[k]?"\u25be ":"\u25b8 ")+esc(nm)+" <span class=\"muted small\">"+g.rows.length+" loc</span></span>";
-        body+="<span class=\"num\">"+isk(g.total)+" <span class=\"muted small\">"+pctv.toFixed(0)+"%</span></span>";
+        body+="<div class=\"loc-row\" data-k=\""+esc(k)+"\" style=\"display:flex;justify-content:space-between;align-items:baseline;gap:10px;cursor:pointer;padding:3px 0\">";
+        body+="<span style=\"white-space:nowrap;overflow:hidden;text-overflow:ellipsis\">"+(open[k]?"\u25be ":"\u25b8 ")+esc(nm)+" <span class=\"muted small\">"+g.rows.length+" loc</span></span>";
+        body+="<span class=\"num\" style=\"white-space:nowrap\">"+isk(g.total)+" <span class=\"muted small\">"+pctv.toFixed(0)+"%</span></span>";
         body+="</div>";
         if(open[k]){
           g.rows.sort(function(a,b){ return b.val-a.val; });
           g.rows.forEach(function(r){
-            body+="<div style=\"display:flex;justify-content:space-between;gap:10px;padding:2px 0 2px 16px\" class=\"muted small\">";
-            body+="<span>"+esc(r.label)+"</span><span class=\"num\">"+isk(r.val)+"</span></div>";
+            body+="<div style=\"display:flex;justify-content:space-between;gap:10px;padding:2px 0 2px 16px;align-items:baseline\" class=\"muted small\">";
+            body+="<span style=\"white-space:nowrap;overflow:hidden;text-overflow:ellipsis\">"+esc(r.label)+"</span><span class=\"num\" style=\"white-space:nowrap\">"+isk(r.val)+"</span></div>";
           });
         }
       });
@@ -6077,7 +6077,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       if(bpc) body+="<div class=\"muted small\" style=\"margin-top:8px\">"+bpc+" blueprint cop"+(bpc===1?"y":"ies")+" excluded \u2014 BPCs cannot be sold on the market.</div>";
       if(missing.length) body+="<div class=\"muted small\">"+missing.length+" item type"+(missing.length===1?"":"s")+" had no hub price; CCP adjusted price used where available.</div>";
       body+="<div class=\"muted small\" style=\"margin-top:4px\"><span id=\"loc-refresh\" style=\"text-decoration:underline;cursor:pointer\">refresh</span></div>";
-      d.innerHTML="<section class=\"panel\"><div><div style=\"font-weight:600;margin-bottom:6px\">\ud83d\udccd Assets by location</div>"+body+"</div></section>";
+      d.innerHTML="<section class=\"panel\" style=\"break-inside:avoid;display:block\"><div style=\"display:block\"><div style=\"font-weight:600;margin-bottom:6px\">\ud83d\udccd Assets by location</div>"+body+"</div></section>";
       var rows=d.querySelectorAll(".loc-row");
       for(var i=0;i<rows.length;i++){
         rows[i].addEventListener("click",function(){ var k=this.getAttribute("data-k"); open[k]=!open[k]; doneAt=0; build(true); });
