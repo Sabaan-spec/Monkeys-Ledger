@@ -6250,6 +6250,58 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   window.__locSweep=sweep;
 })();
 </script>
+
+<script>/* Suggest position v1 */
+(function(){
+  function boxes(){ return [].slice.call(document.querySelectorAll("[id$=suggestions],[id$=-sug]")); }
+  function inputFor(box){
+    var id=box.id.replace(/-?sug(gestions)?$/,"");
+    var byId=document.getElementById(id+"-search")||document.getElementById(id+"search")||document.getElementById(id);
+    if(byId&&byId.tagName==="INPUT") return byId;
+    var p=box.parentElement, n=0;
+    while(p&&n++<4){ var i=p.querySelector("input"); if(i) return i; p=p.parentElement; }
+    return null;
+  }
+  function visible(el){
+    if(!el) return false;
+    if(el.offsetParent===null&&getComputedStyle(el).position!=="fixed") return false;
+    var cs=getComputedStyle(el);
+    if(cs.display==="none"||cs.visibility==="hidden") return false;
+    return el.getBoundingClientRect().height>0;
+  }
+  function place(box){
+    var inp=inputFor(box); if(!inp) return;
+    var r=inp.getBoundingClientRect();
+    if(!r.width) return;
+    var gap=4;
+    box.style.position="fixed";
+    box.style.left=Math.round(r.left)+"px";
+    box.style.width=Math.round(r.width)+"px";
+    box.style.zIndex="9999";
+    box.style.margin="0";
+    box.style.overflowY="auto";
+    var below=window.innerHeight-r.bottom-gap-8;
+    var above=r.top-gap-8;
+    if(below<140&&above>below){
+      var h=Math.min(box.scrollHeight,Math.max(120,above));
+      box.style.maxHeight=h+"px";
+      box.style.top=Math.round(r.top-gap-h)+"px";
+    } else {
+      box.style.maxHeight=Math.max(120,below)+"px";
+      box.style.top=Math.round(r.bottom+gap)+"px";
+    }
+  }
+  function tick(){
+    var bs=boxes();
+    for(var i=0;i<bs.length;i++){ if(visible(bs[i])) place(bs[i]); }
+  }
+  setInterval(tick,180);
+  window.addEventListener("scroll",tick,true);
+  window.addEventListener("resize",tick);
+  document.addEventListener("input",function(){ setTimeout(tick,30); },true);
+  window.__sugTick=tick;
+})();
+</script>
 </body>
 </html>
 
