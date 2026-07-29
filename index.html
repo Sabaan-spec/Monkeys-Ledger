@@ -5885,6 +5885,46 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   setInterval(sweep,1000);
 })();
 </script>
+
+<script>/* Merge job cards v1 */
+(function(){
+  var cacheHTML=null;
+  function panels(){ var t=document.getElementById("tab-sso"); return t?[].slice.call(t.querySelectorAll("section.panel")):[]; }
+  function find(ps,txt){ for(var i=0;i<ps.length;i++){ if(ps[i].textContent.indexOf(txt)>=0) return ps[i]; } return null; }
+  function run(){
+    var ps=panels(); if(!ps.length) return;
+    var tl=find(ps,"Job timeline");
+    var slots=null;
+    for(var i=0;i<ps.length;i++){ if(ps[i]!==tl && ps[i].textContent.indexOf("Job slots")>=0){ slots=ps[i]; break; } }
+    if(slots){
+      var inner=slots.firstElementChild||slots;
+      var kids=[].slice.call(inner.children);
+      if(kids.length && kids[0].textContent.length<40 && kids[0].textContent.indexOf("Job slots")>=0) kids.shift();
+      var frag=kids.map(function(k){ return k.outerHTML; }).join("");
+      if(frag) cacheHTML=frag;
+      if(tl){
+        var w=slots.parentElement;
+        slots.remove();
+        if(w&&!w.children.length&&w.id!=="tab-sso"&&w.id!=="sso-body") w.remove();
+      }
+    }
+    if(tl&&cacheHTML&&!tl.querySelector("#merged-slots")){
+      var box=tl.firstElementChild||tl;
+      var d=document.createElement("div");
+      d.id="merged-slots";
+      d.style.cssText="margin:4px 0 10px;padding-bottom:9px;border-bottom:1px solid rgba(255,255,255,.09)";
+      d.innerHTML=cacheHTML;
+      var head=box.firstElementChild;
+      if(head&&head.nextSibling) box.insertBefore(d,head.nextSibling); else box.appendChild(d);
+      if(head&&head.textContent.indexOf("Job timeline")>=0&&head.textContent.indexOf("slots")<0){
+        head.textContent=head.textContent.replace("Job timeline","Job slots & timeline");
+      }
+    }
+  }
+  setTimeout(run,1200);
+  setInterval(run,1200);
+})();
+</script>
 </body>
 </html>
 
