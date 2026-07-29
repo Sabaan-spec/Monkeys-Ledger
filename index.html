@@ -5855,15 +5855,17 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 
 <style>#acc-pnl-off{display:none!important}</style>
 
-<script>/* Hide skills card v1 */
+<script>/* Hide cards v2 */
 (function(){
+  var MATCH=["Total SP","Realized P&L"];
   var obs=null, bound=null;
   function kill(root){
     if(!root) return;
     var ps=root.querySelectorAll("section.panel");
     for(var i=0;i<ps.length;i++){
-      var p=ps[i];
-      if(p.textContent.indexOf("Total SP")<0) continue;
+      var p=ps[i], t=p.textContent||"", hit=false;
+      for(var k=0;k<MATCH.length;k++){ if(t.indexOf(MATCH[k])>=0){ hit=true; break; } }
+      if(!hit) continue;
       var w=p.parentElement;
       p.remove();
       if(w&&w!==root&&w.id!=="sso-body"&&w.id!=="tab-sso"&&!w.children.length) w.remove();
@@ -5876,13 +5878,10 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     if(bound!==t){
       if(obs) try{ obs.disconnect(); }catch(e){}
       bound=t;
-      try{
-        obs=new MutationObserver(function(){ kill(t); });
-        obs.observe(t,{childList:true,subtree:true});
-      }catch(e){ obs=null; }
+      try{ obs=new MutationObserver(function(){ kill(t); }); obs.observe(t,{childList:true,subtree:true}); }catch(e){ obs=null; }
     }
   }
-  setTimeout(sweep,600);
+  setTimeout(sweep,500);
   setInterval(sweep,1000);
 })();
 </script>
