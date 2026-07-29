@@ -6561,12 +6561,21 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     if(typeof window.switchTab!=="function"||window.switchTab.__cheapWrap) return;
     var orig=window.switchTab;
     var fn=function(id){
-      if(id===ID){ ensure(); orig("calc"); show(true); mark(); return; }
+      if(id===ID){ ensure(); orig("calc"); show(true); mark(); autorun(); return; }
       show(false);
       return orig.apply(this,arguments);
     };
     fn.__cheapWrap=1;
     window.switchTab=fn;
+  }
+  var ranOnce=false;
+  function autorun(){
+    if(ranOnce) return;
+    var go=document.getElementById("ci-go"), out=document.getElementById("ci-out");
+    if(!go) return;
+    if(out&&out.textContent.trim().length>0){ ranOnce=true; return; }
+    ranOnce=true;
+    setTimeout(function(){ try{ go.click(); }catch(e){} },250);
   }
   function normalize(){
     var p=document.getElementById("ci-panel"); if(!p) return;
@@ -6587,6 +6596,8 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   setInterval(function(){ ensure(); wrap(); normalize(); },1500);
 })();
 </script>
+
+<style>#eve-fmt-toggle{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border:1px solid var(--border);border-radius:2px;color:var(--muted);font-size:12px;cursor:pointer;transition:color .12s ease,border-color .12s ease}#eve-fmt-toggle::after{content:"\2194 click to switch";opacity:.7}#eve-fmt-toggle:hover{color:var(--text);border-color:var(--accent-dim)}</style>
 </body>
 </html>
 
