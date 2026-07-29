@@ -6356,7 +6356,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       var want="tab"+(b.getAttribute("data-group")===grp.id?" active":"");
       if(b.className!==want) b.className=want;
     });
-    var sig=grp.id+"|"+act+"|"+grp.tabs.join(",");
+    var sig=grp.id+"|"+act+"|"+grp.tabs.filter(function(t){ return !!btnFor(t); }).join(",");
     if(n.s.getAttribute("data-sig")!==sig){
       n.s.setAttribute("data-sig",sig);
       n.s.innerHTML="";
