@@ -6303,15 +6303,15 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 })();
 </script>
 
-<style>#tabs-groups,#tabs-sub{display:flex;flex-wrap:wrap;align-items:center;max-width:100%}#tabs-groups{gap:6px;justify-content:flex-start;margin:0;padding-bottom:9px;border-bottom:1px solid rgba(255,255,255,.10)}#tabs-sub{gap:2px;justify-content:flex-start;margin:7px 0 12px}#tabs-sub button.subtab{background:none;border:0;border-radius:0;clip-path:none;padding:5px 11px;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;font-family:inherit;color:inherit;opacity:.55;cursor:pointer;border-bottom:2px solid transparent;transition:opacity .12s ease}#tabs-sub button.subtab:hover{opacity:.85}#tabs-sub button.subtab.active{opacity:1;border-bottom-color:currentColor}</style>
+<style>#tabs-groups,#tabs-sub{display:flex;flex-wrap:wrap;align-items:center;max-width:100%}#tabs-groups{gap:8px;justify-content:space-between;margin:0;padding-bottom:9px;border-bottom:1px solid rgba(255,255,255,.10)}#tabs-groups button.tab{flex:1 1 0;min-width:0;text-align:center;justify-content:center}#tabs-groups button.tab[data-group=acct]{flex:1.25 1 0;font-weight:700;letter-spacing:.09em;background:rgba(120,215,195,.09);color:#cdefe6}#tabs-groups button.tab[data-group=acct]:hover{background:rgba(120,215,195,.16)}#tabs-sub{gap:2px;justify-content:flex-start;margin:7px 0 12px}#tabs-sub button.subtab{background:none;border:0;border-radius:0;clip-path:none;padding:5px 11px;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;font-family:inherit;color:inherit;opacity:.55;cursor:pointer;border-bottom:2px solid transparent;transition:opacity .12s ease}#tabs-sub button.subtab:hover{opacity:.85}#tabs-sub button.subtab.active{opacity:1;border-bottom-color:currentColor}</style>
 <script>/* Tab groups v2 */
 (function(){
   var GROUPS=[
     {id:"ind",label:"Industry",tabs:["calc","tree","research","invent","react"]},
     {id:"mat",label:"Materials",tabs:["ore","repro","pi"]},
+    {id:"acct",label:"Account",tabs:["sso"]},
     {id:"trade",label:"Trade",tabs:["arb","top","plan"]},
-    {id:"intel",label:"Intel",tabs:["kills","fits"]},
-    {id:"acct",label:"Account",tabs:["sso"]}
+    {id:"intel",label:"Intel",tabs:["kills","fits"]}
   ];
   var KEY="eveTabGroupV1";
   function origNav(){ return document.querySelector("nav.tabs"); }
