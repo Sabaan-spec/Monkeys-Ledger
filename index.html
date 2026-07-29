@@ -6568,8 +6568,23 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     fn.__cheapWrap=1;
     window.switchTab=fn;
   }
-  setTimeout(function(){ ensure(); wrap(); },1200);
-  setInterval(function(){ ensure(); wrap(); },1500);
+  function normalize(){
+    var p=document.getElementById("ci-panel"); if(!p) return;
+    var b=document.getElementById("ci-body");
+    if(b&&getComputedStyle(b).display==="none"){ b.style.display=""; }
+    var hdr=p.firstElementChild;
+    if(hdr&&hdr!==b&&!hdr.__flat){
+      var c=hdr.cloneNode(true);
+      [].slice.call(c.children).forEach(function(k){ if(/^[\s\u25b8\u25be\u25b4\u25bc\u25b6\u25c2]*$/.test(k.textContent)) k.remove(); });
+      var w=document.createTreeWalker(c,NodeFilter.SHOW_TEXT,null), n;
+      while((n=w.nextNode())){ n.nodeValue=n.nodeValue.replace(/[\u25b8\u25be\u25b4\u25bc\u25b6\u25c2]/g,""); }
+      c.style.cursor="default";
+      c.__flat=1;
+      hdr.parentElement.replaceChild(c,hdr);
+    }
+  }
+  setTimeout(function(){ ensure(); wrap(); normalize(); },1200);
+  setInterval(function(){ ensure(); wrap(); normalize(); },1500);
 })();
 </script>
 </body>
