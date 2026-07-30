@@ -6817,6 +6817,186 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   document.addEventListener("input",function(e){ if(e.target&&(e.target.id==="rp-search"||e.target.id==="rp-yield")) setTimeout(paint,400); },true);
 })();
 </script>
+
+<style>
+#rp-own,#os-led{display:block;font-size:12px;color:var(--muted);line-height:1.55;margin:8px 0 2px;max-width:820px}
+#rp-own-use,#os-led-use{text-decoration:underline;cursor:pointer;color:var(--text)}
+#rp-own-use:hover,#os-led-use:hover{color:var(--accent)}
+#os-led input{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:3px 7px;width:58px;font-family:inherit;font-size:12px;margin:0 4px}
+</style>
+<script>/* Reprocess units from assets v1 */
+(function(){
+  var idCache={}, assets=null, assetsFor=null, assetsAt=0, lastKey="";
+  function $(id){ return document.getElementById(id); }
+  function isk(n){ try{ return window.eveISK?window.eveISK(n):Math.round(n).toLocaleString(); }catch(e){ return Math.round(n).toLocaleString(); } }
+  async function esi(p){ try{ var r=await EVEAPI.esi(p); return (r&&r.data)?r.data:r; }catch(e){ return null; } }
+  async function typeId(name){
+    name=String(name||"").trim(); if(!name) return null;
+    if(idCache[name]!==undefined) return idCache[name];
+    try{
+      var r=await fetch("https://esi.evetech.net/latest/universe/ids/",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify([name])});
+      if(!r.ok){ idCache[name]=null; return null; }
+      var o=await r.json();
+      var t=(o&&o.inventory_types&&o.inventory_types[0])||null;
+      idCache[name]=t?t.id:null;
+      return idCache[name];
+    }catch(e){ idCache[name]=null; return null; }
+  }
+  async function allAssets(cid){
+    if(assets&&assetsFor===cid&&(Date.now()-assetsAt)<600000) return assets;
+    var out=[], page=1;
+    while(page<=25){
+      var d=await esi("/characters/"+cid+"/assets/?page="+page);
+      if(!d||!d.length) break;
+      out=out.concat(d);
+      if(d.length<1000) break;
+      page++;
+    }
+    assets=out; assetsFor=cid; assetsAt=Date.now();
+    return out;
+  }
+  function host(){
+    var q=$("rp-qty"); if(!q) return null;
+    var d=$("rp-own");
+    if(!d){ d=document.createElement("div"); d.id="rp-own"; var sec=q.closest("section")||q.parentElement.parentElement; sec.appendChild(d); }
+    return d;
+  }
+  async function paint(){
+    var d=host(); if(!d) return;
+    if(!(EVEAPI.loggedIn&&EVEAPI.loggedIn())) { if(d.textContent){ d.textContent=""; } return; }
+    var ch=(EVEAPI.getChar&&EVEAPI.getChar())||null; if(!ch||!ch.id) return;
+    var nm=($("rp-search")||{}).value||"";
+    if(!nm.trim()){ if(d.textContent){ d.textContent=""; lastKey=""; } return; }
+    var tid=await typeId(nm);
+    if(!tid){ var m1="Could not match \u201c"+nm+"\u201d to an item."; if(d.textContent!==m1) d.textContent=m1; return; }
+    var list=await allAssets(ch.id);
+    if(!list||!list.length){ return; }
+    var byId={}; list.forEach(function(a){ byId[a.item_id]=a; });
+    function rootLoc(a){ var cur=a,n=0; while(n++<40){ var p=byId[cur.location_id]; if(!p) return cur.location_id; cur=p; } return cur.location_id; }
+    var total=0, per={};
+    list.forEach(function(a){
+      if(a.type_id!==tid) return;
+      var q=a.quantity||1; total+=q;
+      var l=rootLoc(a); per[l]=(per[l]||0)+q;
+    });
+    var key=tid+"|"+total;
+    if(key===lastKey) return;
+    lastKey=key;
+    if(!total){ d.innerHTML="You hold none of this item."; return; }
+    var locs=Object.keys(per).sort(function(a,b){ return per[b]-per[a]; });
+    await Promise.all(locs.slice(0,8).map(function(l){ return (Number(l)>=30000000&&Number(l)<32000000)?null:(window.EVESTRUCT?window.EVESTRUCT.resolve(l):null); }));
+    var parts=locs.slice(0,4).map(function(l){
+      var nmx=(window.EVESTRUCT&&window.EVESTRUCT.name(l))||("location "+l);
+      return per[l].toLocaleString()+" at "+nmx;
+    });
+    var extra=locs.length>4?(" +"+(locs.length-4)+" more"):"";
+    d.innerHTML="You hold <b>"+total.toLocaleString()+"</b> \u2014 "+parts.join(" \u00b7 ")+extra+". <span id=rp-own-use>use "+total.toLocaleString()+"</span>";
+    var u=$("rp-own-use");
+    if(u) u.addEventListener("click",function(){
+      var q=$("rp-qty"); if(!q) return;
+      q.value=total;
+      q.dispatchEvent(new Event("input",{bubbles:true}));
+      q.dispatchEvent(new Event("change",{bubbles:true}));
+      var rf=$("rp-refresh"); if(rf) rf.click();
+    });
+  }
+  function tick(){ var t=$("tab-repro"); if(!t||t.offsetParent===null) return; paint(); }
+  setTimeout(tick,2000);
+  setInterval(tick,3000);
+  document.addEventListener("input",function(e){ if(e.target&&e.target.id==="rp-search"){ lastKey=""; setTimeout(paint,700); } },true);
+})();
+</script>
+
+<script>/* Ore rate from ledger v1 */
+(function(){
+  var led=null, ledFor=null, ledAt=0, vol={}, lastKey="", hoursKey="eveMineHrsV1";
+  function $(id){ return document.getElementById(id); }
+  async function esi(p){ try{ var r=await EVEAPI.esi(p); return (r&&r.data)?r.data:r; }catch(e){ return null; } }
+  function hours(){ var v=parseFloat(localStorage.getItem(hoursKey)); return (v>0&&v<24)?v:2; }
+  function setHours(v){ try{ localStorage.setItem(hoursKey,String(v)); }catch(e){} }
+  async function ledger(cid){
+    if(led&&ledFor===cid&&(Date.now()-ledAt)<900000) return led;
+    var out=[], page=1;
+    while(page<=10){
+      var d=await esi("/characters/"+cid+"/mining/?page="+page);
+      if(!d||!d.length) break;
+      out=out.concat(d);
+      if(d.length<1000) break;
+      page++;
+    }
+    led=out; ledFor=cid; ledAt=Date.now();
+    return out;
+  }
+  async function volumeOf(tid){
+    if(vol[tid]!==undefined) return vol[tid];
+    try{
+      var r=await fetch("https://esi.evetech.net/latest/universe/types/"+tid+"/");
+      if(!r.ok){ vol[tid]=null; return null; }
+      var o=await r.json();
+      vol[tid]=(o&&typeof o.volume==="number")?o.volume:null;
+      return vol[tid];
+    }catch(e){ vol[tid]=null; return null; }
+  }
+  function host(){
+    var r=$("os-rate"); if(!r) return null;
+    var d=$("os-led");
+    if(!d){ d=document.createElement("div"); d.id="os-led"; var sec=r.closest("section")||r.parentElement.parentElement; sec.appendChild(d); }
+    return d;
+  }
+  async function paint(){
+    var d=host(); if(!d) return;
+    if(!(EVEAPI.loggedIn&&EVEAPI.loggedIn())){
+      var m0="Connect a character to use your own mining ledger instead of the ship presets.";
+      if(d.textContent!==m0) d.textContent=m0;
+      return;
+    }
+    var ch=(EVEAPI.getChar&&EVEAPI.getChar())||null; if(!ch||!ch.id) return;
+    var rows=await ledger(ch.id);
+    if(rows===null){ var m1="Mining ledger not available \u2014 sign in again to grant the mining permission."; if(d.textContent!==m1) d.textContent=m1; return; }
+    var since=Date.now()-2592000000;
+    var days={}, byType={};
+    rows.forEach(function(r){
+      var ts=Date.parse(r.date);
+      if(!(ts>=since)) return;
+      days[r.date]=1;
+      byType[r.type_id]=(byType[r.type_id]||0)+(r.quantity||0);
+    });
+    var tids=Object.keys(byType);
+    if(!tids.length){ var m2="No mining recorded in the last 30 days \u2014 the ship presets are your best estimate."; if(d.textContent!==m2) d.textContent=m2; return; }
+    await Promise.all(tids.slice(0,40).map(function(t){ return volumeOf(t); }));
+    var m3=0, unpriced=0;
+    tids.forEach(function(t){ var v=vol[t]; if(v==null){ unpriced++; return; } m3+=v*byType[t]; });
+    var nDays=Object.keys(days).length;
+    var hrs=hours();
+    var perDay=nDays?(m3/nDays):0;
+    var perHour=hrs>0?(perDay/hrs):0;
+    var key=Math.round(m3)+"|"+nDays+"|"+hrs;
+    if(key===lastKey) return;
+    lastKey=key;
+    function big(n){ if(n>=1e9) return (n/1e9).toFixed(2)+"B"; if(n>=1e6) return (n/1e6).toFixed(2)+"M"; if(n>=1e3) return (n/1e3).toFixed(1)+"k"; return Math.round(n).toString(); }
+    var txt="Your ledger: <b>"+big(m3)+" m\u00b3</b> mined across <b>"+nDays+"</b> active day"+(nDays===1?"":"s")+" in the last 30 \u2014 "+big(perDay)+" m\u00b3 per active day.";
+    txt+="<br>The ledger records daily totals, not time spent, so hours are yours to set: <input id=os-hrs type=number step=0.5 min=0.5 max=23 value="+hrs+"> h/day \u2192 <b>"+big(perHour)+" m\u00b3/hr</b> <span id=os-led-use>use this rate</span>";
+    if(unpriced) txt+="<br>"+unpriced+" ore type"+(unpriced===1?"":"s")+" had no volume data and were skipped.";
+    d.innerHTML=txt;
+    var h=$("os-hrs");
+    if(h) h.addEventListener("change",function(){ var v=parseFloat(this.value); if(v>0){ setHours(v); lastKey=""; paint(); } });
+    var u=$("os-led-use");
+    if(u) u.addEventListener("click",function(){
+      var r=$("os-rate"); if(!r) return;
+      r.value=Math.round(perHour);
+      var sh=$("os-ship");
+      if(sh){ var c=[].slice.call(sh.options).find(function(o){ return /custom/i.test(o.textContent); }); if(c){ sh.value=c.value; sh.dispatchEvent(new Event("change",{bubbles:true})); } }
+      r.value=Math.round(perHour);
+      r.dispatchEvent(new Event("input",{bubbles:true}));
+      r.dispatchEvent(new Event("change",{bubbles:true}));
+      var go=$("os-go"); if(go) go.click();
+    });
+  }
+  function tick(){ var t=$("tab-ore"); if(!t||t.offsetParent===null) return; paint(); }
+  setTimeout(tick,2200);
+  setInterval(tick,3500);
+})();
+</script>
 </body>
 </html>
 
