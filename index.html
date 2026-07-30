@@ -6573,7 +6573,9 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     var go=document.getElementById("ci-go"), out=document.getElementById("ci-out");
     var home=document.getElementById("ci-home"), mf=document.getElementById("mf-sys");
     if(!go) return;
+    var HUBSYS={jita:"Jita",amarr:"Amarr",dodixie:"Dodixie",rens:"Rens",hek:"Hek"};
     var mfv=mf?(mf.value||"").trim():"";
+    if(!mfv){ var hb=document.getElementById("hub"); if(hb&&HUBSYS[hb.value]) mfv=HUBSYS[hb.value]; }
     if(home&&mfv){
       var cur=(home.value||"").trim();
       if(!cur||cur===lastSynced){ home.value=mfv; lastSynced=mfv; }
