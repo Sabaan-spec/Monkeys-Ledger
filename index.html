@@ -6568,13 +6568,20 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     fn.__cheapWrap=1;
     window.switchTab=fn;
   }
-  var ranOnce=false;
+  var lastKey=null, lastSynced=null;
   function autorun(){
-    if(ranOnce) return;
     var go=document.getElementById("ci-go"), out=document.getElementById("ci-out");
+    var home=document.getElementById("ci-home"), mf=document.getElementById("mf-sys");
     if(!go) return;
-    if(out&&out.textContent.trim().length>0){ ranOnce=true; return; }
-    ranOnce=true;
+    var mfv=mf?(mf.value||"").trim():"";
+    if(home&&mfv){
+      var cur=(home.value||"").trim();
+      if(!cur||cur===lastSynced){ home.value=mfv; lastSynced=mfv; }
+    }
+    var key=(home?(home.value||"").trim():"")+"|"+mfv;
+    if(key===lastKey) return;
+    if(lastKey===null&&out&&out.textContent.trim().length>0){ lastKey=key; return; }
+    lastKey=key;
     setTimeout(function(){ try{ go.click(); }catch(e){} },250);
   }
   function normalize(){
@@ -6598,6 +6605,74 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 </script>
 
 <style>#eve-fmt-toggle{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border:1px solid var(--border);border-radius:2px;color:var(--muted);font-size:12px;cursor:pointer;transition:color .12s ease,border-color .12s ease}#eve-fmt-toggle::after{content:"\2194\00a0 click to switch";opacity:.7}#eve-fmt-toggle:hover{color:var(--text);border-color:var(--accent-dim)}</style>
+
+<style>
+#tab-err-host{margin:0 0 12px}
+.tab-err{border:1px solid var(--bad);border-left-width:3px;border-radius:2px;background:rgba(232,116,107,.08);padding:10px 12px;font-size:13px;color:var(--text);display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.tab-err b{color:var(--bad)}
+.tab-err .msg{color:var(--muted);font-size:12px;flex:1 1 100%;word-break:break-word}
+.tab-err button{background:none;border:1px solid var(--border);color:var(--text);border-radius:2px;padding:4px 10px;font-size:12px;font-family:inherit;cursor:pointer}
+.tab-err button:hover{border-color:var(--accent-dim)}
+</style>
+<script>/* Tab error isolation v1 */
+(function(){
+  var MAXPER=1, shown={}, lastAt=0;
+  function activeTabId(){
+    var nav=document.querySelector("nav.tabs"); if(!nav) return null;
+    var r=null;
+    [].slice.call(nav.querySelectorAll("button.tab[data-tab]")).forEach(function(b){ if(/\bactive\b/.test(b.className)) r=b.getAttribute("data-tab"); });
+    return r;
+  }
+  function visiblePanel(){
+    var list=[].slice.call(document.querySelectorAll("[id^=tab-]"));
+    for(var i=0;i<list.length;i++){
+      var e=list[i];
+      if(e.id==="tab-err-host") continue;
+      if(e.offsetParent!==null) return e;
+    }
+    return null;
+  }
+  function retry(id){
+    try{
+      if(typeof window.switchTab==="function"){
+        var other=(id==="calc")?"tree":"calc";
+        window.switchTab(other);
+        setTimeout(function(){ window.switchTab(id); },60);
+      } else { location.reload(); }
+    }catch(e){ location.reload(); }
+  }
+  function report(msg){
+    var now=Date.now();
+    if(now-lastAt<1500) return;
+    lastAt=now;
+    var p=visiblePanel(); if(!p) return;
+    var id=activeTabId()||"this tab";
+    shown[id]=(shown[id]||0)+1;
+    if(shown[id]>MAXPER) return;
+    var box=document.createElement("div");
+    box.className="tab-err";
+    box.innerHTML='<span><b>This panel hit an error.</b> Some of it may be missing or out of date.</span>'+
+      '<span style="flex:1"></span>'+'<button data-act=retry>Retry</button><button data-act=hide>Dismiss</button>'+'<span class=msg></span>';
+    box.querySelector(".msg").textContent=String(msg||"").slice(0,220);
+    box.querySelector("[data-act=retry]").addEventListener("click",function(){ shown[id]=0; box.remove(); retry(activeTabId()); });
+    box.querySelector("[data-act=hide]").addEventListener("click",function(){ box.remove(); });
+    p.insertBefore(box,p.firstChild);
+  }
+  window.addEventListener("error",function(ev){
+    if(ev&&ev.target&&ev.target.tagName&&/^(IMG|LINK|SCRIPT|SOURCE)$/.test(ev.target.tagName)) return;
+    report((ev&&ev.message)||"Script error");
+  },true);
+  window.addEventListener("unhandledrejection",function(ev){
+    var r=ev&&ev.reason;
+    report((r&&(r.message||r))||"Unhandled promise rejection");
+  });
+  var origSwitch=null;
+  setInterval(function(){
+    if(typeof window.switchTab==="function"&&window.switchTab!==origSwitch){ origSwitch=window.switchTab; shown={}; }
+  },1000);
+  window.__tabErr=report;
+})();
+</script>
 </body>
 </html>
 
