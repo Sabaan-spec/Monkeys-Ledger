@@ -6724,6 +6724,105 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   setInterval(run,900);
 })();
 </script>
+
+<style>
+#rp-sso{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin:10px 0 4px}
+#rp-sso label{display:flex;flex-direction:column;gap:4px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+#rp-sso select,#rp-sso input{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:9px 11px;font-family:inherit;font-size:14px}
+#rp-sso input{width:96px}
+#rp-why{flex:1 1 100%;font-size:12px;color:var(--muted);line-height:1.5}
+</style>
+<script>/* Reprocess yield from skills v1 */
+(function(){
+  var SK_REP=3385, SK_EFF=3389;
+  var ORES=["Veldspar","Scordite","Pyroxeres","Plagioclase","Omber","Kernite","Jaspet","Hemorphite","Hedbergite","Gneiss","Dark Ochre","Spodumain","Crokite","Bistot","Arkonor","Mercoxit"];
+  var skills=null, skillFor=null, nameCache=null;
+  function $(id){ return document.getElementById(id); }
+  async function esi(p){ try{ var r=await EVEAPI.esi(p); return (r&&r.data)?r.data:r; }catch(e){ return null; } }
+  async function loadSkills(){
+    var ch=(EVEAPI.getChar&&EVEAPI.getChar())||null;
+    if(!ch||!ch.id) return null;
+    if(skills&&skillFor===ch.id) return skills;
+    var d=await esi("/characters/"+ch.id+"/skills/");
+    var arr=(d&&d.skills)||null;
+    if(!arr) return null;
+    var m={};
+    arr.forEach(function(s){ m[s.skill_id]=(s.active_skill_level!=null?s.active_skill_level:s.trained_skill_level)||0; });
+    skillFor=ch.id; skills=m;
+    if(!nameCache){ try{ nameCache=await EVEAPI.names(Object.keys(m).map(Number))||{}; }catch(e){ nameCache={}; } }
+    return skills;
+  }
+  function oreFamily(txt){
+    var s=String(txt||"").toLowerCase();
+    for(var i=0;i<ORES.length;i++){ if(s.indexOf(ORES[i].toLowerCase())>=0) return ORES[i]; }
+    if(/ice|glacial|icicle|white glaze|blue ice|glare crust|dark glitter|gelidus|krystallos/.test(s)) return "Ice";
+    return null;
+  }
+  function specificLevel(fam){
+    if(!fam||!skills||!nameCache) return null;
+    var want=(fam==="Ice"?"ice processing":(fam.toLowerCase()+" processing"));
+    var lvl=null;
+    Object.keys(skills).forEach(function(id){ if(String(nameCache[id]||"").toLowerCase()===want) lvl=skills[id]; });
+    return lvl;
+  }
+  function ui(){
+    var y=$("rp-yield"); if(!y) return null;
+    var box=$("rp-sso");
+    if(!box){
+      box=document.createElement("div"); box.id="rp-sso";
+      box.innerHTML="<label>Facility<select id=rp-fac><option value=50>NPC station (50%)</option><option value=custom>Structure \u2014 set base</option></select></label>"+
+        "<label>Base %<input id=rp-base type=number step=0.1 value=50></label>"+
+        "<label>Implant<select id=rp-imp><option value=0>None</option><option value=1>RX-801 (+1%)</option><option value=2>RX-802 (+2%)</option><option value=4>RX-804 (+4%)</option></select></label>"+
+        "<div id=rp-why></div>";
+      var host=y.closest("section")||y.parentElement.parentElement;
+      host.appendChild(box);
+      $("rp-fac").addEventListener("change",function(){ var c=this.value==="custom"; $("rp-base").disabled=!c; if(!c) $("rp-base").value=this.value; recalc(); });
+      $("rp-base").addEventListener("input",recalc);
+      $("rp-imp").addEventListener("change",recalc);
+      $("rp-base").disabled=true;
+    }
+    return box;
+  }
+  async function recalc(){
+    if(!ui()) return;
+    var why=$("rp-why"), y=$("rp-yield");
+    if(!(EVEAPI.loggedIn&&EVEAPI.loggedIn())){
+      var m0="Connect a character to compute yield from your actual skills.";
+      if(why&&why.textContent!==m0) why.textContent=m0;
+      return;
+    }
+    var sk=await loadSkills();
+    if(!sk){ if(why) why.textContent="Could not read your skills."; return; }
+    var base=parseFloat(($("rp-base")||{}).value); if(!(base>0)) base=50;
+    var imp=parseFloat(($("rp-imp")||{}).value)||0;
+    var rep=sk[SK_REP]||0, eff=sk[SK_EFF]||0;
+    var srch=$("rp-search");
+    var fam=oreFamily(srch?srch.value:"");
+    var spec=specificLevel(fam);
+    var out=base*(1+0.03*rep)*(1+0.02*eff)*(1+0.02*(spec||0))*(1+imp/100);
+    if(out>100) out=100;
+    var rounded=Math.round(out*100)/100;
+    if(y&&Math.abs(parseFloat(y.value)-rounded)>0.005){
+      y.value=rounded;
+      y.dispatchEvent(new Event("input",{bubbles:true}));
+      y.dispatchEvent(new Event("change",{bubbles:true}));
+      var rf=$("rp-refresh"); if(rf) rf.click();
+    }
+    var bits=[base.toFixed(1)+"% base","Reprocessing "+rep,"Reprocessing Efficiency "+eff];
+    if(fam&&spec!=null){ bits.push(fam+" Processing "+spec); }
+    else if(fam){ bits.push("no "+fam+" Processing trained"); }
+    if(imp){ bits.push("implant +"+imp+"%"); }
+    var txt=bits.join(" \u00b7 ")+" = "+rounded.toFixed(2)+"% yield";
+    if(!fam){ txt+="  \u2014 pick an ore or ice to include its specific skill"; }
+    if(why&&why.textContent!==txt) why.textContent=txt;
+  }
+  function tick(){ var t=$("tab-repro"); if(!t||t.offsetParent===null) return; recalc(); }
+  setTimeout(tick,1500);
+  setInterval(tick,2500);
+  document.addEventListener("change",function(e){ if(e.target&&e.target.id==="rp-search") setTimeout(recalc,200); },true);
+  document.addEventListener("input",function(e){ if(e.target&&e.target.id==="rp-search") setTimeout(recalc,600); },true);
+})();
+</script>
 </body>
 </html>
 
