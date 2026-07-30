@@ -6677,6 +6677,53 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 </script>
 
 <style>#acc-topbar{display:flex!important;flex-wrap:wrap;align-items:center;gap:8px;column-span:all;margin:0 0 12px}#acc-tools{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}#acc-topbar button{margin:0;flex:0 0 auto}#acc-asof,#acc-corpline{color:var(--muted);font-size:12px}#acc-topbar>span:not(#acc-tools){display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}</style>
+
+<style>
+#acc-toolbar{display:flex!important;flex-wrap:wrap;align-items:center;gap:8px;column-span:all;margin:0 0 12px;position:relative}
+#acc-toolbar>*{margin:0!important;position:static!important;float:none!important;flex:0 0 auto}
+#acc-toolbar .acc-meta{color:var(--muted);font-size:12px;display:inline-flex;align-items:center;gap:8px}
+</style>
+<script>/* Account toolbar v1 */
+(function(){
+  var WANT=[/collapse all/i,/expand all/i,/refresh all/i];
+  function host(){
+    var t=document.getElementById("tab-sso"); if(!t) return null;
+    var d=document.getElementById("acc-toolbar");
+    if(!d){ d=document.createElement("div"); d.id="acc-toolbar"; t.insertBefore(d,t.firstChild); }
+    else if(d.parentElement!==t||t.firstChild!==d){ t.insertBefore(d,t.firstChild); }
+    return d;
+  }
+  function tidy(b){
+    b.style.margin="0";
+    b.style.position="static";
+    b.style.top=""; b.style.left=""; b.style.right=""; b.style.bottom="";
+    b.style.float="none";
+  }
+  function run(){
+    var t=document.getElementById("tab-sso");
+    if(!t||t.offsetParent===null) return;
+    var d=host(); if(!d) return;
+    var all=[].slice.call(t.querySelectorAll("button"));
+    WANT.forEach(function(rx){
+      var hit=null;
+      for(var i=0;i<all.length;i++){ if(rx.test(all[i].textContent||"")){ hit=all[i]; break; } }
+      if(!hit) return;
+      tidy(hit);
+      if(hit.parentElement!==d) d.appendChild(hit);
+    });
+    var order=[].slice.call(d.children);
+    var sorted=order.slice().sort(function(a,b){
+      function rank(e){ for(var i=0;i<WANT.length;i++){ if(WANT[i].test(e.textContent||"")) return i; } return 99; }
+      return rank(a)-rank(b);
+    });
+    for(var k=0;k<sorted.length;k++){ if(d.children[k]!==sorted[k]) d.appendChild(sorted[k]); }
+    var tb=document.getElementById("acc-topbar");
+    if(tb&&!tb.querySelector("button")&&!tb.textContent.trim()){ tb.style.display="none"; }
+  }
+  setTimeout(run,800);
+  setInterval(run,900);
+})();
+</script>
 </body>
 </html>
 
