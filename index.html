@@ -6065,7 +6065,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       var grand=0; keys.forEach(function(k){ grand+=bySys[k].total; });
       var body="";
       body+="<div style=\"font-size:20px;font-weight:700\">"+isk(grand)+" ISK</div>";
-      body+="<div class=\"muted small\">across "+keys.length+" system"+(keys.length===1?"":"s")+" \u00b7 priced at "+esc(hub)+" sell</div>";
+      body+="<div class=\"muted small\">across "+keys.length+" system"+(keys.length===1?"":"s")+" \u00b7 cheapest sell in the "+esc(hub)+" region</div>";
       body+="<div style=\"margin-top:8px;max-height:330px;overflow-y:auto;overflow-x:hidden\">";
       keys.forEach(function(k){
         var g=bySys[k];
@@ -7432,14 +7432,11 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   }
   async function fuzz(region,ids){
     var px={};
-    for(var i=0;i<ids.length;i+=200){
-      try{
-        var r=await fetch("https://market.fuzzwork.co.uk/aggregates/?region="+region+"&types="+ids.slice(i,i+200).join(","));
-        if(!r.ok) continue;
-        var o=await r.json();
-        for(var k in o){ var s=o[k]&&o[k].sell; if(!s) continue; var v=parseFloat(s.percentile); if(!(v>0)) v=parseFloat(s.min); if(v>0) px[k]=v; }
-      }catch(e){}
-    }
+    var STN={10000002:60003760,10000043:60008494,10000032:60011866,10000030:60004588,10000042:60005686};
+    var stn=String(STN[region]||60003760);
+    await Promise.all(ids.map(async function(id){
+      try{ var b=await window.EVEMKT.best(stn,Number(id)); if(b&&b.sell>0) px[id]=b.sell; }catch(e){}
+    }));
     return px;
   }
   function table(title,rows,px,bpOk){
@@ -7492,7 +7489,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         var hrs=(Math.max.apply(null,times)-Math.min.apply(null,times))/3600000;
         span=" over the last "+(hrs<1?Math.round(hrs*60)+" minutes":hrs.toFixed(1)+" hours");
       }
-      var msg=z.length+" recent kills"+span+", priced at "+esc(hub)+" sell. Cargo is excluded \u2014 only fitted slots, rigs and subsystems count.";
+      var msg=z.length+" recent kills"+span+", priced at the cheapest order in "+esc(hub)+" itself. Cargo is excluded \u2014 only fitted slots, rigs and subsystems count.";
       if(!bpOk) msg+=" Connect a character to see which of these you hold blueprints for.";
       msg+=" <span id=kd-run>refresh</span>";
       if(note) note.innerHTML=msg;
@@ -8172,15 +8169,11 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   }
   async function prices(ids){
     var px={}, hub=($("hub")||{}).value||"jita";
-    var REG={jita:10000002,amarr:10000043,dodixie:10000032,rens:10000030,hek:10000042};
-    for(var i=0;i<ids.length;i+=200){
-      try{
-        var r=await fetch("https://market.fuzzwork.co.uk/aggregates/?region="+(REG[hub]||10000002)+"&types="+ids.slice(i,i+200).join(","));
-        if(!r.ok) continue;
-        var o=await r.json();
-        for(var k in o){ var s=o[k]&&o[k].sell; if(!s) continue; var v=parseFloat(s.percentile); if(!(v>0)) v=parseFloat(s.min); if(v>0) px[k]=v; }
-      }catch(e){}
-    }
+    var STN={jita:60003760,amarr:60008494,dodixie:60011866,rens:60004588,hek:60005686};
+    var stn=String(STN[hub]||60003760);
+    await Promise.all(ids.map(async function(id){
+      try{ var b=await window.EVEMKT.best(stn,Number(id)); if(b&&b.sell>0) px[id]=b.sell; }catch(e){}
+    }));
     return px;
   }
   function clusters(rows){
