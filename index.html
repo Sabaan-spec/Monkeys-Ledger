@@ -6139,8 +6139,14 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     var k=region+":"+typeId;
     var c=rCache[k];
     if(c&&(Date.now()-c.ts)<REG_TTL) return c.orders;
-    var d=await pub("/markets/"+region+"/orders/?order_type=all&type_id="+typeId);
-    var out=d||[];
+    var out=[], page=1;
+    while(page<=6){
+      var d=await pub("/markets/"+region+"/orders/?order_type=all&type_id="+typeId+"&page="+page);
+      if(!d||!d.length) break;
+      out=out.concat(d);
+      if(d.length<1000) break;
+      page++;
+    }
     rCache[k]={ts:Date.now(),orders:out};
     return out;
   }
@@ -7127,16 +7133,31 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     if(hub) locName=hub[1];
     else if(window.EVESTRUCT){ try{ var rec=await window.EVESTRUCT.resolve(locId); if(rec&&rec.name) locName=rec.name; }catch(e){} }
     watches.push({id:Date.now()+"-"+Math.random().toString(36).slice(2,7),typeId:t.id,name:t.name,locId:String(locId),locName:locName,rule:rule,target:(rule==="undercut"?null:target),last:null,firedAt:0});
-    save(); render(); msg("Watching "+t.name+" at "+locName+".");
+    save(); render(); msg("Watching "+t.name+" at "+locName+"\u2026 checking for orders.");
+    (async function(){ try{ var b=await window.EVEMKT.best(String(locId),t.id); if(!b||b.sell==null){ msg("Added, but no sell orders for "+t.name+" were found at "+locName+" \u2014 check the item name and location. Type ID "+t.id+"."); } else { msg("Watching "+t.name+" at "+locName+" \u2014 current sell "+isk(b.sell)+"."); } }catch(e){} })();
     var ii=$("sc-item"); if(ii) ii.value="";
     poll(true);
   }
   function remove(id){ watches=watches.filter(function(w){ return w.id!==id; }); save(); render(); }
-  function ruleText(w){
-    if(w.rule==="below") return "sell < "+isk(w.target);
-    if(w.rule==="above") return "sell > "+isk(w.target);
-    if(w.rule==="cost") return "sell < cost "+isk(w.target);
-    return "undercut on my order";
+  function ruleMeta(w){
+    if(w.rule==="below") return {arrow:"\u25bc",label:"Drops below",cls:"sc-buy",dir:-1};
+    if(w.rule==="above") return {arrow:"\u25b2",label:"Rises above",cls:"sc-sell",dir:1};
+    if(w.rule==="cost") return {arrow:"\u25bc",label:"Under build cost",cls:"sc-cost",dir:-1};
+    return {arrow:"\u2694",label:"Undercut on my order",cls:"sc-under",dir:0};
+  }
+  function gapText(w,m){
+    if(m.dir===0||w.target==null||w.last==null) return "\u2014";
+    var diff=(m.dir<0)?(w.last-w.target):(w.target-w.last);
+    if(diff<=0) return "<span class=sc-hit>condition met</span>";
+    var pct=w.target>0?(100*diff/w.target):0;
+    return "needs "+(m.dir<0?"\u2212":"+")+isk(diff)+" <span class=sc-wait>("+pct.toFixed(1)+"%)</span>";
+  }
+  function agoText(ts){
+    if(!ts) return "\u2014";
+    var s=Math.round((Date.now()-ts)/1000);
+    if(s<60) return s+"s ago";
+    if(s<3600) return Math.floor(s/60)+"m ago";
+    return Math.floor(s/3600)+"h ago";
   }
   function render(){
     var p=panel(); if(!p) return;
@@ -7144,10 +7165,23 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     if(!watches.length){ host.innerHTML="<div class=sc-wait style=\"margin-top:8px\">No watches yet. Add one above.</div>"; }
     else{
       var rows=watches.map(function(w){
-        var state=w.hit?"<span class=sc-hit>HIT</span>":"<span class=sc-wait>watching</span>";
-        return "<tr><td>"+esc(w.name)+"</td><td>"+esc(w.locName)+"</td><td>"+esc(ruleText(w))+"</td><td>"+isk(w.last)+"</td><td>"+state+"</td><td><span class=sc-x data-id=\""+w.id+"\">remove</span></td></tr>";
+        var m=ruleMeta(w);
+        var state=w.hit?"<span class=sc-hit>ALERT</span>":"<span class=sc-wait>watching</span>";
+        var tgt=(w.target==null)?"<span class=sc-wait>n/a</span>":isk(w.target);
+        var noData=(w.checkedAt&&w.last==null);
+        if(noData) state="<span class=sc-none>no orders found</span>";
+        return "<tr class=\""+m.cls+"\">"+
+          "<td><b>"+esc(w.name)+"</b></td>"+
+          "<td>"+esc(w.locName)+"</td>"+
+          "<td class=sc-dir><span class=sc-arrow>"+m.arrow+"</span> "+esc(m.label)+"</td>"+
+          "<td class=num>"+tgt+"</td>"+
+          "<td class=num>"+(noData?"<span class=sc-none>none</span>":isk(w.last))+"</td>"+
+          "<td>"+gapText(w,m)+"</td>"+
+          "<td>"+state+"</td>"+
+          "<td class=sc-wait>"+agoText(w.checkedAt)+"</td>"+
+          "<td><span class=sc-x data-id=\""+w.id+"\">remove</span></td></tr>";
       }).join("");
-      host.innerHTML="<table><thead><tr><th>Item</th><th>Location</th><th>Condition</th><th>Current sell</th><th>Status</th><th></th></tr></thead><tbody>"+rows+"</tbody></table>";
+      host.innerHTML="<table><thead><tr><th>Item</th><th>Location</th><th>Alert when</th><th>Target</th><th>Current sell</th><th>Gap to target</th><th>Status</th><th>Checked</th><th></th></tr></thead><tbody>"+rows+"</tbody></table>";
       [].slice.call(host.querySelectorAll(".sc-x")).forEach(function(x){ x.addEventListener("click",function(){ remove(this.getAttribute("data-id")); }); });
     }
     var lg=$("sc-log");
@@ -7173,7 +7207,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
         var b=null;
         try{ b=await window.EVEMKT.best(w.locId,w.typeId); }catch(e){ b=null; }
         if(!b){ continue; }
-        w.last=b.sell;
+        w.last=b.sell; w.checkedAt=Date.now();
         w.hit=false;
         if(w.rule==="below"&&b.sell!=null&&b.sell<w.target){ w.hit=true; fire(w,w.name+" is "+isk(b.sell)+" at "+w.locName+" (below "+isk(w.target)+")"); }
         else if(w.rule==="above"&&b.sell!=null&&b.sell>w.target){ w.hit=true; fire(w,w.name+" is "+isk(b.sell)+" at "+w.locName+" (above "+isk(w.target)+")"); }
@@ -7254,6 +7288,10 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 </script>
 
 <style>#sc-status{font-size:12px;color:var(--muted);margin:2px 0 12px;letter-spacing:.02em}</style>
+
+<style>#tab-scan tr.sc-buy td:first-child{box-shadow:inset 3px 0 0 var(--good)}#tab-scan tr.sc-sell td:first-child{box-shadow:inset 3px 0 0 var(--accent)}#tab-scan tr.sc-cost td:first-child{box-shadow:inset 3px 0 0 var(--warn)}#tab-scan tr.sc-under td:first-child{box-shadow:inset 3px 0 0 var(--bad)}#tab-scan tr.sc-buy .sc-arrow{color:var(--good)}#tab-scan tr.sc-sell .sc-arrow{color:var(--accent)}#tab-scan tr.sc-cost .sc-arrow{color:var(--warn)}#tab-scan tr.sc-under .sc-arrow{color:var(--bad)}#tab-scan .sc-dir{white-space:nowrap}#tab-scan td.num{text-align:right;font-variant-numeric:tabular-nums}#tab-scan th{white-space:nowrap}</style>
+
+<style>#tab-scan .sc-none{color:var(--bad);opacity:.85}</style>
 </body>
 </html>
 
