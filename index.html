@@ -2520,7 +2520,18 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 
     function short(n){try{return iskShort(n);}catch(e){return Math.round(n).toLocaleString();}}
     function money(n){try{return isk(Math.round(n));}catch(e){return Math.round(n).toLocaleString()+' ISK';}}
-    function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26)return 'mid'; if(flag>=11&&flag<=18)return 'low'; if(flag>=92&&flag<=94)return 'rig'; if(flag>=125&&flag<=132)return 'sub'; if(flag===87)return 'drone'; return null; }
+    var __chargeSet=null;
+function isChargeType(tid){
+  if(__chargeSet===null){
+    __chargeSet={};
+    try{
+      var __idx=JSON.parse(localStorage.getItem("eveCatIdxV1")||"null");
+      if(__idx&&__idx.groups) __idx.groups.forEach(function(g){ if(g.cat===8) (g.types||[]).forEach(function(t){ __chargeSet[t]=1; }); });
+    }catch(e){}
+  }
+  return !!__chargeSet[tid];
+}
+function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26)return 'mid'; if(flag>=11&&flag<=18)return 'low'; if(flag>=92&&flag<=94)return 'rig'; if(flag>=125&&flag<=132)return 'sub'; if(flag===87)return 'drone'; return null; }
     var CATS=[['high','High slots','hi'],['mid','Mid slots','med'],['low','Low slots','low'],['rig','Rigs','rig'],['sub','Subsystems','sub']];
 
     var FACTION=/\b(Caldari Navy|Imperial Navy|Federation Navy|Republic Fleet|Dread Guristas|True Sansha|Shadow Serpentis|Dark Blood|Domination|Khanid Navy|Ammatar Navy|Sisters|Syndicate|Guristas|Sansha|Serpentis|Blood Raider|Angel|Thukker|Mordu)\b/g;
@@ -2607,7 +2618,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       function parse(k){
         var cat={high:[],mid:[],low:[],rig:[],sub:[]}, drones={}, ammo={}, byFlag={};
         k.victim.items.forEach(function(it){
-          var c=catOf(it.flag);
+          var c=catOf(it.flag); if(c&&c!=="ammo"&&c!=="drones"&&isChargeType(it.item_type_id)) c="ammo";
           var q=(it.quantity_destroyed||0)+(it.quantity_dropped||0); if(q<=0)q=1;
           if(c==='drone'){ drones[it.item_type_id]=(drones[it.item_type_id]||0)+q; return; }
           if(!c) return;
