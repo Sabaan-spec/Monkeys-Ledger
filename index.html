@@ -8555,9 +8555,11 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
 }
 </style>
 <style>/* System filter v1 */
-#sf-bar{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin:12px 0 6px;position:relative}
+#sf-bar{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin:10px 0 6px;position:relative}
 #sf-bar label{display:flex;flex-direction:column;gap:4px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
-#sf-sys{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:8px 10px;font-family:inherit;font-size:14px;min-width:200px}
+#sf-loc{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:9px 11px;font-family:inherit;font-size:14px;width:100%;box-sizing:border-box}
+#sf-loc:focus{outline:none;border-color:var(--accent)}
+#sf-sug .sf-k{color:var(--muted);font-size:11px;letter-spacing:.05em;text-transform:uppercase;float:right;margin-left:14px}
 #sf-sug{position:fixed;z-index:9999;background:var(--panel);border:1px solid var(--border);border-radius:2px;max-height:240px;overflow:auto;display:none;min-width:200px;box-shadow:var(--shadow)}
 #sf-sug div{padding:6px 10px;cursor:pointer;font-size:13px;color:var(--text)}
 #sf-sug div:hover{background:var(--accent-dim)}
@@ -8568,25 +8570,25 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
 #sf-help{flex-basis:100%;font-size:12px;color:var(--muted);line-height:1.5;margin-top:-2px}
 #sf-help b{color:var(--text);font-weight:600}
 </style>
-<script>/* System filter v1 */
+<script>/* System filter v2 */
 (function(){
   var LS="eveSysFilterV1", STOCK="eveSysStockV1";
   function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s==null?"":s).replace(/[&<>]/g,function(c){ return c==="&"?"&amp;":(c==="<"?"&lt;":"&gt;"); }); }
   var st={sys:"",sysId:0,on:false};
-  try{ var s=JSON.parse(localStorage.getItem(LS)||"{}"); st.sys=s.sys||""; st.sysId=Number(s.sysId)||0; st.on=!!s.on; }catch(e){}
+  try{ var s0=JSON.parse(localStorage.getItem(LS)||"{}"); st.sys=s0.sys||""; st.sysId=Number(s0.sysId)||0; st.on=!!s0.on; }catch(e){}
   function save(){ try{ localStorage.setItem(LS,JSON.stringify(st)); }catch(e){} }
-  var MAP=null, LIST=null, RNAME=null;
+  var MAP=null, RNAME=null, LOC=null, LOCN=-1, selfSet=false;
   function map(){ if(MAP) return MAP; try{ MAP=(JSON.parse(localStorage.getItem("eveMapV2")||"{}").sys)||{}; }catch(e){ MAP={}; } return MAP; }
-  function list(){ if(LIST) return LIST; var m=map(); LIST=Object.keys(m).map(function(k){ return {id:Number(k),name:String(m[k][2]||""),sec:m[k][0]}; }); return LIST; }
   function rname(){ if(RNAME) return RNAME; RNAME={}; try{ var n=JSON.parse(localStorage.getItem("eveTypeNamesV1")||"{}"); for(var k in n) RNAME[String(n[k]).toUpperCase()]=Number(k); }catch(e){} return RNAME; }
   function status(t,bad){ var e=$("sf-status"); if(e){ e.textContent=t; e.className=bad?"bad":""; } }
   function regionId(){ return (($("mb-region")||{}).value)||""; }
+  function regionName(){ var sel=$("mb-region"); if(!sel||sel.selectedIndex<0) return ""; var o=sel.options[sel.selectedIndex]; return o?o.textContent.replace(/^[^A-Za-z0-9]+/,"").trim():""; }
   function stockKey(){ return regionId()+"|"+st.sysId; }
   function getStock(){ try{ var o=JSON.parse(localStorage.getItem(STOCK)||"{}"); return o[stockKey()]||null; }catch(e){ return null; } }
-  function setStock(ids){ try{ var o=JSON.parse(localStorage.getItem(STOCK)||"{}"); o[stockKey()]={t:Date.now(),ids:ids.join(",")}; var ks=Object.keys(o); if(ks.length>3){ ks.sort(function(a,b){ return o[a].t-o[b].t; }); while(ks.length>3){ delete o[ks.shift()]; } } localStorage.setItem(STOCK,JSON.stringify(o)); }catch(e){ status("Could not save the scan \u2014 storage is full."); } }
-  var stockSet=null;
+  function setStock(ids){ try{ var o=JSON.parse(localStorage.getItem(STOCK)||"{}"); o[stockKey()]={t:Date.now(),ids:ids.join(",")}; var ks=Object.keys(o); if(ks.length>3){ ks.sort(function(a,b){ return o[a].t-o[b].t; }); while(ks.length>3){ delete o[ks.shift()]; } } localStorage.setItem(STOCK,JSON.stringify(o)); }catch(e){ status("Could not save the scan \u2014 browser storage is full.",1); } }
+  var stockSet=null, applying=false, allowed=null, lastKey="", pending=false, slock=0;
   function loadSet(){ var s=getStock(); if(!s){ stockSet=null; return null; } var set={}; s.ids.split(",").forEach(function(x){ if(x) set[x]=1; }); stockSet=set; return set; }
-  var applying=false, allowed=null, lastKey="", pending=false, slock=0;
   function applyTree(){
     var tree=$("mb-tree"); if(!tree) return;
     applying=true;
@@ -8630,7 +8632,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   }
   async function build(region,tid){
     allowed={};
-    if(!region||!tid||!st.sysId) return;
+    if(!region||region==="0"||!tid||!st.sysId) return;
     try{
       var page=1,pages=1,locs={};
       while(page<=pages&&page<=10){
@@ -8665,9 +8667,9 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         var res=filterRows();
         if(scanning||Date.now()<slock){ /* scan owns the status line */ }
         else if(st.on&&st.sysId&&res){
-          var extra=stockSet?"":" \u2014 scan the region to also filter the item list";
-          status(res.shown?(res.shown+" of "+res.total+" orders are in "+st.sys+extra):("No orders for this item in "+st.sys+extra));
-        } else if(!st.on) status("");
+          var extra=stockSet?"":" \u2014 press Scan region for stock to also filter the Browse list";
+          status(res.shown?(res.shown+" of "+res.total+" orders are in "+st.sys+extra):("No orders for this item in "+st.sys+extra),!res.shown);
+        }
       }
     }catch(e){}
     pending=false;
@@ -8676,9 +8678,8 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   async function scan(){
     if(scanning){ cancelFlag=true; return; }
     var region=regionId();
-    if(!region){ status("Pick a region first."); return; }
-    if(!st.sysId) resolveTyped();
-    if(!st.sysId){ status("Pick a system first \u2014 type its name and choose it from the dropdown.",1); return; }
+    if(!region||region==="0"){ status("Pick a single region (not All Regions) before scanning.",1); return; }
+    if(!st.sysId){ status("Pick a system in the box above first \u2014 the scan needs to know which system to look for.",1); return; }
     scanning=true; cancelFlag=false;
     var btn=$("sf-scan"); if(btn) btn.textContent="Cancel scan";
     var base="https://esi.evetech.net/latest/markets/"+region+"/orders/?order_type=sell";
@@ -8705,99 +8706,143 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       else{
         var ids=Object.keys(found);
         setStock(ids); loadSet(); applyTree(); slock=Date.now()+9000;
-        status(ids.length.toLocaleString()+" item types have stock in "+st.sys+". Expand a category on the left \u2014 everything with no stock there is now hidden.");
+        status(ids.length.toLocaleString()+" item types have stock in "+st.sys+". Expand a category on the left \u2014 anything with no stock there is now hidden.");
       }
-    }catch(e){ status("Scan failed \u2014 ESI did not respond."); }
+    }catch(e){ status("Scan failed \u2014 ESI did not respond.",1); }
     scanning=false;
-    var b2=$("sf-scan"); if(b2) b2.textContent="Scan region";
+    var b2=$("sf-scan"); if(b2) b2.textContent="Scan region for stock";
   }
-  function suggest(){
-    var inp=$("sf-sys"), box=$("sf-sug"); if(!inp||!box) return;
+  function locList(){
+    var sel=$("mb-region"); var n=sel?sel.options.length:0;
+    if(LOC&&LOCN===n) return LOC;
+    LOCN=n; LOC=[];
+    if(sel) [].forEach.call(sel.options,function(o){ LOC.push({kind:"r",id:o.value,name:o.textContent.replace(/^[^A-Za-z0-9]+/,"").trim()}); });
+    var m=map();
+    for(var k in m) LOC.push({kind:"s",id:Number(k),name:String(m[k][2]||""),region:m[k][1],sec:m[k][0]});
+    return LOC;
+  }
+  function setLocText(){
+    var inp=$("sf-loc"); if(!inp) return;
+    if(document.activeElement===inp) return;
+    inp.value = (st.on&&st.sys) ? st.sys : regionName();
+  }
+  function sugBox(){
+    var b=$("sf-sug");
+    if(!b){ b=document.createElement("div"); b.id="sf-sug"; document.body.appendChild(b); }
+    return b;
+  }
+  function suggestLoc(){
+    var inp=$("sf-loc"); if(!inp) return;
+    var box=sugBox();
     var q=inp.value.trim().toUpperCase();
-    if(q.length<2){ box.style.display="none"; return; }
-    var all=list();
-    var a=[],b=[];
-    for(var i=0;i<all.length&&a.length+b.length<40;i++){
-      var u=all[i].name.toUpperCase();
-      if(u.indexOf(q)===0) a.push(all[i]);
-      else if(u.indexOf(q)>0) b.push(all[i]);
+    var all=locList(), regs=[], syss=[];
+    for(var i=0;i<all.length;i++){
+      var x=all[i], u=x.name.toUpperCase();
+      var hit = q.length<1 ? (x.kind==="r") : (u.indexOf(q)===0 ? 1 : (u.indexOf(q)>0 ? 2 : 0));
+      if(!hit) continue;
+      if(x.kind==="r"){ if(regs.length<6) regs.push(x); }
+      else if(q.length>=2&&syss.length<8) syss.push(x);
+      if(regs.length>=6&&syss.length>=8) break;
     }
-    var rows=a.concat(b).slice(0,8);
+    var rows=regs.concat(syss).slice(0,12);
     if(!rows.length){ box.style.display="none"; return; }
     box.innerHTML="";
     rows.forEach(function(x){
       var d=document.createElement("div");
-      d.textContent=x.name+"  "+(x.sec/10).toFixed(1);
-      d.addEventListener("mousedown",function(ev){ ev.preventDefault(); pick(x); });
+      d.innerHTML=esc(x.name)+" <span class=sf-k>"+(x.kind==="r"?"region":("system "+(x.sec/10).toFixed(1)))+"</span>";
+      d.addEventListener("mousedown",function(ev){ ev.preventDefault(); pickLoc(x); });
       box.appendChild(d);
     });
     var r=inp.getBoundingClientRect();
     box.style.display="block";
     box.style.left=r.left+"px";
-    box.style.minWidth=r.width+"px";
+    box.style.minWidth=Math.max(220,r.width)+"px";
     var below=window.innerHeight-r.bottom;
-    if(below<160&&r.top>below){ box.style.top=""; box.style.bottom=(window.innerHeight-r.top+4)+"px"; }
+    if(below<180&&r.top>below){ box.style.top=""; box.style.bottom=(window.innerHeight-r.top+4)+"px"; }
     else{ box.style.bottom=""; box.style.top=(r.bottom+4)+"px"; }
   }
+  function setRegion(id){
+    var sel=$("mb-region"); if(!sel||!id&&id!==0) return;
+    var want=String(id), found=false;
+    [].forEach.call(sel.options,function(o){ if(o.value===want) found=true; });
+    if(!found||sel.value===want) return;
+    selfSet=true; sel.value=want;
+    sel.dispatchEvent(new Event("change",{bubbles:true}));
+    setTimeout(function(){ selfSet=false; },50);
+  }
+  function pickLoc(x){
+    var box=$("sf-sug"); if(box) box.style.display="none";
+    if(x.kind==="r"){
+      st.sys=""; st.sysId=0; st.on=false; save();
+      setRegion(x.id);
+      lastKey=""; allowed=null; loadSet(); applyTree(); applyOrders(); setLocText();
+      status(x.name+" \u2014 showing every order in the region.");
+    } else {
+      st.sys=x.name; st.sysId=x.id; st.on=true; save();
+      setRegion(x.region);
+      lastKey=""; allowed=null; loadSet(); applyTree(); applyOrders(); setLocText();
+      var sc=getStock();
+      if(sc) status(x.name+" only \u2014 a stock scan from "+Math.max(1,Math.round((Date.now()-sc.t)/60000))+" min ago is loaded, so the Browse list is filtered too.");
+      else status(x.name+" only. Press Scan region for stock to filter the Browse list as well.");
+    }
+    var inp=$("sf-loc"); if(inp) inp.blur();
+  }
   function resolveTyped(){
-    var inp=$("sf-sys"); if(!inp) return false;
-    var q=(inp.value||"").trim(); if(!q) return false;
-    if(st.sysId&&st.sys&&st.sys.toUpperCase()===q.toUpperCase()) return true;
-    var all=list(), U=q.toUpperCase(), exact=null, pre=[];
+    var inp=$("sf-loc"); if(!inp) return false;
+    var q=(inp.value||"").trim(); if(!q){ setLocText(); return false; }
+    var U=q.toUpperCase(), all=locList(), exact=null, pre=[];
     for(var i=0;i<all.length;i++){
       var u=all[i].name.toUpperCase();
-      if(u===U){ exact=all[i]; break; }
-      if(u.indexOf(U)===0) pre.push(all[i]);
+      if(u===U){ if(!exact||exact.kind==="s") exact=all[i]; }
+      else if(u.indexOf(U)===0) pre.push(all[i]);
     }
     var hit=exact||(pre.length===1?pre[0]:null);
-    if(hit){ pick(hit); return true; }
+    if(hit){ pickLoc(hit); return true; }
+    status("No region or system called \u201c"+q+"\u201d \u2014 pick one from the list.",1);
+    setLocText();
     return false;
   }
-  function pick(x){
-    st.sys=x.name; st.sysId=x.id; save();
-    var inp=$("sf-sys"); if(inp) inp.value=x.name;
-    var box=$("sf-sug"); if(box) box.style.display="none";
-    lastKey=""; allowed=null; loadSet(); applyTree(); applyOrders();
-    var sc=getStock();
-    if(sc) status(st.sys+" selected \u2014 a stock scan from "+Math.max(1,Math.round((Date.now()-sc.t)/60000))+" min ago is loaded for this region.");
-    else status(st.sys+" selected. Turn on \u201cOnly this system\u201d to filter the order book; press Scan region to filter the Browse list too.");
+  function onRegionChanged(){
+    if(st.on&&st.sysId){
+      var m=map()[String(st.sysId)];
+      if(m&&String(m[1])!==regionId()){ st.sys=""; st.sysId=0; st.on=false; save(); }
+    }
+    lastKey=""; allowed=null; loadSet(); applyTree(); applyOrders(); setLocText();
   }
-  function toggle(){
-    if(!st.sysId) resolveTyped();
-    if(!st.sysId){ status("I do not recognise that system name \u2014 pick one from the dropdown.",1); return; }
-    st.on=!st.on; save();
-    var b=$("sf-toggle"); if(b) b.className="tab"+(st.on?" on":"");
-    lastKey="";
-    loadSet(); applyTree(); applyOrders();
-    if(!st.on) status("");
+  function mountLoc(){
+    var reg=$("mb-region"); if(!reg) return;
+    if($("sf-loc")){ if(reg.style.display!=="none") reg.style.display="none"; setLocText(); return; }
+    var f=reg.parentElement; if(!f) return;
+    var lab=f.querySelector("label"); if(lab) lab.textContent="Region or system";
+    var inp=document.createElement("input");
+    inp.id="sf-loc"; inp.setAttribute("autocomplete","off"); inp.spellcheck=false;
+    inp.placeholder="Region or system\u2026";
+    f.insertBefore(inp,reg);
+    reg.style.display="none";
+    sugBox();
+    inp.addEventListener("input",suggestLoc);
+    inp.addEventListener("focus",function(){ try{ inp.select(); }catch(e){} suggestLoc(); });
+    inp.addEventListener("blur",function(){ setTimeout(function(){ var b=$("sf-sug"); if(b) b.style.display="none"; setLocText(); },180); });
+    inp.addEventListener("keydown",function(ev){ if(ev.key==="Enter"){ ev.preventDefault(); resolveTyped(); } });
+    reg.addEventListener("change",function(){ if(selfSet) return; onRegionChanged(); });
+    setLocText();
   }
   function mount(){
-    var main=$("mb-main"), reg=$("mb-region");
-    if(!main||!reg||$("sf-bar")) return;
+    var main=$("mb-main"); if(!main) return;
+    mountLoc();
+    if($("sf-bar")) return;
+    var reg=$("mb-region"); if(!reg) return;
     var row=reg; while(row&&row.parentElement!==main) row=row.parentElement;
     var bar=document.createElement("div"); bar.id="sf-bar";
-    bar.innerHTML="<label>System<input id=sf-sys placeholder=\"e.g. Amarr\" autocomplete=off spellcheck=false></label>"+
-      "<button id=sf-toggle class=tab>Only this system</button>"+
-      "<button id=sf-scan class=tab>Scan region</button>"+
-      "<span id=sf-status></span><div id=sf-sug></div>"+
-      "<div id=sf-help><b>Only this system</b> hides every order below that is not in that system. <b>Scan region</b> reads the whole region order book once (20\u201360s) and then also hides items with no stock there from the Browse list on the left.</div>";
+    bar.innerHTML="<button id=sf-scan class=tab>Scan region for stock</button><span id=sf-status></span>"+
+      "<div id=sf-help>Pick a <b>region</b> to see all of it, or a <b>system</b> to see only that system\u2019s orders \u2014 both live in the one box above. <b>Scan region for stock</b> reads the whole region order book once (20\u201360s) so the Browse list on the left can hide items with no stock in that system.</div>";
     main.insertBefore(bar,row?row.nextSibling:main.firstChild);
-    var inp=$("sf-sys");
-    inp.value=st.sys||"";
-    inp.addEventListener("input",suggest);
-    inp.addEventListener("change",resolveTyped);
-    inp.addEventListener("keydown",function(ev){ if(ev.key==="Enter"){ ev.preventDefault(); var b=$("sf-sug"); if(b) b.style.display="none"; resolveTyped(); } });
-    inp.addEventListener("focus",suggest);
-    inp.addEventListener("blur",function(){ setTimeout(function(){ var b=$("sf-sug"); if(b) b.style.display="none"; },160); });
-    $("sf-toggle").addEventListener("click",toggle);
     $("sf-scan").addEventListener("click",scan);
-    if(st.on) $("sf-toggle").className="tab on";
     loadSet();
     var mo=new MutationObserver(function(){ if(applying) return; clearTimeout(window.__sfT); window.__sfT=setTimeout(function(){ applyOrders(); },220); });
     var ob=$("mb-orders"); if(ob) mo.observe(ob,{childList:true,subtree:true});
     var mt=new MutationObserver(function(){ if(applying) return; clearTimeout(window.__sfT2); window.__sfT2=setTimeout(function(){ applyTree(); },160); });
     var tr=$("mb-tree"); if(tr) mt.observe(tr,{childList:true,subtree:true});
-    reg.addEventListener("change",function(){ lastKey=""; allowed=null; loadSet(); applyTree(); applyOrders(); });
     if(st.on&&st.sys){ applyTree(); applyOrders(); }
   }
   window.EVETICK.add(mount);
