@@ -8583,7 +8583,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   function setStock(ids){ try{ var o=JSON.parse(localStorage.getItem(STOCK)||"{}"); o[stockKey()]={t:Date.now(),ids:ids.join(",")}; var ks=Object.keys(o); if(ks.length>3){ ks.sort(function(a,b){ return o[a].t-o[b].t; }); while(ks.length>3){ delete o[ks.shift()]; } } localStorage.setItem(STOCK,JSON.stringify(o)); }catch(e){ status("Could not save the scan \u2014 storage is full."); } }
   var stockSet=null;
   function loadSet(){ var s=getStock(); if(!s){ stockSet=null; return null; } var set={}; s.ids.split(",").forEach(function(x){ if(x) set[x]=1; }); stockSet=set; return set; }
-  var applying=false, allowed=null, lastKey="", pending=false;
+  var applying=false, allowed=null, lastKey="", pending=false, slock=0;
   function applyTree(){
     var tree=$("mb-tree"); if(!tree) return;
     applying=true;
@@ -8660,7 +8660,8 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
           if(key!==lastKey){ lastKey=key; await build(regionId(),tid); }
         }
         var res=filterRows();
-        if(st.on&&st.sysId&&res){
+        if(scanning||Date.now()<slock){ /* scan owns the status line */ }
+        else if(st.on&&st.sysId&&res){
           var extra=stockSet?"":" \u2014 scan the region to also filter the item list";
           status(res.shown?(res.shown+" of "+res.total+" orders are in "+st.sys+extra):("No orders for this item in "+st.sys+extra));
         } else if(!st.on) status("");
@@ -8699,7 +8700,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       if(cancelFlag){ status("Scan cancelled."); }
       else{
         var ids=Object.keys(found);
-        setStock(ids); loadSet(); applyTree();
+        setStock(ids); loadSet(); applyTree(); slock=Date.now()+9000;
         status(ids.length.toLocaleString()+" item types have sell orders in "+st.sys+". The browse list is now filtered.");
       }
     }catch(e){ status("Scan failed \u2014 ESI did not respond."); }
