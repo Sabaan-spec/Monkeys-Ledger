@@ -8554,6 +8554,231 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   #kd-note,#fee-why,#rp-why,#ci-note,#sc-status{max-width:1150px}
 }
 </style>
+<style>/* System filter v1 */
+#sf-bar{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin:12px 0 6px;position:relative}
+#sf-bar label{display:flex;flex-direction:column;gap:4px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+#sf-sys{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:8px 10px;font-family:inherit;font-size:14px;min-width:200px}
+#sf-sug{position:fixed;z-index:9999;background:var(--panel);border:1px solid var(--border);border-radius:2px;max-height:240px;overflow:auto;display:none;min-width:200px;box-shadow:var(--shadow)}
+#sf-sug div{padding:6px 10px;cursor:pointer;font-size:13px;color:var(--text)}
+#sf-sug div:hover{background:var(--accent-dim)}
+#sf-bar button{padding:8px 14px}
+#sf-bar button.on{background:var(--accent-dim);border-color:var(--accent);color:var(--text)}
+#sf-status{font-size:12px;color:var(--muted);align-self:center;max-width:640px}
+</style>
+<script>/* System filter v1 */
+(function(){
+  var LS="eveSysFilterV1", STOCK="eveSysStockV1";
+  function $(id){ return document.getElementById(id); }
+  var st={sys:"",sysId:0,on:false};
+  try{ var s=JSON.parse(localStorage.getItem(LS)||"{}"); st.sys=s.sys||""; st.sysId=Number(s.sysId)||0; st.on=!!s.on; }catch(e){}
+  function save(){ try{ localStorage.setItem(LS,JSON.stringify(st)); }catch(e){} }
+  var MAP=null, LIST=null, RNAME=null;
+  function map(){ if(MAP) return MAP; try{ MAP=(JSON.parse(localStorage.getItem("eveMapV2")||"{}").sys)||{}; }catch(e){ MAP={}; } return MAP; }
+  function list(){ if(LIST) return LIST; var m=map(); LIST=Object.keys(m).map(function(k){ return {id:Number(k),name:String(m[k][2]||""),sec:m[k][0]}; }); return LIST; }
+  function rname(){ if(RNAME) return RNAME; RNAME={}; try{ var n=JSON.parse(localStorage.getItem("eveTypeNamesV1")||"{}"); for(var k in n) RNAME[String(n[k]).toUpperCase()]=Number(k); }catch(e){} return RNAME; }
+  function status(t){ var e=$("sf-status"); if(e) e.textContent=t; }
+  function regionId(){ return (($("mb-region")||{}).value)||""; }
+  function stockKey(){ return regionId()+"|"+st.sysId; }
+  function getStock(){ try{ var o=JSON.parse(localStorage.getItem(STOCK)||"{}"); return o[stockKey()]||null; }catch(e){ return null; } }
+  function setStock(ids){ try{ var o=JSON.parse(localStorage.getItem(STOCK)||"{}"); o[stockKey()]={t:Date.now(),ids:ids.join(",")}; var ks=Object.keys(o); if(ks.length>3){ ks.sort(function(a,b){ return o[a].t-o[b].t; }); while(ks.length>3){ delete o[ks.shift()]; } } localStorage.setItem(STOCK,JSON.stringify(o)); }catch(e){ status("Could not save the scan \u2014 storage is full."); } }
+  var stockSet=null;
+  function loadSet(){ var s=getStock(); if(!s){ stockSet=null; return null; } var set={}; s.ids.split(",").forEach(function(x){ if(x) set[x]=1; }); stockSet=set; return set; }
+  var applying=false, allowed=null, lastKey="", pending=false;
+  function applyTree(){
+    var tree=$("mb-tree"); if(!tree) return;
+    applying=true;
+    var leaves=tree.querySelectorAll(".mb-leaf");
+    if(!st.on||!stockSet){
+      [].forEach.call(leaves,function(l){ l.style.display=""; });
+      [].forEach.call(tree.querySelectorAll(".mb-grp"),function(g){ g.style.display=""; });
+    } else {
+      [].forEach.call(leaves,function(l){ l.style.display=stockSet[l.getAttribute("data-id")]?"":"none"; });
+      [].forEach.call(tree.querySelectorAll(".mb-grp"),function(g){
+        var k=g.nextElementSibling;
+        if(!k||k.className.indexOf("mb-grpk")<0||!k.children.length){ g.style.display=""; return; }
+        var any=false;
+        [].forEach.call(k.children,function(c){ if(c.style.display!=="none") any=true; });
+        g.style.display=any?"":"none";
+      });
+    }
+    applying=false;
+  }
+  function filterRows(){
+    var box=$("mb-orders"); if(!box) return null;
+    applying=true;
+    var shown=0,total=0;
+    var sysU=(st.sys||"").toUpperCase();
+    [].forEach.call(box.querySelectorAll("table"),function(tb){
+      var ths=[].slice.call(tb.querySelectorAll("th")).map(function(x){ return x.textContent.trim().toUpperCase(); });
+      var li=ths.indexOf("LOCATION"); if(li<0) li=2;
+      [].forEach.call(tb.querySelectorAll("tbody tr"),function(tr){
+        var c=tr.children[li]; if(!c) return;
+        total++;
+        if(!st.on||!sysU){ tr.style.display=""; shown++; return; }
+        var txt=(c.textContent||"").trim().toUpperCase();
+        var okRow=!!(allowed&&allowed[txt]);
+        if(!okRow) okRow=(txt===sysU)||(txt.indexOf(sysU)===0&&!/[A-Z0-9]/.test(txt.charAt(sysU.length)));
+        tr.style.display=okRow?"":"none";
+        if(okRow) shown++;
+      });
+    });
+    applying=false;
+    return {shown:shown,total:total};
+  }
+  async function build(region,tid){
+    allowed={};
+    if(!region||!tid||!st.sysId) return;
+    try{
+      var page=1,pages=1,locs={};
+      while(page<=pages&&page<=10){
+        var r=await fetch("https://esi.evetech.net/latest/markets/"+region+"/orders/?order_type=all&type_id="+tid+"&page="+page);
+        if(!r.ok) break;
+        pages=Number(r.headers.get("x-pages")||1);
+        var a=await r.json();
+        a.forEach(function(o){ if(o.system_id===st.sysId) locs[o.location_id]=1; });
+        page++;
+      }
+      var ids=Object.keys(locs).map(Number);
+      var stations=ids.filter(function(i){ return i<1000000000; });
+      var others=ids.filter(function(i){ return i>=1000000000; });
+      if(stations.length){
+        var nr=await fetch("https://esi.evetech.net/latest/universe/names/",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(stations)});
+        if(nr.ok){ (await nr.json()).forEach(function(x){ allowed[String(x.name).toUpperCase()]=1; }); }
+      }
+      others.forEach(function(i){ try{ var n=(window.EVESTRUCT&&typeof window.EVESTRUCT.name==="function")?window.EVESTRUCT.name(i):null; if(n) allowed[String(n).toUpperCase()]=1; }catch(e){} });
+    }catch(e){}
+  }
+  async function applyOrders(){
+    if(pending) return; pending=true;
+    try{
+      var box=$("mb-orders");
+      if(box&&box.querySelector("tbody tr")){
+        if(st.on&&st.sysId){
+          var prod=(($("mb-product")||{}).textContent||"").trim();
+          var tid=rname()[prod.toUpperCase()];
+          var key=regionId()+"|"+st.sysId+"|"+(tid||0);
+          if(key!==lastKey){ lastKey=key; await build(regionId(),tid); }
+        }
+        var res=filterRows();
+        if(st.on&&st.sysId&&res){
+          var extra=stockSet?"":" \u2014 scan the region to also filter the item list";
+          status(res.shown?(res.shown+" of "+res.total+" orders are in "+st.sys+extra):("No orders for this item in "+st.sys+extra));
+        } else if(!st.on) status("");
+      }
+    }catch(e){}
+    pending=false;
+  }
+  var scanning=false, cancelFlag=false;
+  async function scan(){
+    if(scanning){ cancelFlag=true; return; }
+    var region=regionId();
+    if(!region){ status("Pick a region first."); return; }
+    if(!st.sysId){ status("Type a system name first."); return; }
+    scanning=true; cancelFlag=false;
+    var btn=$("sf-scan"); if(btn) btn.textContent="Cancel scan";
+    var base="https://esi.evetech.net/latest/markets/"+region+"/orders/?order_type=sell";
+    try{
+      var r=await fetch(base+"&page=1");
+      if(!r.ok) throw new Error("bad");
+      var pages=Number(r.headers.get("x-pages")||1);
+      var found={}, done=0;
+      function take(a){ a.forEach(function(o){ if(o.system_id===st.sysId) found[o.type_id]=1; }); }
+      take(await r.json()); done=1;
+      status("Scanning "+done+" / "+pages+" pages\u2026");
+      var next=2;
+      async function worker(){
+        while(next<=pages&&!cancelFlag){
+          var p=next++;
+          try{ var rr=await fetch(base+"&page="+p); if(rr.ok) take(await rr.json()); }catch(e){}
+          done++;
+          if(done%4===0||done===pages) status("Scanning "+done+" / "+pages+" pages\u2026");
+        }
+      }
+      var ws=[]; for(var i=0;i<8;i++) ws.push(worker());
+      await Promise.all(ws);
+      if(cancelFlag){ status("Scan cancelled."); }
+      else{
+        var ids=Object.keys(found);
+        setStock(ids); loadSet(); applyTree();
+        status(ids.length.toLocaleString()+" item types have sell orders in "+st.sys+". The browse list is now filtered.");
+      }
+    }catch(e){ status("Scan failed \u2014 ESI did not respond."); }
+    scanning=false;
+    var b2=$("sf-scan"); if(b2) b2.textContent="Scan region";
+  }
+  function suggest(){
+    var inp=$("sf-sys"), box=$("sf-sug"); if(!inp||!box) return;
+    var q=inp.value.trim().toUpperCase();
+    if(q.length<2){ box.style.display="none"; return; }
+    var all=list();
+    var a=[],b=[];
+    for(var i=0;i<all.length&&a.length+b.length<40;i++){
+      var u=all[i].name.toUpperCase();
+      if(u.indexOf(q)===0) a.push(all[i]);
+      else if(u.indexOf(q)>0) b.push(all[i]);
+    }
+    var rows=a.concat(b).slice(0,8);
+    if(!rows.length){ box.style.display="none"; return; }
+    box.innerHTML="";
+    rows.forEach(function(x){
+      var d=document.createElement("div");
+      d.textContent=x.name+"  "+(x.sec/10).toFixed(1);
+      d.addEventListener("mousedown",function(ev){ ev.preventDefault(); pick(x); });
+      box.appendChild(d);
+    });
+    var r=inp.getBoundingClientRect();
+    box.style.display="block";
+    box.style.left=r.left+"px";
+    box.style.minWidth=r.width+"px";
+    var below=window.innerHeight-r.bottom;
+    if(below<160&&r.top>below){ box.style.top=""; box.style.bottom=(window.innerHeight-r.top+4)+"px"; }
+    else{ box.style.bottom=""; box.style.top=(r.bottom+4)+"px"; }
+  }
+  function pick(x){
+    st.sys=x.name; st.sysId=x.id; save();
+    var inp=$("sf-sys"); if(inp) inp.value=x.name;
+    var box=$("sf-sug"); if(box) box.style.display="none";
+    lastKey=""; allowed=null; loadSet(); applyTree(); applyOrders();
+    if(!stockSet) status("Ready. Turn on \u201cOnly this system\u201d, then scan the region to filter the item list.");
+  }
+  function toggle(){
+    if(!st.sysId&&st.on===false){ status("Type a system name first."); return; }
+    st.on=!st.on; save();
+    var b=$("sf-toggle"); if(b) b.className="tab"+(st.on?" on":"");
+    lastKey="";
+    loadSet(); applyTree(); applyOrders();
+    if(!st.on) status("");
+  }
+  function mount(){
+    var main=$("mb-main"), reg=$("mb-region");
+    if(!main||!reg||$("sf-bar")) return;
+    var row=reg; while(row&&row.parentElement!==main) row=row.parentElement;
+    var bar=document.createElement("div"); bar.id="sf-bar";
+    bar.innerHTML="<label>Only in system<input id=sf-sys placeholder=\"e.g. Amarr\" autocomplete=off spellcheck=false></label>"+
+      "<button id=sf-toggle class=tab>Only this system</button>"+
+      "<button id=sf-scan class=tab>Scan region</button>"+
+      "<span id=sf-status></span><div id=sf-sug></div>";
+    main.insertBefore(bar,row?row.nextSibling:main.firstChild);
+    var inp=$("sf-sys");
+    inp.value=st.sys||"";
+    inp.addEventListener("input",suggest);
+    inp.addEventListener("focus",suggest);
+    inp.addEventListener("blur",function(){ setTimeout(function(){ var b=$("sf-sug"); if(b) b.style.display="none"; },160); });
+    $("sf-toggle").addEventListener("click",toggle);
+    $("sf-scan").addEventListener("click",scan);
+    if(st.on) $("sf-toggle").className="tab on";
+    loadSet();
+    var mo=new MutationObserver(function(){ if(applying) return; clearTimeout(window.__sfT); window.__sfT=setTimeout(function(){ applyOrders(); },220); });
+    var ob=$("mb-orders"); if(ob) mo.observe(ob,{childList:true,subtree:true});
+    var mt=new MutationObserver(function(){ if(applying) return; clearTimeout(window.__sfT2); window.__sfT2=setTimeout(function(){ applyTree(); },160); });
+    var tr=$("mb-tree"); if(tr) mt.observe(tr,{childList:true,subtree:true});
+    reg.addEventListener("change",function(){ lastKey=""; allowed=null; loadSet(); applyTree(); applyOrders(); });
+    if(st.on&&st.sys){ applyTree(); applyOrders(); }
+  }
+  window.EVETICK.add(mount);
+  setTimeout(mount,2500);
+})();
+</script>
 </body>
 </html>
 
