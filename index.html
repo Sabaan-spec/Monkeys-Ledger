@@ -8540,6 +8540,17 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
 </script>
 
 <style>/* wide reference tables scroll inside their panel instead of stretching the page */#pc-out,#rf-body,#ds-out,#kd-grid,#sc-table{overflow-x:auto;-webkit-overflow-scrolling:touch}#pc-out table,#rf-body table,#ds-out table,#sc-table table{min-width:max-content}@media (max-width:760px){  #tab-pricecheck th,#tab-pricecheck td,#tab-reference th,#tab-reference td,#tab-dscan th,#tab-dscan td,#tab-scan th,#tab-scan td{padding:5px 6px;font-size:12px}  #tab-pricecheck input,#tab-scan input,#tab-scan select{width:100%!important;max-width:none!important}  #tab-pricecheck .pc-form label,#tab-scan .sc-form label{flex:1 1 100%}  #tab-scan #sc-add,#tab-scan #sc-notify,#tab-pricecheck #pc-go{flex:1 1 100%}  #tab-dscan .ds-card{flex:1 1 45%;min-width:0}  #tabs-groups button.tab{flex:1 1 45%;font-size:12px;padding:8px 6px}  #tabs-sub button.subtab{font-size:12.5px;padding:7px 10px}  #pc-suggestions{max-width:calc(100vw - 40px)}}@media (max-width:760px){#eve-data{display:flex;width:100%;margin:8px 0 0}}</style>
+<style>/* Wide desktop v1 */
+@media (min-width:1440px){
+  .wrap{max-width:none;padding:0 clamp(30px,2.2vw,56px)}
+}
+@media (min-width:1900px){
+  #tab-sso.acc-cols{column-count:4}
+}
+@media (min-width:1700px){
+  #kd-note,#fee-why,#rp-why,#ci-note,#sc-status{max-width:1150px}
+}
+</style>
 </body>
 </html>
 
