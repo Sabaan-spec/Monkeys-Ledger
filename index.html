@@ -8555,20 +8555,20 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
 }
 </style>
 <style>/* System filter v1 */
-#sf-bar{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin:10px 0 6px;position:relative}
-#sf-bar label{display:flex;flex-direction:column;gap:4px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
-#sf-loc{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:9px 11px;font-family:inherit;font-size:14px;width:100%;box-sizing:border-box}
-#sf-loc:focus{outline:none;border-color:var(--accent)}
-#sf-sug .sf-k{color:var(--muted);font-size:11px;letter-spacing:.05em;text-transform:uppercase;float:right;margin-left:14px}
-#sf-sug{position:fixed;z-index:9999;background:var(--panel);border:1px solid var(--border);border-radius:2px;max-height:240px;overflow:auto;display:none;min-width:200px;box-shadow:var(--shadow)}
-#sf-sug div{padding:6px 10px;cursor:pointer;font-size:13px;color:var(--text)}
-#sf-sug div:hover{background:var(--accent-dim)}
-#sf-bar button{padding:8px 14px}
-#sf-bar button.on{background:var(--accent-dim);border-color:var(--accent);color:var(--text)}
-#sf-status{font-size:12px;color:var(--muted);align-self:center;max-width:640px}
-#sf-status.bad{color:var(--warn)}
-#sf-help{flex-basis:100%;font-size:12px;color:var(--muted);line-height:1.5;margin-top:-2px}
-#sf-help b{color:var(--text);font-weight:600}
+#mkl-bar{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin:10px 0 6px;position:relative}
+#mkl-bar label{display:flex;flex-direction:column;gap:4px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+#mkl-loc{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:9px 11px;font-family:inherit;font-size:14px;width:100%;box-sizing:border-box}
+#mkl-loc:focus{outline:none;border-color:var(--accent)}
+#mkl-sug .mkl-k{color:var(--muted);font-size:11px;letter-spacing:.05em;text-transform:uppercase;float:right;margin-left:14px}
+#mkl-sug{position:fixed;z-index:9999;background:var(--panel);border:1px solid var(--border);border-radius:2px;max-height:240px;overflow:auto;display:none;min-width:200px;box-shadow:var(--shadow)}
+#mkl-sug div{padding:6px 10px;cursor:pointer;font-size:13px;color:var(--text)}
+#mkl-sug div:hover{background:var(--accent-dim)}
+#mkl-bar button{padding:8px 14px}
+#mkl-bar button.on{background:var(--accent-dim);border-color:var(--accent);color:var(--text)}
+#mkl-status{font-size:12px;color:var(--muted);align-self:center;max-width:640px}
+#mkl-status.bad{color:var(--warn)}
+#mkl-help{flex-basis:100%;font-size:12px;color:var(--muted);line-height:1.5;margin-top:-2px}
+#mkl-help b{color:var(--text);font-weight:600}
 </style>
 <script>/* System filter v2 */
 (function(){
@@ -8581,7 +8581,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   var MAP=null, RNAME=null, LOC=null, LOCN=-1, selfSet=false;
   function map(){ if(MAP) return MAP; try{ MAP=(JSON.parse(localStorage.getItem("eveMapV2")||"{}").sys)||{}; }catch(e){ MAP={}; } return MAP; }
   function rname(){ if(RNAME) return RNAME; RNAME={}; try{ var n=JSON.parse(localStorage.getItem("eveTypeNamesV1")||"{}"); for(var k in n) RNAME[String(n[k]).toUpperCase()]=Number(k); }catch(e){} return RNAME; }
-  function status(t,bad){ var e=$("sf-status"); if(e){ e.textContent=t; e.className=bad?"bad":""; } }
+  function status(t,bad){ var e=$("mkl-status"); if(e){ e.textContent=t; e.className=bad?"bad":""; } }
   function regionId(){ return (($("mb-region")||{}).value)||""; }
   function regionName(){ var sel=$("mb-region"); if(!sel||sel.selectedIndex<0) return ""; var o=sel.options[sel.selectedIndex]; return o?o.textContent.replace(/^[^A-Za-z0-9]+/,"").trim():""; }
   function stockKey(){ return regionId()+"|"+st.sysId; }
@@ -8721,7 +8721,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     if(!region||region==="0"){ status("Pick a single region (not All Regions) before scanning.",1); return; }
     if(!st.sysId){ status("Pick a system in the box above first \u2014 the scan needs to know which system to look for.",1); return; }
     scanning=true; cancelFlag=false;
-    var btn=$("sf-scan"); if(btn) btn.textContent="Cancel scan";
+    var btn=$("mkl-scan"); if(btn) btn.textContent="Cancel scan";
     var base="https://esi.evetech.net/latest/markets/"+region+"/orders/?order_type=sell";
     try{
       var r=await fetch(base+"&page=1");
@@ -8750,7 +8750,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       }
     }catch(e){ status("Scan failed \u2014 ESI did not respond.",1); }
     scanning=false;
-    var b2=$("sf-scan"); if(b2) b2.textContent="Scan region for stock";
+    var b2=$("mkl-scan"); if(b2) b2.textContent="Scan region for stock";
   }
   function locList(){
     var sel=$("mb-region"); var n=sel?sel.options.length:0;
@@ -8762,17 +8762,17 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     return LOC;
   }
   function setLocText(){
-    var inp=$("sf-loc"); if(!inp) return;
+    var inp=$("mkl-loc"); if(!inp) return;
     if(document.activeElement===inp) return;
     inp.value = (st.on&&st.sys) ? st.sys : regionName();
   }
   function sugBox(){
-    var b=$("sf-sug");
-    if(!b){ b=document.createElement("div"); b.id="sf-sug"; document.body.appendChild(b); }
+    var b=$("mkl-sug");
+    if(!b){ b=document.createElement("div"); b.id="mkl-sug"; document.body.appendChild(b); }
     return b;
   }
   function suggestLoc(){
-    var inp=$("sf-loc"); if(!inp) return;
+    var inp=$("mkl-loc"); if(!inp) return;
     var box=sugBox();
     var q=inp.value.trim().toUpperCase();
     var all=locList(), regs=[], syss=[];
@@ -8789,7 +8789,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     box.innerHTML="";
     rows.forEach(function(x){
       var d=document.createElement("div");
-      d.innerHTML=esc(x.name)+" <span class=sf-k>"+(x.kind==="r"?"region":("system "+(x.sec/10).toFixed(1)))+"</span>";
+      d.innerHTML=esc(x.name)+" <span class=mkl-k>"+(x.kind==="r"?"region":("system "+(x.sec/10).toFixed(1)))+"</span>";
       d.addEventListener("mousedown",function(ev){ ev.preventDefault(); pickLoc(x); });
       box.appendChild(d);
     });
@@ -8811,7 +8811,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     setTimeout(function(){ selfSet=false; },50);
   }
   function pickLoc(x){
-    var box=$("sf-sug"); if(box) box.style.display="none";
+    var box=$("mkl-sug"); if(box) box.style.display="none";
     if(x.kind==="r"){
       st.sys=""; st.sysId=0; st.on=false; save();
       setRegion(x.id);
@@ -8825,10 +8825,10 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       if(sc) status(x.name+" only \u2014 a stock scan from "+Math.max(1,Math.round((Date.now()-sc.t)/60000))+" min ago is loaded, so the Browse list is filtered too.");
       else status(x.name+" only. Press Scan region for stock to filter the Browse list as well.");
     }
-    var inp=$("sf-loc"); if(inp) inp.blur();
+    var inp=$("mkl-loc"); if(inp) inp.blur();
   }
   function resolveTyped(){
-    var inp=$("sf-loc"); if(!inp) return false;
+    var inp=$("mkl-loc"); if(!inp) return false;
     var q=(inp.value||"").trim(); if(!q){ setLocText(); return false; }
     var U=q.toUpperCase(), all=locList(), exact=null, pre=[];
     for(var i=0;i<all.length;i++){
@@ -8851,18 +8851,18 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   }
   function mountLoc(){
     var reg=$("mb-region"); if(!reg) return;
-    if($("sf-loc")){ if(reg.style.display!=="none") reg.style.display="none"; setLocText(); return; }
+    if($("mkl-loc")){ if(reg.style.display!=="none") reg.style.display="none"; setLocText(); return; }
     var f=reg.parentElement; if(!f) return;
     var lab=f.querySelector("label"); if(lab) lab.textContent="Region or system";
     var inp=document.createElement("input");
-    inp.id="sf-loc"; inp.setAttribute("autocomplete","off"); inp.spellcheck=false;
+    inp.id="mkl-loc"; inp.setAttribute("autocomplete","off"); inp.spellcheck=false;
     inp.placeholder="Region or system\u2026";
     f.insertBefore(inp,reg);
     reg.style.display="none";
     sugBox();
     inp.addEventListener("input",suggestLoc);
     inp.addEventListener("focus",function(){ try{ inp.select(); }catch(e){} suggestLoc(); });
-    inp.addEventListener("blur",function(){ setTimeout(function(){ var b=$("sf-sug"); if(b) b.style.display="none"; setLocText(); },180); });
+    inp.addEventListener("blur",function(){ setTimeout(function(){ var b=$("mkl-sug"); if(b) b.style.display="none"; setLocText(); },180); });
     inp.addEventListener("keydown",function(ev){ if(ev.key==="Enter"){ ev.preventDefault(); resolveTyped(); } });
     reg.addEventListener("change",function(){ if(selfSet) return; onRegionChanged(); });
     setLocText();
@@ -8870,14 +8870,14 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   function mount(){
     var main=$("mb-main"); if(!main) return;
     mountLoc();
-    if($("sf-bar")) return;
+    if($("mkl-bar")) return;
     var reg=$("mb-region"); if(!reg) return;
     var row=reg; while(row&&row.parentElement!==main) row=row.parentElement;
-    var bar=document.createElement("div"); bar.id="sf-bar";
-    bar.innerHTML="<button id=sf-scan class=tab>Scan region for stock</button><span id=sf-status></span>"+
-      "<div id=sf-help>Pick a <b>region</b> to see all of it, or a <b>system</b> to see only that system\u2019s orders \u2014 both live in the one box above. <b>Scan region for stock</b> reads the whole region order book once (20\u201360s) so the Browse list on the left can hide items with no stock in that system.</div>";
+    var bar=document.createElement("div"); bar.id="mkl-bar";
+    bar.innerHTML="<button id=mkl-scan class=tab>Scan region for stock</button><span id=mkl-status></span>"+
+      "<div id=mkl-help>Pick a <b>region</b> to see all of it, or a <b>system</b> to see only that system\u2019s orders \u2014 both live in the one box above. <b>Scan region for stock</b> reads the whole region order book once (20\u201360s) so the Browse list on the left can hide items with no stock in that system.</div>";
     main.insertBefore(bar,row?row.nextSibling:main.firstChild);
-    $("sf-scan").addEventListener("click",scan);
+    $("mkl-scan").addEventListener("click",scan);
     loadSet();
     var mo=new MutationObserver(function(){ if(applying) return; clearTimeout(window.__sfT); window.__sfT=setTimeout(function(){ applyOrders(); },220); });
     var ob=$("mb-orders"); if(ob) mo.observe(ob,{childList:true,subtree:true});
