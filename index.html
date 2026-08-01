@@ -7104,6 +7104,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
         "<label>Alert when<select id=sc-rule></select></label>"+
         "<label id=sc-tlabel>Target ISK<input id=sc-target type=number step=any placeholder=\"0\"></label>"+
         "<button id=sc-add class=tab style=\"padding:9px 16px\">Add watch</button>"+
+        "<button id=sc-import class=tab style=\"padding:9px 16px\">Watch my sell orders</button>"+
         "<button id=sc-notify class=tab style=\"padding:9px 16px\">Enable notifications</button>"+
         "</div><div id=sc-msg></div><div id=sc-status></div>"+
         "<div id=sc-table></div>"+
@@ -7116,6 +7117,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
       RULES.forEach(function(r){ var o=document.createElement("option"); o.value=r[0]; o.textContent=r[1]; rl.appendChild(o); });
       p.querySelector("#sc-add").addEventListener("click",add);
       p.querySelector("#sc-notify").addEventListener("click",askNotify);
+      p.querySelector("#sc-import").addEventListener("click",importOrders);
       rl.addEventListener("change",function(){
         var t=$("sc-tlabel"), inp=$("sc-target");
         var v=this.value;
@@ -7157,6 +7159,32 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     save(); render(); msg("Watching "+t.name+" at "+locName+"\u2026 checking for orders.");
     (async function(){ try{ var b=await window.EVEMKT.best(String(locId),t.id); if(!b||b.sell==null){ msg("Added, but no sell orders for "+t.name+" were found at "+locName+" \u2014 check the item name and location. Type ID "+t.id+"."); } else { msg("Watching "+t.name+" at "+locName+" \u2014 current sell "+isk(b.sell)+"."); } }catch(e){} })();
     var ii=$("sc-item"); if(ii) ii.value="";
+    poll(true);
+  }
+  async function importOrders(){
+    if(!(EVEAPI.loggedIn&&EVEAPI.loggedIn())){ msg("Connect a character first \u2014 your orders come from your account."); return; }
+    msg("Reading your market orders\u2026");
+    ordersAt=0;
+    var orders=await charOrders();
+    var sells=(orders||[]).filter(function(o){ return !o.is_buy_order; });
+    if(!sells.length){ msg("No open sell orders found on this character."); return; }
+    var ids=[]; sells.forEach(function(o){ if(ids.indexOf(o.type_id)<0) ids.push(o.type_id); });
+    var nm={}; try{ nm=await EVEAPI.names(ids)||{}; }catch(e){ nm={}; }
+    var locs=[]; sells.forEach(function(o){ var l=String(o.location_id); if(locs.indexOf(l)<0) locs.push(l); });
+    await Promise.all(locs.map(function(l){ try{ return window.EVESTRUCT?window.EVESTRUCT.resolve(l):null; }catch(e){ return null; } }));
+    var added=0, dup=0;
+    sells.forEach(function(o){
+      var loc=String(o.location_id);
+      var exists=watches.some(function(w){ return w.typeId===o.type_id && String(w.locId)===loc && w.rule==="undercut"; });
+      if(exists){ dup++; return; }
+      var ln=(window.EVESTRUCT&&window.EVESTRUCT.name(loc))||("location "+loc);
+      watches.push({id:Date.now()+"-"+Math.random().toString(36).slice(2,7),typeId:o.type_id,name:nm[o.type_id]||("Type "+o.type_id),locId:loc,locName:ln,rule:"undercut",target:null,last:null,firedAt:0});
+      added++;
+    });
+    save(); render();
+    var m="Added "+added+" undercut watch"+(added===1?"":"es")+" from "+sells.length+" sell order"+(sells.length===1?"":"s");
+    if(dup) m+=", skipped "+dup+" already watched";
+    msg(m+". Buy orders are not included \u2014 undercut only applies to sells.");
     poll(true);
   }
   function remove(id){ watches=watches.filter(function(w){ return w.id!==id; }); save(); render(); }
