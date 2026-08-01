@@ -8129,7 +8129,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     var tackle=(groups["Interdictor"]||0)+(groups["Heavy Interdiction Cruiser"]||0);
     var caps=(groups["Titan"]||0)+(groups["Supercarrier"]||0)+(groups["Dreadnought"]||0)+(groups["Carrier"]||0)+(groups["Force Auxiliary"]||0);
     var ships=cats[6]||0;
-    if(wrecks>0) bits.push("<b>"+wrecks+" wrecks</b> on scan \u2014 something died here recently");
+    if(wrecks>0) bits.push("<b>"+wrecks+" wreck"+(wrecks===1?"":"s")+"</b> on scan \u2014 something died here recently");
     if(caps>0) bits.push("<b>capitals present</b> ("+caps+") \u2014 assume escalation");
     if(mining>=3) bits.push("looks like a <b>mining operation</b> \u2014 "+mining+" mining hulls");
     else if(mining>0) bits.push(mining+" mining hull"+(mining===1?"":"s")+" present");
