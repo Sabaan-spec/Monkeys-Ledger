@@ -6310,7 +6310,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     {id:"ind",label:"Industry",tabs:["calc","cheapsys","tree","research","invent","react"]},
     {id:"mat",label:"Materials",tabs:["ore","repro","pi"]},
     {id:"acct",label:"Account",tabs:["sso"]},
-    {id:"trade",label:"Trade",tabs:["arb","top","plan"]},
+    {id:"trade",label:"Trade",tabs:["arb","top","plan","scan"]},
     {id:"intel",label:"Intel",tabs:["kills","fits"]}
   ];
   var KEY="eveTabGroupV1";
@@ -7015,6 +7015,211 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   setTimeout(fit,900);
   setInterval(fit,900);
   window.addEventListener("resize",function(){ last=null; fit(); });
+})();
+</script>
+
+<style>
+#tab-scan .sc-form{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:12px}
+#tab-scan .sc-form label{display:flex;flex-direction:column;gap:4px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+#tab-scan input,#tab-scan select{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:9px 11px;font-family:inherit;font-size:14px}
+#tab-scan input:focus,#tab-scan select:focus{outline:none;border-color:var(--accent-dim)}
+#sc-item{min-width:230px}#sc-target{width:150px}#sc-loc{min-width:230px}
+#tab-scan table{width:100%;border-collapse:collapse;margin-top:6px}
+#tab-scan th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--border)}
+#tab-scan td{padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.05);font-size:13px}
+#tab-scan .sc-hit{color:var(--good);font-weight:600}
+#tab-scan .sc-wait{color:var(--muted)}
+#tab-scan .sc-x{cursor:pointer;color:var(--bad);opacity:.75}
+#tab-scan .sc-x:hover{opacity:1}
+#sc-log li{margin:3px 0;font-size:13px}
+#sc-msg{font-size:12px;color:var(--muted);margin-top:6px}
+</style>
+<script>/* Market scanner v1 */
+(function(){
+  var KEY="eveScanV1", LOGKEY="eveScanLogV1", ID="scan";
+  var HUBS=[["60003760","Jita IV-4 (The Forge)"],["60008494","Amarr VIII (Domain)"],["60011866","Dodixie IX (Sinq Laison)"],["60004588","Rens VI (Heimatar)"],["60005686","Hek VIII (Metropolis)"]];
+  var RULES=[["below","Price drops below"],["above","Price rises above"],["cost","Sell price below my build cost"],["undercut","Someone undercuts my order"]];
+  var COOLDOWN=1800000, POLL=180000;
+  var watches=load(KEY,[]), log=load(LOGKEY,[]), busy=false, lastPoll=0, myOrders=null, ordersAt=0;
+  function load(k,d){ try{ var v=JSON.parse(localStorage.getItem(k)); return v||d; }catch(e){ return d; } }
+  function save(){ try{ localStorage.setItem(KEY,JSON.stringify(watches)); localStorage.setItem(LOGKEY,JSON.stringify(log.slice(0,40))); }catch(e){} }
+  function $(id){ return document.getElementById(id); }
+  function isk(n){ if(n==null) return "\u2014"; try{ return window.eveISK?window.eveISK(n):Math.round(n).toLocaleString(); }catch(e){ return Math.round(n).toLocaleString(); } }
+  function esc(s){ return String(s==null?"":s).replace(/[&<>]/g,function(c){ return c==="&"?"&amp;":(c==="<"?"&lt;":"&gt;"); }); }
+  async function typeId(name){
+    name=String(name||"").trim(); if(!name) return null;
+    try{
+      var r=await fetch("https://esi.evetech.net/latest/universe/ids/",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify([name])});
+      if(!r.ok) return null;
+      var o=await r.json();
+      var t=(o&&o.inventory_types&&o.inventory_types[0])||null;
+      return t?{id:t.id,name:t.name}:null;
+    }catch(e){ return null; }
+  }
+  async function charOrders(){
+    var ch=(EVEAPI.getChar&&EVEAPI.getChar())||null;
+    if(!ch||!ch.id) return [];
+    if(myOrders&&(Date.now()-ordersAt)<180000) return myOrders;
+    try{ var r=await EVEAPI.esi("/characters/"+ch.id+"/orders/"); var d=(r&&r.data)?r.data:r; myOrders=d||[]; ordersAt=Date.now(); }catch(e){ myOrders=[]; }
+    return myOrders;
+  }
+  function panel(){
+    var arb=$("tab-arb"); if(!arb) return null;
+    var p=$("tab-"+ID);
+    if(!p){
+      p=document.createElement("div"); p.id="tab-"+ID; p.hidden=true; p.style.display="none";
+      arb.parentElement.insertBefore(p,arb.nextSibling);
+      p.innerHTML="<section class=\"panel\"><div>"+
+        "<div style=\"font-weight:600;margin-bottom:10px\">\ud83d\udce1 Market scanner</div>"+
+        "<div class=sc-form>"+
+        "<label>Item<input id=sc-item placeholder=\"e.g. Prototype Cloaking Device I\"></label>"+
+        "<label>Location<select id=sc-loc></select></label>"+
+        "<label>Other ID<input id=sc-locid placeholder=\"station or citadel ID\" style=\"width:170px\"></label>"+
+        "<label>Alert when<select id=sc-rule></select></label>"+
+        "<label id=sc-tlabel>Target ISK<input id=sc-target type=number step=any placeholder=\"0\"></label>"+
+        "<button id=sc-add class=tab style=\"padding:9px 16px\">Add watch</button>"+
+        "<button id=sc-notify class=tab style=\"padding:9px 16px\">Enable notifications</button>"+
+        "</div><div id=sc-msg></div>"+
+        "<div id=sc-table></div>"+
+        "<div style=\"margin-top:16px;font-weight:600\">Recent alerts</div><ul id=sc-log></ul>"+
+        "</div></section>";
+      var loc=p.querySelector("#sc-loc");
+      HUBS.forEach(function(h){ var o=document.createElement("option"); o.value=h[0]; o.textContent=h[1]; loc.appendChild(o); });
+      var oo=document.createElement("option"); oo.value="other"; oo.textContent="Other (use ID field)"; loc.appendChild(oo);
+      var rl=p.querySelector("#sc-rule");
+      RULES.forEach(function(r){ var o=document.createElement("option"); o.value=r[0]; o.textContent=r[1]; rl.appendChild(o); });
+      p.querySelector("#sc-add").addEventListener("click",add);
+      p.querySelector("#sc-notify").addEventListener("click",askNotify);
+      rl.addEventListener("change",function(){
+        var t=$("sc-tlabel"), inp=$("sc-target");
+        var v=this.value;
+        var lbl=(v==="cost")?"Build cost ISK":(v==="undercut"?"Not used":"Target ISK");
+        t.childNodes[0].nodeValue=lbl;
+        inp.disabled=(v==="undercut");
+      });
+      var nb=p.querySelector("#sc-notify");
+      if(typeof Notification!=="undefined"&&Notification.permission==="granted") nb.style.display="none";
+    }
+    return p;
+  }
+  function askNotify(){
+    if(typeof Notification==="undefined"){ msg("This browser does not support notifications."); return; }
+    Notification.requestPermission().then(function(p){
+      msg(p==="granted"?"Notifications enabled.":"Notifications not granted \u2014 alerts will only show on this page.");
+      if(p==="granted"){ var b=$("sc-notify"); if(b) b.style.display="none"; }
+    });
+  }
+  function msg(t){ var m=$("sc-msg"); if(m) m.textContent=t; }
+  async function add(){
+    var nm=($("sc-item")||{}).value||"";
+    var rule=($("sc-rule")||{}).value||"below";
+    var target=parseFloat(($("sc-target")||{}).value);
+    var locSel=($("sc-loc")||{}).value;
+    var locId=(locSel==="other")?String(($("sc-locid")||{}).value||"").trim():locSel;
+    if(!nm.trim()){ msg("Enter an item name."); return; }
+    if(!locId){ msg("Pick a location or paste a station/citadel ID."); return; }
+    if(rule!=="undercut"&&!(target>0)){ msg("Enter a target price."); return; }
+    msg("Looking up item\u2026");
+    var t=await typeId(nm);
+    if(!t){ msg("Could not find an item called \u201c"+nm+"\u201d \u2014 names must match exactly."); return; }
+    var locName=locId;
+    var hub=HUBS.filter(function(h){ return h[0]===String(locId); })[0];
+    if(hub) locName=hub[1];
+    else if(window.EVESTRUCT){ try{ var rec=await window.EVESTRUCT.resolve(locId); if(rec&&rec.name) locName=rec.name; }catch(e){} }
+    watches.push({id:Date.now()+"-"+Math.random().toString(36).slice(2,7),typeId:t.id,name:t.name,locId:String(locId),locName:locName,rule:rule,target:(rule==="undercut"?null:target),last:null,firedAt:0});
+    save(); render(); msg("Watching "+t.name+" at "+locName+".");
+    var ii=$("sc-item"); if(ii) ii.value="";
+    poll(true);
+  }
+  function remove(id){ watches=watches.filter(function(w){ return w.id!==id; }); save(); render(); }
+  function ruleText(w){
+    if(w.rule==="below") return "sell < "+isk(w.target);
+    if(w.rule==="above") return "sell > "+isk(w.target);
+    if(w.rule==="cost") return "sell < cost "+isk(w.target);
+    return "undercut on my order";
+  }
+  function render(){
+    var p=panel(); if(!p) return;
+    var host=$("sc-table"); if(!host) return;
+    if(!watches.length){ host.innerHTML="<div class=sc-wait style=\"margin-top:8px\">No watches yet. Add one above.</div>"; }
+    else{
+      var rows=watches.map(function(w){
+        var state=w.hit?"<span class=sc-hit>HIT</span>":"<span class=sc-wait>watching</span>";
+        return "<tr><td>"+esc(w.name)+"</td><td>"+esc(w.locName)+"</td><td>"+esc(ruleText(w))+"</td><td>"+isk(w.last)+"</td><td>"+state+"</td><td><span class=sc-x data-id=\""+w.id+"\">remove</span></td></tr>";
+      }).join("");
+      host.innerHTML="<table><thead><tr><th>Item</th><th>Location</th><th>Condition</th><th>Current sell</th><th>Status</th><th></th></tr></thead><tbody>"+rows+"</tbody></table>";
+      [].slice.call(host.querySelectorAll(".sc-x")).forEach(function(x){ x.addEventListener("click",function(){ remove(this.getAttribute("data-id")); }); });
+    }
+    var lg=$("sc-log");
+    if(lg) lg.innerHTML=log.length?log.slice(0,12).map(function(e){ return "<li>"+esc(e.t)+" \u2014 "+esc(e.m)+"</li>"; }).join(""):"<li class=sc-wait>Nothing yet.</li>";
+  }
+  function fire(w,text){
+    var now=Date.now();
+    if(now-(w.firedAt||0)<COOLDOWN) return;
+    w.firedAt=now;
+    log.unshift({t:new Date().toLocaleTimeString(),m:text});
+    save();
+    try{ if(typeof Notification!=="undefined"&&Notification.permission==="granted") new Notification("Market scanner",{body:text}); }catch(e){}
+  }
+  async function poll(force){
+    if(busy) return;
+    if(!force&&Date.now()-lastPoll<POLL) return;
+    if(!watches.length) return;
+    busy=true; lastPoll=Date.now();
+    try{
+      var orders=null;
+      for(var i=0;i<watches.length;i++){
+        var w=watches[i];
+        var b=null;
+        try{ b=await window.EVEMKT.best(w.locId,w.typeId); }catch(e){ b=null; }
+        if(!b){ continue; }
+        w.last=b.sell;
+        w.hit=false;
+        if(w.rule==="below"&&b.sell!=null&&b.sell<w.target){ w.hit=true; fire(w,w.name+" is "+isk(b.sell)+" at "+w.locName+" (below "+isk(w.target)+")"); }
+        else if(w.rule==="above"&&b.sell!=null&&b.sell>w.target){ w.hit=true; fire(w,w.name+" is "+isk(b.sell)+" at "+w.locName+" (above "+isk(w.target)+")"); }
+        else if(w.rule==="cost"&&b.sell!=null&&b.sell<w.target){ w.hit=true; fire(w,w.name+" sells for "+isk(b.sell)+" at "+w.locName+" \u2014 under your build cost "+isk(w.target)); }
+        else if(w.rule==="undercut"){
+          if(orders===null) orders=await charOrders();
+          var mine=orders.filter(function(o){ return o.type_id===w.typeId && String(o.location_id)===String(w.locId) && !o.is_buy_order; })[0];
+          if(mine&&b.sell!=null&&b.sell<mine.price-0.005){ w.hit=true; fire(w,"Undercut on "+w.name+" at "+w.locName+": "+isk(b.sell)+" vs your "+isk(mine.price)); }
+        }
+      }
+      save(); render();
+    }catch(e){}
+    busy=false;
+  }
+  function wrap(){
+    if(typeof window.switchTab!=="function"||window.switchTab.__scanWrap) return;
+    var prev=window.switchTab;
+    var fn=function(id){
+      var p=panel(), arb=document.getElementById("tab-arb");
+      if(id===ID){
+        prev("arb");
+        if(arb){ arb.hidden=true; arb.style.display="none"; }
+        if(p){ p.hidden=false; p.style.display=""; }
+        var nav=document.querySelector("nav.tabs");
+        if(nav) [].slice.call(nav.querySelectorAll("button.tab[data-tab]")).forEach(function(b){ if(b.getAttribute("data-tab")===ID) b.classList.add("active"); else b.classList.remove("active"); });
+        render(); poll(true);
+        return;
+      }
+      if(p){ p.hidden=true; p.style.display="none"; }
+      if(arb) arb.style.display="";
+      return prev.apply(this,arguments);
+    };
+    fn.__scanWrap=1;
+    window.switchTab=fn;
+  }
+  function ensureBtn(){
+    var nav=document.querySelector("nav.tabs"); if(!nav) return;
+    if(nav.querySelector("button.tab[data-tab=scan]")) return;
+    var b=document.createElement("button");
+    b.className="tab"; b.setAttribute("data-tab",ID); b.textContent="Scanner";
+    b.addEventListener("click",function(e){ e.stopPropagation(); if(window.switchTab) window.switchTab(ID); });
+    nav.appendChild(b);
+  }
+  setTimeout(function(){ panel(); ensureBtn(); wrap(); render(); },1400);
+  setInterval(function(){ panel(); ensureBtn(); wrap(); },1600);
+  setInterval(function(){ poll(false); },30000);
 })();
 </script>
 </body>
