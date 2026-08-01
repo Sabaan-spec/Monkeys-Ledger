@@ -2621,7 +2621,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
           var c=catOf(it.flag); if(c&&c!=="ammo"&&c!=="drones"&&isChargeType(it.item_type_id)) c="ammo";
           var q=(it.quantity_destroyed||0)+(it.quantity_dropped||0); if(q<=0)q=1;
           if(c==='drone'){ drones[it.item_type_id]=(drones[it.item_type_id]||0)+q; return; }
-          if(!c) return;
+          if(!c||c==="ammo"||c==="drones") return;
           (byFlag[it.flag]=byFlag[it.flag]||[]).push({id:it.item_type_id,q:q});
         });
         Object.keys(byFlag).forEach(function(f){
