@@ -8890,7 +8890,11 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
 })();
 </script>
 <style>/* Fitting bay v1 */
-#fb-wrap{display:grid;grid-template-columns:minmax(430px,1fr) minmax(320px,420px);gap:20px;align-items:start}
+#fb-wrap{display:grid;grid-template-columns:minmax(430px,1fr) minmax(320px,430px);gap:24px;align-items:start}
+#fb-left{display:grid;grid-template-columns:minmax(280px,470px) minmax(230px,1fr);gap:24px;align-items:start}
+@media (max-width:1200px){#fb-left{grid-template-columns:1fr}}
+#fb-ring text{font-family:var(--display),inherit}
+#fb-ring g{cursor:default}
 @media (max-width:900px){#fb-wrap{grid-template-columns:1fr}}
 #fb-ring{width:100%;max-width:520px}
 .fb-sec{border-top:1px solid var(--border);padding:7px 0 3px;margin-top:6px}
@@ -8960,25 +8964,42 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     return out;
   }
   function align(h){ var m=h.a[A.mass]||0, g=h.a[A.agi]||0; return (-Math.log(0.25)*g*m)/1000000; }
-  function ringSVG(counts,filled){
-    var R=210, cx=250, cy=250, out=[];
-    out.push("<circle cx="+cx+" cy="+cy+" r="+R+" fill=none stroke=\"var(--border)\" stroke-width=26 opacity=.55/>");
-    var arcs=[["hi",-160,-105],["med",-85,-30],["low",-10,45],["rig",70,110]];
+  function ringSVG(counts,filled,byslot,hullName,ehpTxt){
+    var R=196, cx=250, cy=250, out=[], i, rad, d;
+    out.push("<circle cx=250 cy=250 r=196 fill=none stroke=\"var(--border)\" stroke-width=34 opacity=.3/>");
+    out.push("<circle cx=250 cy=250 r=179 fill=none stroke=\"var(--border)\" stroke-width=1 opacity=.55/>");
+    out.push("<circle cx=250 cy=250 r=213 fill=none stroke=\"var(--border)\" stroke-width=1 opacity=.55/>");
+    for(d=0;d<360;d+=3){
+      rad=d*Math.PI/180;
+      var big=(d%15===0), r1=228, r2=big?242:236;
+      out.push("<line x1="+(cx+r1*Math.cos(rad))+" y1="+(cy+r1*Math.sin(rad))+" x2="+(cx+r2*Math.cos(rad))+" y2="+(cy+r2*Math.sin(rad))+" stroke=\"var(--border)\" stroke-width=\""+(big?1.6:1)+"\" opacity=\""+(big?.85:.45)+"\"/>");
+    }
+    var arcs=[["hi",-158,-104,"HIGH"],["med",-76,-22,"MID"],["low",6,60,"LOW"],["rig",104,140,"RIG"]];
     arcs.forEach(function(ar){
       var key=ar[0], n=counts[key]||0;
       if(!n) return;
-      var a0=ar[1], a1=ar[2];
-      for(var i=0;i<n;i++){
-        var t=n===1?0.5:(i/(n-1));
-        var deg=a0+(a1-a0)*t, rad=deg*Math.PI/180;
-        var x=cx+R*Math.cos(rad), y=cy+R*Math.sin(rad);
-        var used=(filled[key]||0)>i;
-        out.push("<rect x="+(x-13)+" y="+(y-13)+" width=26 height=26 rx=3 fill=\""+(used?"var(--accent-dim)":"var(--bg)")+"\" stroke=\""+(used?"var(--accent)":"var(--border)")+"\" stroke-width=1.5/>");
+      var a0=ar[1], a1=ar[2], list=byslot[key]||[];
+      var span=Math.min(a1-a0, 17*Math.max(1,n-1));
+      var mid0=(a0+a1)/2-span/2;
+      for(var k=0;k<n;k++){
+        var t=(n===1)?0:(k/(n-1));
+        var deg=(n===1)?((a0+a1)/2):(mid0+span*t);
+        var rr=deg*Math.PI/180;
+        var x=cx+R*Math.cos(rr), y=cy+R*Math.sin(rr);
+        var nm=list[k]||"";
+        var on=!!nm;
+        out.push("<g><title>"+esc(nm||("Empty "+ar[3].toLowerCase()+" slot"))+"</title>"+
+          "<rect x="+(x-16)+" y="+(y-16)+" width=32 height=32 rx=4 fill=\""+(on?"var(--accent-dim)":"var(--panel)")+"\" stroke=\""+(on?"var(--accent)":"var(--muted)")+"\" stroke-width=\""+(on?2.2:1.2)+"\" opacity=\""+(on?1:.75)+"\"/>"+
+          (on?("<circle cx="+x+" cy="+y+" r=4.5 fill=\"var(--accent)\"/>"):"")+"</g>");
       }
-      var mid=(a0+a1)/2*Math.PI/180;
-      var lx=cx+(R-46)*Math.cos(mid), ly=cy+(R-46)*Math.sin(mid);
-      out.push("<text x="+lx+" y="+ly+" fill=\"var(--muted)\" font-size=11 text-anchor=middle letter-spacing=1>"+key.toUpperCase()+"</text>");
+      var mdeg=((n===1)?((a0+a1)/2):(mid0+span/2))*Math.PI/180;
+      var lx=cx+(R-44)*Math.cos(mdeg), ly=cy+(R-44)*Math.sin(mdeg);
+      var fill2=(filled[key]||0);
+      out.push("<text x="+lx+" y="+ly+" fill=\"var(--muted)\" font-size=13 text-anchor=middle letter-spacing=1.5 font-weight=600>"+ar[3]+"</text>");
+      out.push("<text x="+lx+" y="+(ly+16)+" fill=\"var(--accent)\" font-size=13 text-anchor=middle font-weight=600>"+fill2+" / "+n+"</text>");
     });
+    out.push("<text x=250 y=244 fill=\"var(--text)\" font-size=22 text-anchor=middle font-weight=600>"+esc(hullName||"")+"</text>");
+    out.push("<text x=250 y=268 fill=\"var(--muted)\" font-size=13 text-anchor=middle>"+esc(ehpTxt||"")+"</text>");
     return "<svg id=fb-ring viewBox=\"0 0 500 500\" xmlns=\"http://www.w3.org/2000/svg\">"+out.join("")+"</svg>";
   }
   var busy=false;
@@ -9002,6 +9023,8 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       var over=[];
       ["hi","med","low","rig"].forEach(function(sl){ if(used[sl]>counts[sl]) over.push(sl.toUpperCase()+" slots"); });
       if(cpu>cpuT) over.push("CPU"); if(pg>pgT) over.push("powergrid"); if(cal>calT) over.push("calibration");
+      var byslot={hi:[],med:[],low:[],rig:[]};
+      mods.forEach(function(m){ var sx=slotOf(m.t); if(sx&&byslot[sx]) byslot[sx].push(m.t.n); });
       var slotHTML=["hi","med","low","rig"].map(function(sl){
         var lbl={hi:"High",med:"Mid",low:"Low",rig:"Rig"}[sl];
         var rows=mods.filter(function(m){ return slotOf(m.t)===sl; }).map(function(m){
@@ -9046,7 +9069,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         "<div class=fb-row><span>Drone bay</span><b>"+num(h.a[A.dbay],0)+" m3</b></div></div>"):"");
       host.innerHTML="<div id=fb-wrap><div><h4 style=\"margin:0 0 4px\">"+esc(h.n)+"</h4>"+
         (over.length?"<div class=fb-bad style=\"font-size:12px;margin-bottom:8px\">Over limit: "+esc(over.join(", "))+"</div>":"<div class=fb-good style=\"font-size:12px;margin-bottom:8px\">Fits within CPU, powergrid and slots.</div>")+
-        ringSVG(counts,used)+slotHTML+"</div><div>"+stats+"</div></div>";
+        "<div id=fb-left><div>"+ringSVG(counts,used,byslot,h.n,num(ehp(h),0)+" ehp \u00b7 hull baseline")+"</div><div>"+slotHTML+"</div></div>"+"</div><div>"+stats+"</div></div>";
       [].forEach.call(host.querySelectorAll("[data-del]"),function(x){
         x.addEventListener("click",function(){
           var id=Number(x.getAttribute("data-del"));
