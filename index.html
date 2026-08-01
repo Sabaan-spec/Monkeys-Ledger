@@ -7046,6 +7046,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   var HUBS=[["60003760","Jita IV-4 (The Forge)"],["60008494","Amarr VIII (Domain)"],["60011866","Dodixie IX (Sinq Laison)"],["60004588","Rens VI (Heimatar)"],["60005686","Hek VIII (Metropolis)"]];
   var RULES=[["below","Price drops below"],["above","Price rises above"],["cost","Sell price below my build cost"],["undercut","Someone undercuts my order"]];
   var COOLDOWN=1800000, POLL=180000;
+  var GLOBAL_ONLY={44992:"PLEX"};
   var watches=load(KEY,[]), log=load(LOGKEY,[]), busy=false, lastPoll=0, myOrders=null, ordersAt=0;
   function load(k,d){ try{ var v=JSON.parse(localStorage.getItem(k)); return v||d; }catch(e){ return d; } }
   function save(){ try{ localStorage.setItem(KEY,JSON.stringify(watches)); localStorage.setItem(LOGKEY,JSON.stringify(log.slice(0,40))); }catch(e){} }
@@ -7128,6 +7129,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     msg("Looking up item\u2026");
     var t=await typeId(nm);
     if(!t){ msg("Could not find an item called \u201c"+nm+"\u201d \u2014 names must match exactly."); return; }
+    if(GLOBAL_ONLY[t.id]){ msg(GLOBAL_ONLY[t.id]+" trades on EVE’s global market, which ESI does not publish per region — there are no regional orders to watch, so the scanner cannot track it."); return; }
     var locName=locId;
     var hub=HUBS.filter(function(h){ return h[0]===String(locId); })[0];
     if(hub) locName=hub[1];
