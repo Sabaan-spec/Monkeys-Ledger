@@ -6317,7 +6317,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     {id:"mat",label:"Materials",tabs:["ore","repro","pi"]},
     {id:"acct",label:"Account",tabs:["sso"]},
     {id:"trade",label:"Trade",tabs:["arb","top","plan","scan","pricecheck"]},
-    {id:"intel",label:"Intel",tabs:["kills","fits"]}
+    {id:"intel",label:"Intel",tabs:["kills","fits","reference"]}
   ];
   var KEY="eveTabGroupV1";
   function origNav(){ return document.querySelector("nav.tabs"); }
@@ -7741,6 +7741,245 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     window.__pcWrapped=1;
   }
   setTimeout(function(){ panel(); ensureBtn(); wrap(); },1600);
+  setInterval(function(){ panel(); ensureBtn(); wrap(); enforce(); },700);
+})();
+</script>
+
+<style>
+#tab-reference .rf-nav{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+#tab-reference .rf-nav button{background:none;border:1px solid var(--border);color:var(--muted);border-radius:2px;padding:7px 14px;font-size:12px;font-family:inherit;cursor:pointer;letter-spacing:.04em;text-transform:uppercase}
+#tab-reference .rf-nav button.on{color:var(--text);border-color:var(--accent-dim);background:rgba(84,194,218,.10)}
+#tab-reference table{width:100%;border-collapse:collapse;margin-top:4px}
+#tab-reference th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:7px 8px;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer}
+#tab-reference td{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.05);font-size:13px}
+#tab-reference td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+#tab-reference .em{color:#7fb8ff}#tab-reference .th{color:#ff8a5c}#tab-reference .kin{color:#c9d1d9}#tab-reference .exp{color:#e3b341}
+#tab-reference .rf-note{font-size:12px;color:var(--muted);line-height:1.55;margin:10px 0 0;max-width:920px}
+#tab-reference .rf-sub{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+#tab-reference .rf-sub button{background:none;border:1px solid var(--border);color:var(--muted);border-radius:2px;padding:5px 11px;font-size:12px;font-family:inherit;cursor:pointer}
+#tab-reference .rf-sub button.on{color:var(--text);border-color:var(--accent-dim)}
+#tab-reference h4{margin:16px 0 6px;font-size:13px;font-weight:600}
+</style>
+<script>/* Reference tab v1 */
+(function(){
+  var ID="reference", CKEY="eveDogmaV1";
+  var A={em:114,th:118,kin:117,exp:116,rng:120,trk:244,fall:128,dmgMult:64,speed:37,optimal:54,falloff:158};
+  var AMMO=[
+    {k:"crystal",label:"Frequency crystals",gids:[86,374,375]},
+    {k:"hybrid",label:"Hybrid charges",gids:[85,373,377,1989]},
+    {k:"projectile",label:"Projectile ammo",gids:[83,372,376]},
+    {k:"missile",label:"Missiles",gids:[387,384,772,385,89,386,476,1019,648,653,654,655,656,657,1677,1678]}
+  ];
+  var FACTIONS=[
+    ["Angel Cartel","Explosive / Kinetic","Explosive"],
+    ["Blood Raiders","EM / Thermal","Explosive"],
+    ["Guristas","Kinetic / Thermal","Kinetic"],
+    ["Sansha\u2019s Nation","EM / Thermal","Explosive"],
+    ["Serpentis","Thermal / Kinetic","Kinetic"],
+    ["Mercenaries","Thermal / Kinetic","Thermal"],
+    ["Mordu\u2019s Legion","Kinetic / Thermal","Thermal"],
+    ["Rogue Drones","Mixed, varies by type","EM / Thermal"],
+    ["Amarr Empire","EM / Thermal","Explosive"],
+    ["Caldari State","Kinetic / Thermal","Kinetic"],
+    ["Gallente Federation","Thermal / Kinetic","Kinetic"],
+    ["Minmatar Republic","Explosive / Kinetic","EM"]
+  ];
+  var EWAR=[
+    ["Tracking Disruptor","TD","Cuts turret tracking and optimal range","Crucifier, Arbitrator"],
+    ["ECM","Jam","Breaks target lock entirely, chance-based","Griffin, Blackbird"],
+    ["Sensor Dampener","Damp","Cuts targeting range and scan resolution","Maulus, Celestis"],
+    ["Target Painter","TP","Increases target signature, helps missiles and turrets","Vigil, Bellicose"],
+    ["Weapon Disruptor","GD","Cuts missile range and rate of fire","Crucifier Navy Issue"],
+    ["Stasis Webifier","Web","Slows the target sharply","Most frigates"],
+    ["Warp Scrambler","Scram","Stops warp and shuts off MWD","Tackle frigates"]
+  ];
+  var cache={}, loading={}, sec="dmg", ammoKind="crystal", sortBy=null, sortDir=-1;
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s==null?"":s).replace(/[&<>]/g,function(c){ return c==="&"?"&amp;":(c==="<"?"&lt;":"&gt;"); }); }
+  function loadCache(){ try{ return JSON.parse(localStorage.getItem(CKEY)||"{}"); }catch(e){ return {}; } }
+  function saveCache(){ try{ localStorage.setItem(CKEY,JSON.stringify(cache)); }catch(e){} }
+  function groupTypes(gids){
+    var idx=null; try{ idx=JSON.parse(localStorage.getItem("eveCatIdxV1")||"null"); }catch(e){}
+    if(!idx||!idx.groups) return [];
+    var out=[];
+    idx.groups.forEach(function(g){ if(gids.indexOf(g.gid)>=0) (g.types||[]).forEach(function(t){ out.push(t); }); });
+    return out;
+  }
+  async function fetchType(id){
+    try{
+      var r=await fetch("https://esi.evetech.net/latest/universe/types/"+id+"/");
+      if(!r.ok) return null;
+      var o=await r.json();
+      var m={}; (o.dogma_attributes||[]).forEach(function(a){ m[a.attribute_id]=a.value; });
+      return {id:o.type_id,name:o.name,a:m,published:o.published};
+    }catch(e){ return null; }
+  }
+  async function loadSet(key,gids,onProgress){
+    if(cache[key]) return cache[key];
+    if(loading[key]) return null;
+    loading[key]=true;
+    var ids=groupTypes(gids), out=[], done=0;
+    for(var i=0;i<ids.length;i+=12){
+      var batch=ids.slice(i,i+12);
+      var res=await Promise.all(batch.map(fetchType));
+      res.forEach(function(x){ if(x&&x.published!==false) out.push(x); });
+      done+=batch.length;
+      if(onProgress) onProgress(done,ids.length);
+    }
+    cache[key]=out; saveCache(); loading[key]=false;
+    return out;
+  }
+  function dmgCells(a){
+    function c(v,cls){ return "<td class=\"n "+cls+"\">"+(v?Math.round(v*10)/10:"\u2014")+"</td>"; }
+    return c(a[A.em],"em")+c(a[A.th],"th")+c(a[A.kin],"kin")+c(a[A.exp],"exp");
+  }
+  function mult(v){ return (v==null)?"\u2014":(Math.round(v*100)/100)+"\u00d7"; }
+  function renderAmmo(){
+    var out=$("rf-body");
+    var set=AMMO.filter(function(x){ return x.k===ammoKind; })[0];
+    var subs=AMMO.map(function(x){ return "<button data-k="+x.k+(x.k===ammoKind?" class=on":"")+">"+esc(x.label)+"</button>"; }).join("");
+    var rows=cache[set.k];
+    var table="";
+    if(!rows){
+      table="<div class=rf-note>Loading "+esc(set.label.toLowerCase())+" from CCP\u2019s type data\u2026 <span id=rf-prog></span></div>";
+      loadSet(set.k,set.gids,function(d,t){ var p=$("rf-prog"); if(p) p.textContent=d+" / "+t; }).then(function(r){ if(r&&sec==="ammo") renderAmmo(); });
+    } else {
+      var list=rows.slice();
+      list.sort(function(x,y){
+        if(sortBy===null) return x.name.localeCompare(y.name);
+        var av=(sortBy==="name")?x.name:(x.a[sortBy]||0);
+        var bv=(sortBy==="name")?y.name:(y.a[sortBy]||0);
+        if(sortBy==="name") return sortDir*String(bv).localeCompare(String(av));
+        return sortDir*(bv-av);
+      });
+      var body=list.map(function(t){
+        return "<tr><td>"+esc(t.name)+"</td>"+dmgCells(t.a)+
+          "<td class=n>"+mult(t.a[A.rng])+"</td><td class=n>"+mult(t.a[A.fall])+"</td><td class=n>"+mult(t.a[A.trk])+"</td></tr>";
+      }).join("");
+      table="<table><thead><tr><th data-s=name>Charge</th><th data-s="+A.em+" class=n>EM</th><th data-s="+A.th+" class=n>Therm</th><th data-s="+A.kin+" class=n>Kin</th><th data-s="+A.exp+" class=n>Exp</th><th data-s="+A.rng+" class=n>Range</th><th data-s="+A.fall+" class=n>Falloff</th><th data-s="+A.trk+" class=n>Tracking</th></tr></thead><tbody>"+body+"</tbody></table>"+
+        "<div class=rf-note>"+list.length+" charges. Range, falloff and tracking are multipliers applied to the weapon \u2014 1.00\u00d7 means unchanged. Values come live from CCP\u2019s type data, so they follow rebalances.</div>";
+    }
+    out.innerHTML="<div class=rf-sub>"+subs+"</div>"+table;
+    [].slice.call(out.querySelectorAll(".rf-sub button")).forEach(function(b){ b.addEventListener("click",function(){ ammoKind=this.getAttribute("data-k"); sortBy=null; renderAmmo(); }); });
+    [].slice.call(out.querySelectorAll("th[data-s]")).forEach(function(th){ th.addEventListener("click",function(){ var s=this.getAttribute("data-s"); s=(s==="name")?"name":Number(s); if(sortBy===s) sortDir=-sortDir; else { sortBy=s; sortDir=-1; } renderAmmo(); }); });
+  }
+  function renderDrones(){
+    var out=$("rf-body");
+    var rows=cache.drone;
+    if(!rows){
+      out.innerHTML="<div class=rf-note>Loading drone data from CCP\u2019s type data\u2026 <span id=rf-prog></span></div>";
+      loadSet("drone",[100],function(d,t){ var p=$("rf-prog"); if(p) p.textContent=d+" / "+t; }).then(function(r){ if(r&&sec==="drone") renderDrones(); });
+      return;
+    }
+    var list=rows.slice().sort(function(x,y){
+      if(sortBy===null) return x.name.localeCompare(y.name);
+      if(sortBy==="name") return sortDir*y.name.localeCompare(x.name);
+      return sortDir*(((y.a[sortBy]||0))-((x.a[sortBy]||0)));
+    });
+    var body=list.map(function(t){
+      var raw=(t.a[A.em]||0)+(t.a[A.th]||0)+(t.a[A.kin]||0)+(t.a[A.exp]||0);
+      var dps=raw*(t.a[A.dmgMult]||1);
+      return "<tr><td>"+esc(t.name)+"</td>"+dmgCells(t.a)+
+        "<td class=n>"+(t.a[A.dmgMult]?((Math.round(t.a[A.dmgMult]*100)/100)+"\u00d7"):"\u2014")+"</td>"+
+        "<td class=n>"+(dps?Math.round(dps*10)/10:"\u2014")+"</td>"+
+        "<td class=n>"+(t.a[A.trk]?(Math.round(t.a[A.trk]*1000)/1000):"\u2014")+"</td>"+
+        "<td class=n>"+(t.a[A.speed]?Math.round(t.a[A.speed]):"\u2014")+"</td></tr>";
+    }).join("");
+    out.innerHTML="<table><thead><tr><th data-s=name>Drone</th><th data-s="+A.em+" class=n>EM</th><th data-s="+A.th+" class=n>Therm</th><th data-s="+A.kin+" class=n>Kin</th><th data-s="+A.exp+" class=n>Exp</th><th data-s="+A.dmgMult+" class=n>Mult</th><th class=n>Volley</th><th data-s="+A.trk+" class=n>Tracking</th><th data-s="+A.speed+" class=n>Speed m/s</th></tr></thead><tbody>"+body+"</tbody></table>"+
+      "<div class=rf-note>"+list.length+" combat drones. Volley is the four damage types summed and multiplied by the drone\u2019s damage multiplier \u2014 it is damage per cycle, not DPS. Click a column to sort.</div>";
+    [].slice.call(out.querySelectorAll("th[data-s]")).forEach(function(th){ th.addEventListener("click",function(){ var s=this.getAttribute("data-s"); s=(s==="name")?"name":Number(s); if(sortBy===s) sortDir=-sortDir; else { sortBy=s; sortDir=-1; } renderDrones(); }); });
+  }
+  function renderDamage(){
+    var body=FACTIONS.map(function(f){ return "<tr><td><b>"+esc(f[0])+"</b></td><td>"+esc(f[1])+"</td><td class=best>"+esc(f[2])+"</td></tr>"; }).join("");
+    $("rf-body").innerHTML="<table><thead><tr><th>Faction</th><th>Damage they deal</th><th>Damage to use against them</th></tr></thead><tbody>"+body+"</tbody></table>"+
+      "<div class=rf-note>Tank against the damage they deal, shoot the damage they are weakest to. These are the long-standing community profiles rather than values read from the game files \u2014 they are reliable for mission and ratting use, but check a specific NPC if you are fitting for something unusual.</div>";
+  }
+  function renderRef(){
+    var st="";
+    for(var i=1;i<=8;i++){ var m=Math.pow(0.5,Math.pow((i-1)/2.22292,2)); st+="<tr><td class=n>"+i+"</td><td class=n>"+(m*100).toFixed(1)+"%</td></tr>"; }
+    var ew=EWAR.map(function(e){ return "<tr><td><b>"+esc(e[0])+"</b></td><td>"+esc(e[1])+"</td><td>"+esc(e[2])+"</td><td>"+esc(e[3])+"</td></tr>"; }).join("");
+    $("rf-body").innerHTML=
+      "<h4>Stacking penalties</h4><table><thead><tr><th class=n>Module</th><th class=n>Effectiveness</th></tr></thead><tbody>"+st+"</tbody></table>"+
+      "<div class=rf-note>Calculated from the game\u2019s formula 0.5^(((n\u22121)/2.22292)^2), not transcribed. Applies to most modules that affect the same attribute; damage mods, rigs and implants stack separately in some cases.</div>"+
+      "<h4>Security bands</h4><table><thead><tr><th>Status</th><th>Space</th><th>What it means</th></tr></thead><tbody>"+
+      "<tr><td class=n>1.0 \u2013 0.5</td><td>High security</td><td>CONCORD responds to aggression; response is fastest at 1.0 and slowest at 0.5</td></tr>"+
+      "<tr><td class=n>0.4 \u2013 0.1</td><td>Low security</td><td>No CONCORD; gate and station guns fire on aggressors</td></tr>"+
+      "<tr><td class=n>0.0 and below</td><td>Null security</td><td>No response of any kind; sovereignty rules apply</td></tr>"+
+      "</tbody></table>"+
+      "<h4>Electronic warfare</h4><table><thead><tr><th>Module</th><th>Short</th><th>Effect</th><th>Common hulls</th></tr></thead><tbody>"+ew+"</tbody></table>"+
+      "<div class=rf-note>Wormhole system effects are not included yet \u2014 they vary by class and I would rather add them verified than approximate.</div>";
+  }
+  function render(){
+    var b=$("rf-body"); if(!b) return;
+    [].slice.call(document.querySelectorAll("#tab-reference .rf-nav button")).forEach(function(x){ x.className=(x.getAttribute("data-sec")===sec)?"on":""; });
+    if(sec==="dmg") renderDamage();
+    else if(sec==="ammo") renderAmmo();
+    else if(sec==="drone") renderDrones();
+    else renderRef();
+  }
+  function panel(){
+    var k=$("tab-kills"); if(!k) return null;
+    var p=$("tab-"+ID);
+    if(!p){
+      cache=loadCache();
+      p=document.createElement("div"); p.id="tab-"+ID; p.hidden=true; p.style.display="none";
+      k.parentElement.insertBefore(p,k.nextSibling);
+      p.innerHTML="<section class=\"panel\"><div>"+
+        "<div style=\"font-weight:600;margin-bottom:10px\">\ud83d\udcd8 Reference</div>"+
+        "<div class=rf-nav>"+
+        "<button data-sec=dmg class=on>Damage &amp; resists</button>"+
+        "<button data-sec=ammo>Ammo</button>"+
+        "<button data-sec=drone>Drones</button>"+
+        "<button data-sec=ref>Tables</button>"+
+        "</div><div id=rf-body></div></div></section>";
+      [].slice.call(p.querySelectorAll(".rf-nav button")).forEach(function(b){ b.addEventListener("click",function(){ sec=this.getAttribute("data-sec"); sortBy=null; render(); }); });
+      render();
+    }
+    return p;
+  }
+  function activeOrigTab(){
+    var nav=document.querySelector("nav.tabs"); if(!nav) return null;
+    var r=null;
+    [].slice.call(nav.querySelectorAll("button.tab[data-tab]")).forEach(function(b){ if(/\bactive\b/.test(b.className)) r=b.getAttribute("data-tab"); });
+    return r;
+  }
+  function hideOthers(){ [].slice.call(document.querySelectorAll("[id^=tab-]")).forEach(function(e){ if(e.id!=="tab-"+ID){ e.hidden=true; e.style.display="none"; } }); }
+  function restoreOthers(){ [].slice.call(document.querySelectorAll("[id^=tab-]")).forEach(function(e){ if(e.id!=="tab-"+ID) e.style.display=""; }); }
+  function enforce(){
+    var p=$("tab-"+ID); if(!p) return;
+    if(activeOrigTab()===ID){ p.hidden=false; p.style.display=""; hideOthers(); }
+    else if(p.style.display!=="none"){ p.hidden=true; p.style.display="none"; restoreOthers(); }
+  }
+  function ensureBtn(){
+    var nav=document.querySelector("nav.tabs"); if(!nav) return;
+    if(nav.querySelector("button.tab[data-tab=reference]")) return;
+    var b=document.createElement("button");
+    b.className="tab"; b.setAttribute("data-tab",ID); b.textContent="Reference";
+    b.addEventListener("click",function(e){ e.stopPropagation(); if(window.switchTab) window.switchTab(ID); });
+    nav.appendChild(b);
+  }
+  function wrap(){
+    if(typeof window.switchTab!=="function"||window.__rfWrapped) return;
+    var prev=window.switchTab;
+    var fn=function(id){
+      var p=panel();
+      if(id===ID){
+        prev("kills");
+        if(p){ p.hidden=false; p.style.display=""; }
+        hideOthers();
+        var nav=document.querySelector("nav.tabs");
+        if(nav) [].slice.call(nav.querySelectorAll("button.tab[data-tab]")).forEach(function(b){ if(b.getAttribute("data-tab")===ID) b.classList.add("active"); else b.classList.remove("active"); });
+        return;
+      }
+      if(p){ p.hidden=true; p.style.display="none"; }
+      restoreOthers();
+      return prev.apply(this,arguments);
+    };
+    fn.__rfWrap=1;
+    window.switchTab=fn;
+    window.__rfWrapped=1;
+  }
+  setTimeout(function(){ panel(); ensureBtn(); wrap(); },1800);
   setInterval(function(){ panel(); ensureBtn(); wrap(); enforce(); },700);
 })();
 </script>
