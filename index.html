@@ -7418,7 +7418,25 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   function $(id){ return document.getElementById(id); }
   function isk(n){ if(n==null) return "\u2014"; try{ return window.eveISK?window.eveISK(n):Math.round(n).toLocaleString(); }catch(e){ return Math.round(n).toLocaleString(); } }
   function esc(s){ return String(s==null?"":s).replace(/[&<>]/g,function(c){ return c==="&"?"&amp;":(c==="<"?"&lt;":"&gt;"); }); }
-  function regionSel(){ return $("kd-region")||$("kl-region"); }
+  function regionSel(){ return $("kd-region"); }
+  var filling=false;
+  async function fillRegions(sel){
+    if(filling||!sel) return; filling=true;
+    try{
+      var ids=await fetch("https://esi.evetech.net/latest/universe/regions/").then(function(r){ return r.json(); });
+      ids=ids.filter(function(i){ return i<11000000; });
+      var nm={};
+      try{ nm=await EVEAPI.names(ids)||{}; }catch(e){}
+      var rows=ids.map(function(i){ return {id:i,name:nm[i]||("Region "+i)}; });
+      rows.sort(function(a,b){ return a.name<b.name?-1:(a.name>b.name?1:0); });
+      sel.innerHTML="";
+      rows.forEach(function(r){ var o=document.createElement("option"); o.value=String(r.id); o.textContent=r.name; sel.appendChild(o); });
+      var hb=($("hub")||{}).value;
+      sel.value=String(HUBREG[hb]||10000002);
+      run(true);
+    }catch(e){}
+    filling=false;
+  }
   function panel(){
     var k=$("tab-kills"); if(!k) return null;
     var p=$("tab-"+ID);
@@ -7432,15 +7450,9 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         "<button id=kd-go class=tab style=\"padding:9px 18px\">Refresh</button></div>"+
         "<div id=kd-note></div><div id=kd-grid></div></div></div></section>";
       var sel=p.querySelector("#kd-region");
-      var src=$("kl-region");
-      if(src){ [].slice.call(src.options).forEach(function(o){ var x=document.createElement("option"); x.value=o.value; x.textContent=o.textContent; sel.appendChild(x); }); }
-      var hub=($("hub")||{}).value;
-      if(HUBREG[hub]) sel.value=String(HUBREG[hub]);
       sel.addEventListener("change",function(){ run(true); });
+      fillRegions(sel);
       p.querySelector("#kd-go").addEventListener("click",function(){ run(true); });
-    } else if(!p.querySelector("#kd-region option")){
-      var sel2=p.querySelector("#kd-region"), src2=$("kl-region");
-      if(sel2&&src2&&src2.options.length){ [].slice.call(src2.options).forEach(function(o){ var x=document.createElement("option"); x.value=o.value; x.textContent=o.textContent; sel2.appendChild(x); }); var hb=($("hub")||{}).value; if(HUBREG[hb]) sel2.value=String(HUBREG[hb]); }
     }
     return p;
   }
