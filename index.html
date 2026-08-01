@@ -7444,7 +7444,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       p=document.createElement("div"); p.id="tab-"+ID; p.hidden=true; p.style.display="none";
       k.parentElement.insertBefore(p,k.nextSibling);
       p.innerHTML="<section class=\"panel\"><div>"+
-        "<div id=kd-panel><h4>\ud83d\udd28 What is dying here \u2014 and what you could build</h4>"+
+        "<style>#kd-panel table{width:100%;border-collapse:collapse}#kd-panel th,#kd-panel td{padding:5px 12px;white-space:nowrap}#kd-panel th:first-child,#kd-panel td:first-child{white-space:normal;width:58%}#kd-panel th.n,#kd-panel td.n{text-align:right}#kd-panel h4{margin:16px 0 6px}</style><div id=kd-panel><h4>\ud83d\udd28 What is dying here \u2014 and what you could build</h4>"+
         "<div style=\"display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:10px\">"+
         "<label style=\"display:flex;flex-direction:column;gap:4px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)\">Region<select id=kd-region style=\"background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:9px 11px;font-family:inherit;font-size:14px;min-width:200px\"></select></label>"+
         "<button id=kd-go class=tab style=\"padding:9px 18px\">Refresh</button></div>"+
@@ -7515,7 +7515,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         var hrs=(Math.max.apply(null,times)-Math.min.apply(null,times))/3600000;
         span=" over the last "+(hrs<1?Math.round(hrs*60)+" minutes":hrs.toFixed(1)+" hours");
       }
-      var msg=z.length+" recent kills"+span+", priced at the cheapest order in "+esc(hub)+" itself. Cargo is excluded \u2014 only fitted slots, rigs and subsystems count.";
+      var msg=z.length+" recent kills"+span+", priced at the cheapest order in "+esc(hub.charAt(0).toUpperCase()+hub.slice(1))+" itself. Cargo is excluded \u2014 only fitted slots, rigs and subsystems count.";
       if(!bpOk) msg+=" Connect a character to see which of these you hold blueprints for.";
       if(note) note.innerHTML=msg;
     }catch(e){ if(note) note.textContent="Could not load destruction data."; }
