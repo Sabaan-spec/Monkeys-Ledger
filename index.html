@@ -7790,6 +7790,9 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     ["Mercenaries","Thermal / Kinetic","Thermal"],
     ["Mordu\u2019s Legion","Kinetic / Thermal","Thermal"],
     ["Rogue Drones","Mixed, varies by type","EM / Thermal"],
+    ["Triglavian Collective","Thermal / Explosive","EM / Thermal"],
+    ["Sleepers","EM / Thermal","EM / Thermal"],
+    ["Drifters","EM / Thermal","EM / Thermal"],
     ["Amarr Empire","EM / Thermal","Explosive"],
     ["Caldari State","Kinetic / Thermal","Kinetic"],
     ["Gallente Federation","Thermal / Kinetic","Kinetic"],
@@ -7905,6 +7908,76 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     $("rf-body").innerHTML="<table><thead><tr><th>Faction</th><th>Damage they deal</th><th>Damage to use against them</th></tr></thead><tbody>"+body+"</tbody></table>"+
       "<div class=rf-note>Tank against the damage they deal, shoot the damage they are weakest to. These are the long-standing community profiles rather than values read from the game files \u2014 they are reliable for mission and ratting use, but check a specific NPC if you are fitting for something unusual.</div>";
   }
+  var TIERS=["Tranquil","Calm","Agitated","Fierce","Raging","Chaotic","Cataclysmic"];
+  var WEATHER=["Electrical","Dark","Exotic","Firestorm","Gamma"];
+  var TRIG=[47269,49710,47270,49712,49711,47271,52250,52252,52254,52907];
+  var abyssCache=null;
+  async function renderAbyss(){
+    var out=$("rf-body");
+    out.innerHTML="<div class=rf-note>Loading filament and hull data\u2026</div>";
+    var names=null; try{ names=JSON.parse(localStorage.getItem("eveTypeNamesV1")||"null"); }catch(e){}
+    if(!names){ out.innerHTML="<div class=rf-note>Open Trade \u2192 Price Checker once to build the item index, then come back \u2014 this section reads names from it.</div>"; return; }
+    var fil={};
+    for(var id in names){
+      var n=names[id];
+      if(!/Filament$/i.test(n)) continue;
+      for(var ti=0;ti<TIERS.length;ti++){
+        for(var wi=0;wi<WEATHER.length;wi++){
+          if(n.indexOf(TIERS[ti])===0 && n.indexOf(WEATHER[wi])>=0){ fil[TIERS[ti]+"|"+WEATHER[wi]]=Number(id); }
+        }
+      }
+    }
+    var ids=Object.keys(fil).map(function(k){ return fil[k]; });
+    var hub=($("hub")||{}).value||"jita";
+    var REG={jita:10000002,amarr:10000043,dodixie:10000032,rens:10000030,hek:10000042};
+    var px={};
+    for(var i=0;i<ids.length;i+=200){
+      try{
+        var r=await fetch("https://market.fuzzwork.co.uk/aggregates/?region="+(REG[hub]||10000002)+"&types="+ids.slice(i,i+200).join(","));
+        if(r.ok){ var o=await r.json(); for(var k in o){ var s=o[k]&&o[k].sell; if(!s) continue; var v=parseFloat(s.percentile); if(!(v>0)) v=parseFloat(s.min); if(v>0) px[k]=v; } }
+      }catch(e){}
+    }
+    var head="<tr><th>Tier</th>"+WEATHER.map(function(w){ return "<th class=n>"+w+"</th>"; }).join("")+"</tr>";
+    var body=TIERS.map(function(t,ti){
+      var cells=WEATHER.map(function(w){
+        var id=fil[t+"|"+w];
+        if(!id) return "<td class=n>\u2014</td>";
+        return "<td class=n>"+(px[id]?isk(px[id]):"\u2014")+"</td>";
+      }).join("");
+      return "<tr><td><b>"+ti+" "+esc(t)+"</b></td>"+cells+"</tr>";
+    }).join("");
+    var hulls="";
+    if(!abyssCache){
+      var res=await Promise.all(TRIG.map(async function(id){
+        try{
+          var r=await fetch("https://esi.evetech.net/latest/universe/types/"+id+"/");
+          if(!r.ok) return null;
+          var o=await r.json(), m={};
+          (o.dogma_attributes||[]).forEach(function(a){ m[a.attribute_id]=a.value; });
+          var meta=null;
+          try{ var idx=JSON.parse(localStorage.getItem("eveCatIdxV1")||"null"); if(idx&&idx.groups) idx.groups.forEach(function(g){ if((g.types||[]).indexOf(id)>=0) meta=g.name; }); }catch(e){}
+          return {id:id,name:o.name,cls:meta||"\u2014",ehp:(m[263]||0)+(m[265]||0)+(m[9]||0)};
+        }catch(e){ return null; }
+      }));
+      abyssCache=res.filter(Boolean);
+    }
+    var hullIds=abyssCache.map(function(x){ return x.id; });
+    var hpx={};
+    try{
+      var r2=await fetch("https://market.fuzzwork.co.uk/aggregates/?region="+(REG[hub]||10000002)+"&types="+hullIds.join(","));
+      if(r2.ok){ var o2=await r2.json(); for(var k2 in o2){ var s2=o2[k2]&&o2[k2].sell; if(!s2) continue; var v2=parseFloat(s2.percentile); if(!(v2>0)) v2=parseFloat(s2.min); if(v2>0) hpx[k2]=v2; } }
+    }catch(e){}
+    hulls="<h4>Triglavian and Abyssal hulls</h4><table><thead><tr><th>Hull</th><th>Class</th><th class=n>Base EHP</th><th class=n>Price @ hub</th></tr></thead><tbody>"+
+      abyssCache.sort(function(a,b){ return a.ehp-b.ehp; }).map(function(x){
+        return "<tr><td><b>"+esc(x.name)+"</b></td><td style=\"color:var(--muted)\">"+esc(x.cls)+"</td><td class=n>"+(x.ehp?Math.round(x.ehp).toLocaleString():"\u2014")+"</td><td class=n>"+(hpx[x.id]?isk(hpx[x.id]):"\u2014")+"</td></tr>";
+      }).join("")+"</tbody></table>";
+    out.innerHTML=
+      "<h4>Filament cost by tier and weather</h4><table><thead>"+head+"</thead><tbody>"+body+"</tbody></table>"+
+      "<div class=rf-note>Live sell prices at your Manufacturing hub. Tier 0\u20133 are the lower-risk runs, 4\u20136 escalate sharply in both difficulty and reward. A filament is consumed on entry, so this is your cost of admission per run.</div>"+
+      hulls+
+      "<div class=rf-note>Triglavian ships fire entropic disintegrators loaded with exotic plasma, which does <b>thermal and explosive</b> damage \u2014 verified from the charge data, not assumed. Their damage <b>ramps the longer they hold a target</b>, so breaking their lock resets it. Base EHP is the bare hull with no fittings.</div>"+
+      "<div class=rf-note>What is deliberately not here: per-weather environmental modifiers and individual NPC behaviour. Those are community-documented rather than published in the game data, and a wrong number in an Abyssal pocket costs you the ship and the filament. The Convocation of Empyreans cheat sheet remains the reference for those.</div>";
+  }
   function renderRef(){
     var st="";
     for(var i=1;i<=8;i++){ var m=Math.pow(0.5,Math.pow((i-1)/2.22292,2)); st+="<tr><td class=n>"+i+"</td><td class=n>"+(m*100).toFixed(1)+"%</td></tr>"; }
@@ -7926,6 +7999,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     if(sec==="dmg") renderDamage();
     else if(sec==="ammo") renderAmmo();
     else if(sec==="drone") renderDrones();
+    else if(sec==="abyss") renderAbyss();
     else renderRef();
   }
   function panel(){
@@ -7941,7 +8015,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         "<button data-sec=dmg class=on>Damage &amp; resists</button>"+
         "<button data-sec=ammo>Ammo</button>"+
         "<button data-sec=drone>Drones</button>"+
-        "<button data-sec=ref>Tables</button>"+
+        "<button data-sec=abyss>Abyssal</button>"+"<button data-sec=ref>Tables</button>"+
         "</div><div id=rf-body></div></div></section>";
       [].slice.call(p.querySelectorAll(".rf-nav button")).forEach(function(b){ b.addEventListener("click",function(){ sec=this.getAttribute("data-sec"); sortBy=null; render(); }); });
       render();
