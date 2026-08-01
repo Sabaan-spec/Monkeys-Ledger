@@ -2952,7 +2952,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 })();
 </script>
 <script>
-/* Profit Watch — items below 30d avg + trending up (BUY) or above 30d avg (SELL), from Jita history */
+/* Day Trade — items below 30d avg + trending up (BUY) or above 30d avg (SELL), from Jita history */
 (function(){
   function $(id){return document.getElementById(id);}
   function ready(cb){function ok(){return typeof HUBS!=='undefined'&&typeof fuzzAgg==='function'&&document.getElementById('cat-ui');}if(ok()){cb();return;}var n=0,iv=setInterval(function(){if(ok()||n++>400){clearInterval(iv);if(ok())cb();}},100);}
@@ -2960,7 +2960,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     var host=$('cat-ui'); if(!host)return;
     var REFREGION=10000002; // The Forge (Jita)
 
-    var nb=[].slice.call(document.querySelectorAll('.tab')).find(function(x){return x.dataset.tab==='top';}); if(nb)nb.textContent='Profit Watch';
+    var nb=[].slice.call(document.querySelectorAll('.tab')).find(function(x){return x.dataset.tab==='top';}); if(nb)nb.textContent='Day Trade';
 
     var st=document.createElement('style');
     st.textContent='#pw-body tr td.sig-buy{color:var(--good);font-weight:600}#pw-body tr td.sig-sell{color:var(--warn);font-weight:600}#pw-wrap .spark{font-family:monospace;letter-spacing:-1px}#pw-prog{height:6px;background:var(--bg-2);border-radius:4px;overflow:hidden;margin:6px 0}#pw-prog>i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}#pw-body td.up{color:var(--good)}#pw-body td.down{color:var(--bad)}';
@@ -3324,7 +3324,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 
   var CATNAMES={4:'Materials',6:'Ships',7:'Modules',8:'Charges',9:'Blueprints',17:'Commodities',18:'Drones',20:'Implants & Boosters',22:'Deployables',23:'Starbase',32:'Subsystems',34:'Ancient Relics',35:'Decryptors',42:'Planetary Materials',43:'Planetary Commodities',46:'Orbitals',63:'Special Edition',65:'Structures',66:'Structure Modules',87:'Fighters',91:'SKINs'};
   var CATIDX=load('eveCatIdxV1',null);
-  function renderTree(){var host=$('mb-tree');if(!host)return;if(!CATIDX||!CATIDX.groups){host.innerHTML='<div class="muted small" style="padding:4px 2px">Category index not built. Open Profit Watch once to build it.</div>';return;}var byCat={};CATIDX.groups.forEach(function(g){(byCat[g.cat]=byCat[g.cat]||[]).push(g);});var cats=Object.keys(byCat).map(function(c){return {id:c,name:CATNAMES[c]||('Category '+c),groups:byCat[c].sort(function(a,b){return a.name.localeCompare(b.name);})};}).sort(function(a,b){return a.name.localeCompare(b.name);});host.innerHTML=cats.map(function(c){return '<div class="mb-cat" data-cat="'+c.id+'">\u25b8 '+c.name+'</div><div class="mb-catk" data-catk="'+c.id+'" style="display:none"></div>';}).join('');}
+  function renderTree(){var host=$('mb-tree');if(!host)return;if(!CATIDX||!CATIDX.groups){host.innerHTML='<div class="muted small" style="padding:4px 2px">Category index not built. Open Day Trade once to build it.</div>';return;}var byCat={};CATIDX.groups.forEach(function(g){(byCat[g.cat]=byCat[g.cat]||[]).push(g);});var cats=Object.keys(byCat).map(function(c){return {id:c,name:CATNAMES[c]||('Category '+c),groups:byCat[c].sort(function(a,b){return a.name.localeCompare(b.name);})};}).sort(function(a,b){return a.name.localeCompare(b.name);});host.innerHTML=cats.map(function(c){return '<div class="mb-cat" data-cat="'+c.id+'">\u25b8 '+c.name+'</div><div class="mb-catk" data-catk="'+c.id+'" style="display:none"></div>';}).join('');}
 
   function eveDrawChart(container,pts){
     if(!container)return;
@@ -4760,7 +4760,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 })();
 </script>
 <script>
-/* Profit watch v5 */
+/* Day trade v5 */
 (function(){
   function $(id){return document.getElementById(id);}
   var ESI='https://esi.evetech.net/latest';
@@ -5047,7 +5047,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     if(!host){host=document.createElement('div');host.id='eve-setup';host.style.cssText='position:fixed;left:14px;bottom:14px;z-index:9998;width:330px;background:rgba(12,24,33,.97);border:1px solid rgba(120,150,170,.35);border-radius:8px;padding:12px 14px;font-size:.82rem;box-shadow:0 4px 18px rgba(0,0,0,.5)';document.body.appendChild(host);}
     var h='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b>\ud83d\ude80 Setup</b><span id="eve-setup-x" style="cursor:pointer;color:#7fb0c8" title="dismiss">\u00d7</span></div>';
     h+=row(mOK,'System map',(busy.map?'':'set-map'),busy.map?'\u2026':'Build',busy.map?('building '+mapProgress()):(mOK?'':'needed for routes &amp; cost finder'));
-    h+=row(cOK,'Category index','set-cat',busy.cat?'\u2026':'Build',busy.cat?'building\u2026':(cOK?'':'needed for Profit Watch'));
+    h+=row(cOK,'Category index','set-cat',busy.cat?'\u2026':'Build',busy.cat?'building\u2026':(cOK?'':'needed for Day Trade'));
     h+=row(lOK,'Character connected','set-login','Log in',lOK?'':'unlocks Account features');
     if(lOK&&sc&&missing.length){h+='<div style="padding:4px 0;color:#e3b341;font-size:.78rem">\u26a0 Missing scopes: '+missing.map(function(s){return s.split('.')[1]||s;}).join(', ')+'<br><span class="muted">Enable at developers.eveonline.com \u2192 your app, then log out &amp; back in.</span></div>';}
     h+='<div class="muted" style="font-size:.72rem;margin-top:4px">Builds run in the background \u2014 you can keep using the app.</div>';
