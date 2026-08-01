@@ -7079,7 +7079,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
         "<label id=sc-tlabel>Target ISK<input id=sc-target type=number step=any placeholder=\"0\"></label>"+
         "<button id=sc-add class=tab style=\"padding:9px 16px\">Add watch</button>"+
         "<button id=sc-notify class=tab style=\"padding:9px 16px\">Enable notifications</button>"+
-        "</div><div id=sc-msg></div>"+
+        "</div><div id=sc-msg></div><div id=sc-status></div>"+
         "<div id=sc-table></div>"+
         "<div style=\"margin-top:16px;font-weight:600\">Recent alerts</div><ul id=sc-log></ul>"+
         "</div></section>";
@@ -7217,11 +7217,31 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     b.addEventListener("click",function(e){ e.stopPropagation(); if(window.switchTab) window.switchTab(ID); });
     nav.appendChild(b);
   }
+  function status(){
+    var el=$("sc-status"); if(!el) return;
+    var parts=[];
+    parts.push(watches.length+" watch"+(watches.length===1?"":"es"));
+    parts.push("checked every 3 minutes");
+    if(busy){ parts.push("checking now\u2026"); }
+    else if(lastPoll){
+      var ago=Math.round((Date.now()-lastPoll)/1000);
+      var next=Math.max(0,Math.round((POLL-(Date.now()-lastPoll))/1000));
+      parts.push("last check "+(ago<60?(ago+"s"):(Math.floor(ago/60)+"m "+(ago%60)+"s"))+" ago");
+      parts.push("next in "+(next<60?(next+"s"):(Math.floor(next/60)+"m "+(next%60)+"s")));
+    }
+    else { parts.push(watches.length?"first check due":"idle until you add a watch"); }
+    parts.push("only runs while this page is open");
+    var t=parts.join(" \u00b7 ");
+    if(el.textContent!==t) el.textContent=t;
+  }
   setTimeout(function(){ panel(); ensureBtn(); wrap(); render(); },1400);
   setInterval(function(){ panel(); ensureBtn(); wrap(); },1600);
   setInterval(function(){ poll(false); },30000);
+  setInterval(status,1000);
 })();
 </script>
+
+<style>#sc-status{font-size:12px;color:var(--muted);margin:2px 0 12px;letter-spacing:.02em}</style>
 </body>
 </html>
 
