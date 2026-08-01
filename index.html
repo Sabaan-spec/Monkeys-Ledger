@@ -8966,9 +8966,9 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   function align(h){ var m=h.a[A.mass]||0, g=h.a[A.agi]||0; return (-Math.log(0.25)*g*m)/1000000; }
   function ringSVG(counts,filled,byslot,hullName,ehpTxt){
     var R=196, cx=250, cy=250, out=[], i, rad, d;
-    out.push("<circle cx=250 cy=250 r=196 fill=none stroke=\"var(--border)\" stroke-width=34 opacity=.3/>");
-    out.push("<circle cx=250 cy=250 r=179 fill=none stroke=\"var(--border)\" stroke-width=1 opacity=.55/>");
-    out.push("<circle cx=250 cy=250 r=213 fill=none stroke=\"var(--border)\" stroke-width=1 opacity=.55/>");
+    out.push("<circle cx=250 cy=250 r=196 fill=none stroke=\"var(--border)\" stroke-width=\"34\" opacity=\"0.3\"></circle>");
+    out.push("<circle cx=250 cy=250 r=179 fill=none stroke=\"var(--border)\" stroke-width=\"1\" opacity=\"0.55\"></circle>");
+    out.push("<circle cx=250 cy=250 r=213 fill=none stroke=\"var(--border)\" stroke-width=\"1\" opacity=\"0.55\"></circle>");
     for(d=0;d<360;d+=3){
       rad=d*Math.PI/180;
       var big=(d%15===0), r1=228, r2=big?242:236;
