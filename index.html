@@ -6564,7 +6564,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     else { p.hidden=true; p.style.display="none"; c.style.display=""; }
   }
   function wrap(){
-    if(typeof window.switchTab!=="function"||window.switchTab.__cheapWrap) return;
+    if(typeof window.switchTab!=="function"||window.__cheapWrapped) return;
     var orig=window.switchTab;
     var fn=function(id){
       if(id===ID){ ensure(); orig("calc"); show(true); mark(); autorun(); return; }
@@ -6573,6 +6573,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     };
     fn.__cheapWrap=1;
     window.switchTab=fn;
+    window.__cheapWrapped=1;
   }
   var lastKey=null, lastSynced=null;
   function autorun(){
@@ -7238,7 +7239,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     busy=false;
   }
   function wrap(){
-    if(typeof window.switchTab!=="function"||window.switchTab.__scanWrap) return;
+    if(typeof window.switchTab!=="function"||window.__scanWrapped) return;
     var prev=window.switchTab;
     var fn=function(id){
       var p=panel(), arb=document.getElementById("tab-arb");
@@ -7257,6 +7258,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     };
     fn.__scanWrap=1;
     window.switchTab=fn;
+    window.__scanWrapped=1;
   }
   function hideOthers(){
     [].slice.call(document.querySelectorAll("[id^=tab-]")).forEach(function(e){
@@ -7266,7 +7268,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   }
   function restoreOthers(){
     [].slice.call(document.querySelectorAll("[id^=tab-]")).forEach(function(e){
-      if(e.id!=="tab-"+ID) e.style.display="";
+      if(e.id!=="tab-"+ID){ e.style.display=""; }
     });
   }
   function scanOpen(){ var p=document.getElementById("tab-"+ID); return !!(p&&!p.hidden&&p.style.display!=="none"); }
