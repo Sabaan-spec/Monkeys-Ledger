@@ -3934,7 +3934,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 (function(){
   var CID='338120aa23d64fbabc5185ed10ddcd89';
   var REDIR='https://www.kaalakiotaforge.com/index.html';
-  var SCOPES='publicData esi-wallet.read_character_wallet.v1 esi-skills.read_skills.v1 esi-industry.read_character_jobs.v1 esi-assets.read_assets.v1 esi-markets.read_character_orders.v1 esi-characters.read_blueprints.v1 esi-planets.manage_planets.v1 esi-industry.read_character_mining.v1 esi-universe.read_structures.v1 esi-markets.structure_markets.v1 esi-characters.read_standings.v1 esi-skills.read_skillqueue.v1';
+  var SCOPES='publicData esi-wallet.read_character_wallet.v1 esi-skills.read_skills.v1 esi-industry.read_character_jobs.v1 esi-assets.read_assets.v1 esi-markets.read_character_orders.v1 esi-characters.read_blueprints.v1 esi-planets.manage_planets.v1 esi-industry.read_character_mining.v1 esi-universe.read_structures.v1 esi-markets.structure_markets.v1 esi-characters.read_standings.v1 esi-skills.read_skillqueue.v1 esi-killmails.read_killmails.v1';
   var AUTHZ='https://login.eveonline.com/v2/oauth/authorize/';
   var TOKEN='https://login.eveonline.com/v2/oauth/token';
   var ESI='https://esi.evetech.net/latest';
@@ -7340,6 +7340,115 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 <style>#tab-scan .sc-none{color:var(--bad);opacity:.85}</style>
 
 <style>#sc-toasts{position:fixed;right:18px;bottom:18px;z-index:99999;display:flex;flex-direction:column;gap:10px;max-width:390px;pointer-events:none}.sc-toast{pointer-events:auto;background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--good);border-radius:3px;padding:12px 14px;box-shadow:var(--shadow);font-size:13px;color:var(--text);animation:scIn .18s ease}.sc-toast .t{font-weight:600;margin-bottom:4px;letter-spacing:.02em}.sc-toast .m{color:var(--muted);font-size:12px;line-height:1.5}.sc-toast .row{display:flex;gap:8px;margin-top:9px}.sc-toast button{background:none;border:1px solid var(--border);color:var(--text);border-radius:2px;padding:4px 10px;font-size:12px;font-family:inherit;cursor:pointer}.sc-toast button:hover{border-color:var(--accent-dim)}@keyframes scIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}</style>
+
+<style>
+#kd-panel{margin-top:14px}
+#kd-panel h4{margin:0 0 8px;font-size:14px;font-weight:600}
+#kd-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media (max-width:900px){#kd-grid{grid-template-columns:1fr}}
+#kd-panel table{width:100%;border-collapse:collapse}
+#kd-panel th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:5px 6px;border-bottom:1px solid var(--border)}
+#kd-panel td{padding:5px 6px;border-bottom:1px solid rgba(255,255,255,.05);font-size:13px}
+#kd-panel td.n{text-align:right;font-variant-numeric:tabular-nums}
+#kd-panel .bp{color:var(--good);font-weight:600}
+#kd-note{font-size:12px;color:var(--muted);margin:6px 0 10px;line-height:1.5}
+#kd-run{text-decoration:underline;cursor:pointer;color:var(--text)}
+</style>
+<script>/* Destruction demand v1 */
+(function(){
+  var HUBREG={jita:10000002,amarr:10000043,dodixie:10000032,rens:10000030,hek:10000042};
+  var FITTED=function(f){ return (f>=11&&f<=34)||(f>=92&&f<=99)||(f>=125&&f<=132); };
+  var busy=false, lastKey="";
+  function $(id){ return document.getElementById(id); }
+  function isk(n){ if(n==null) return "\u2014"; try{ return window.eveISK?window.eveISK(n):Math.round(n).toLocaleString(); }catch(e){ return Math.round(n).toLocaleString(); } }
+  function esc(s){ return String(s==null?"":s).replace(/[&<>]/g,function(c){ return c==="&"?"&amp;":(c==="<"?"&lt;":"&gt;"); }); }
+  function host(){
+    var t=$("tab-kills"); if(!t) return null;
+    var p=$("kd-panel");
+    if(!p){
+      p=document.createElement("div"); p.id="kd-panel";
+      p.innerHTML="<section class=\"panel\"><div>"+
+        "<h4>\ud83d\udd28 What is dying here \u2014 and what you could build</h4>"+
+        "<div id=kd-note></div><div id=kd-grid></div></div></section>";
+      t.appendChild(p);
+    }
+    return p;
+  }
+  async function fuzz(region,ids){
+    var px={};
+    for(var i=0;i<ids.length;i+=200){
+      try{
+        var r=await fetch("https://market.fuzzwork.co.uk/aggregates/?region="+region+"&types="+ids.slice(i,i+200).join(","));
+        if(!r.ok) continue;
+        var o=await r.json();
+        for(var k in o){ var s=o[k]&&o[k].sell; if(!s) continue; var v=parseFloat(s.percentile); if(!(v>0)) v=parseFloat(s.min); if(v>0) px[k]=v; }
+      }catch(e){}
+    }
+    return px;
+  }
+  function table(title,rows,px,bpOk){
+    var body=rows.map(function(r){
+      var can=bpOk&&window.EVEBP&&window.EVEBP.byProduct&&window.EVEBP.byProduct[r.id];
+      var unit=px[r.id]||null;
+      return "<tr><td>"+esc(r.name)+(can?" <span class=bp>\u2713 you can build</span>":"")+"</td>"+
+        "<td class=n>"+r.n+"</td><td class=n>"+isk(unit)+"</td><td class=n>"+(unit?isk(unit*r.n):"\u2014")+"</td></tr>";
+    }).join("");
+    return "<div><h4>"+title+"</h4><table><thead><tr><th>Item</th><th class=n>Lost</th><th class=n>Unit @ hub</th><th class=n>Replacement value</th></tr></thead><tbody>"+body+"</tbody></table></div>";
+  }
+  async function run(force){
+    var p=host(); if(!p) return;
+    if(busy) return;
+    var sel=$("kl-region"); if(!sel) return;
+    var region=sel.value;
+    var hub=($("hub")||{}).value||"jita";
+    var key=region+"|"+hub;
+    if(!force&&key===lastKey) return;
+    busy=true; lastKey=key;
+    var note=$("kd-note");
+    if(note) note.textContent="Reading recent kills\u2026";
+    try{
+      var z=await fetch("https://zkillboard.com/api/regionID/"+region+"/").then(function(r){ return r.ok?r.json():[]; });
+      if(!z.length){ if(note) note.textContent="No recent kills returned for this region."; busy=false; return; }
+      var hulls={}, mods={}, times=[];
+      z.forEach(function(k){
+        if(k.killmail_time) times.push(Date.parse(k.killmail_time));
+        var v=k.victim||{};
+        if(v.ship_type_id) hulls[v.ship_type_id]=(hulls[v.ship_type_id]||0)+1;
+        (v.items||[]).forEach(function(it){
+          if(!FITTED(it.flag)) return;
+          var q=(it.quantity_destroyed||0)+(it.quantity_dropped||0);
+          if(!q) q=1;
+          mods[it.item_type_id]=(mods[it.item_type_id]||0)+q;
+        });
+      });
+      function top(o,n){ return Object.keys(o).map(function(k){ return {id:Number(k),n:o[k]}; }).sort(function(a,b){ return b.n-a.n; }).slice(0,n); }
+      var tH=top(hulls,12), tM=top(mods,12);
+      var ids=tH.concat(tM).map(function(r){ return r.id; });
+      var nm={};
+      try{ nm=await EVEAPI.names(ids)||{}; }catch(e){ nm={}; }
+      tH.forEach(function(r){ r.name=nm[r.id]||("Type "+r.id); });
+      tM.forEach(function(r){ r.name=nm[r.id]||("Type "+r.id); });
+      var px=await fuzz(HUBREG[hub]||10000002,ids.map(String));
+      var bpOk=!!(window.EVEBP&&window.EVEBP.ok);
+      $("kd-grid").innerHTML=table("Hulls lost",tH,px,bpOk)+table("Fitted modules lost",tM,px,bpOk);
+      var span="";
+      if(times.length){
+        var hrs=(Math.max.apply(null,times)-Math.min.apply(null,times))/3600000;
+        span=" over the last "+(hrs<1?Math.round(hrs*60)+" minutes":hrs.toFixed(1)+" hours");
+      }
+      var msg=z.length+" recent kills"+span+", priced at "+esc(hub)+" sell. Cargo is excluded \u2014 only fitted slots, rigs and subsystems count.";
+      if(!bpOk) msg+=" Connect a character to see which of these you hold blueprints for.";
+      msg+=" <span id=kd-run>refresh</span>";
+      if(note) note.innerHTML=msg;
+      var rr=$("kd-run"); if(rr) rr.addEventListener("click",function(){ run(true); });
+    }catch(e){ if(note) note.textContent="Could not load destruction data."; }
+    busy=false;
+  }
+  function tick(){ var t=$("tab-kills"); if(!t||t.offsetParent===null) return; host(); run(false); }
+  setTimeout(tick,2500);
+  setInterval(tick,4000);
+})();
+</script>
 </body>
 </html>
 
