@@ -7213,7 +7213,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     var nav=document.querySelector("nav.tabs"); if(!nav) return;
     if(nav.querySelector("button.tab[data-tab=scan]")) return;
     var b=document.createElement("button");
-    b.className="tab"; b.setAttribute("data-tab",ID); b.textContent="Scanner";
+    b.className="tab"; b.setAttribute("data-tab",ID); b.textContent="Market Scanner";
     b.addEventListener("click",function(e){ e.stopPropagation(); if(window.switchTab) window.switchTab(ID); });
     nav.appendChild(b);
   }
