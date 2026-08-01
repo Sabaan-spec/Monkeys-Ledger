@@ -8366,6 +8366,112 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   setInterval(function(){ panel(); ensureBtn(); wrap(); enforce(); },700);
 })();
 </script>
+
+<style>
+#eve-data{display:inline-flex;align-items:center;gap:8px;margin-left:14px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+#eve-data button{background:none;border:1px solid var(--border);color:var(--text);border-radius:2px;padding:3px 9px;font-size:12px;font-family:inherit;cursor:pointer}
+#eve-data button:hover{border-color:var(--accent-dim)}
+#eve-data .warnbar{color:var(--warn)}
+#eve-data .badbar{color:var(--bad);font-weight:600}
+#eve-restore-modal{position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.62);display:flex;align-items:center;justify-content:center;padding:20px}
+#eve-restore-modal .box{background:var(--panel);border:1px solid var(--border);border-radius:3px;max-width:620px;width:100%;padding:20px;box-shadow:var(--shadow)}
+#eve-restore-modal h3{margin:0 0 10px;font-size:16px}
+#eve-restore-modal .rows{max-height:300px;overflow:auto;font-size:12px;margin:10px 0;border:1px solid var(--border);border-radius:2px}
+#eve-restore-modal .rows div{padding:5px 9px;border-bottom:1px solid rgba(255,255,255,.05);display:flex;justify-content:space-between;gap:12px}
+#eve-restore-modal .act{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
+#eve-restore-modal button{border:1px solid var(--border);background:none;color:var(--text);border-radius:2px;padding:7px 16px;font-family:inherit;font-size:13px;cursor:pointer}
+#eve-restore-modal button.go{border-color:var(--accent-dim);background:rgba(84,194,218,.12)}
+</style>
+<script>/* Backup restore v1 */
+(function(){
+  var VER=1, WARN=0.75, CRIT=0.9, LIMIT=5*1024*1024;
+  function keys(){ return Object.keys(localStorage).filter(function(k){ return k.indexOf("eve")===0; }); }
+  function used(){ var n=0; Object.keys(localStorage).forEach(function(k){ n+=k.length+((localStorage.getItem(k)||"").length); }); return n*2; }
+  function kb(n){ return (n/1024)>=1024?((n/1048576).toFixed(2)+" MB"):(Math.round(n/1024)+" KB"); }
+  function stamp(){ var d=new Date(); function p(x){ return (x<10?"0":"")+x; } return d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+"-"+p(d.getHours())+p(d.getMinutes()); }
+  function exportAll(){
+    var data={_v:VER,_saved:new Date().toISOString(),_app:"Monkeys Ledger",keys:{}};
+    keys().forEach(function(k){ data.keys[k]=localStorage.getItem(k); });
+    var blob=new Blob([JSON.stringify(data)],{type:"application/json"});
+    var a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download="monkeys-ledger-backup-"+stamp()+".json";
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },1000);
+    say("Saved "+Object.keys(data.keys).length+" items ("+kb(used())+").");
+  }
+  function pickFile(){
+    var inp=document.createElement("input");
+    inp.type="file"; inp.accept="application/json,.json";
+    inp.addEventListener("change",function(){
+      var f=this.files&&this.files[0]; if(!f) return;
+      var fr=new FileReader();
+      fr.onload=function(){
+        var data=null;
+        try{ data=JSON.parse(fr.result); }catch(e){ say("That file is not valid JSON."); return; }
+        if(!data||!data.keys||typeof data.keys!=="object"){ say("That does not look like a Monkeys Ledger backup."); return; }
+        confirmRestore(data);
+      };
+      fr.readAsText(f);
+    });
+    inp.click();
+  }
+  function confirmRestore(data){
+    var ks=Object.keys(data.keys);
+    var rows=ks.map(function(k){
+      var cur=localStorage.getItem(k);
+      var state=(cur===null)?"new":(cur===data.keys[k]?"identical":"will be replaced");
+      return "<div><span>"+k+"</span><span style=\"color:var(--muted)\">"+state+" \u00b7 "+kb((data.keys[k]||"").length*2)+"</span></div>";
+    }).join("");
+    var extra=keys().filter(function(k){ return ks.indexOf(k)<0; });
+    var m=document.createElement("div");
+    m.id="eve-restore-modal";
+    m.innerHTML="<div class=box><h3>Restore backup</h3>"+
+      "<div style=\"font-size:13px;color:var(--muted)\">Saved "+(data._saved?new Date(data._saved).toLocaleString():"unknown date")+" \u00b7 "+ks.length+" items</div>"+
+      "<div class=rows>"+rows+"</div>"+
+      (extra.length?("<div style=\"font-size:12px;color:var(--warn)\">"+extra.length+" item"+(extra.length===1?"":"s")+" already here are not in this backup and will be left alone.</div>"):"")+
+      "<div style=\"font-size:12px;color:var(--muted);margin-top:8px\">Anything marked \u201cwill be replaced\u201d is overwritten and cannot be undone. Export first if you are unsure.</div>"+
+      "<div class=act><button id=eve-rest-no>Cancel</button><button id=eve-rest-yes class=go>Restore</button></div></div>";
+    document.body.appendChild(m);
+    m.querySelector("#eve-rest-no").addEventListener("click",function(){ m.remove(); });
+    m.querySelector("#eve-rest-yes").addEventListener("click",function(){
+      var okN=0, failN=0;
+      ks.forEach(function(k){ try{ localStorage.setItem(k,data.keys[k]); okN++; }catch(e){ failN++; } });
+      m.remove();
+      say("Restored "+okN+" item"+(okN===1?"":"s")+(failN?(", "+failN+" failed \u2014 storage may be full"):"")+". Reloading\u2026");
+      setTimeout(function(){ location.reload(); },1400);
+    });
+  }
+  function say(t){ var s=document.getElementById("eve-data-msg"); if(s) s.textContent=t; }
+  function bar(){
+    var foot=document.querySelector("footer.site-footer")||document.querySelector("footer");
+    if(!foot) return null;
+    var d=document.getElementById("eve-data");
+    if(!d){
+      d=document.createElement("span"); d.id="eve-data";
+      d.innerHTML="<button id=eve-export>Back up data</button><button id=eve-import>Restore</button><span id=eve-data-use></span><span id=eve-data-msg></span>";
+      foot.appendChild(d);
+      d.querySelector("#eve-export").addEventListener("click",exportAll);
+      d.querySelector("#eve-import").addEventListener("click",pickFile);
+    }
+    return d;
+  }
+  var lastTxt="";
+  function gauge(){
+    if(!bar()) return;
+    var u=used(), pctv=u/LIMIT;
+    var el=document.getElementById("eve-data-use"); if(!el) return;
+    var t=kb(u)+" stored";
+    var cls="";
+    if(pctv>=CRIT){ t=kb(u)+" stored \u2014 storage almost full, back up now"; cls="badbar"; }
+    else if(pctv>=WARN){ t=kb(u)+" stored \u2014 getting full"; cls="warnbar"; }
+    if(t!==lastTxt){ lastTxt=t; el.textContent=t; el.className=cls; }
+  }
+  window.EVEBACKUP={exportAll:exportAll,used:used};
+  setTimeout(function(){ bar(); gauge(); },1500);
+  setInterval(gauge,15000);
+})();
+</script>
 </body>
 </html>
 
