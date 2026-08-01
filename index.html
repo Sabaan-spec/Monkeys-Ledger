@@ -6997,6 +6997,26 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   setInterval(tick,3500);
 })();
 </script>
+
+<script>/* Cheapest system fill height v1 */
+(function(){
+  var MIN=320, PAD=26, last=null;
+  function fit(){
+    var t=document.getElementById("tab-cheapsys");
+    if(!t||t.offsetParent===null) return;
+    var out=document.getElementById("ci-out");
+    if(!out) return;
+    var top=out.getBoundingClientRect().top;
+    var avail=Math.round(window.innerHeight-top-PAD);
+    if(avail<MIN) avail=MIN;
+    var want=avail+"px";
+    if(last!==want){ last=want; out.style.maxHeight=want; }
+  }
+  setTimeout(fit,900);
+  setInterval(fit,900);
+  window.addEventListener("resize",function(){ last=null; fit(); });
+})();
+</script>
 </body>
 </html>
 
