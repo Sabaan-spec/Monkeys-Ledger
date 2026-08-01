@@ -6593,6 +6593,18 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     lastKey=key;
     setTimeout(function(){ try{ go.click(); }catch(e){} },250);
   }
+  function activeOrigTab2(){
+    var nav=document.querySelector("nav.tabs"); if(!nav) return null;
+    var r=null;
+    [].slice.call(nav.querySelectorAll("button.tab[data-tab]")).forEach(function(b){ if(/\bactive\b/.test(b.className)) r=b.getAttribute("data-tab"); });
+    return r;
+  }
+  function enforceCheap(){
+    var p=panel(); if(!p) return;
+    var on=(activeOrigTab2()===ID);
+    var isOn=(p.style.display!=="none"&&!p.hidden);
+    if(on!==isOn) show(on);
+  }
   function normalize(){
     var p=document.getElementById("ci-panel"); if(!p) return;
     var b=document.getElementById("ci-body");
@@ -6609,7 +6621,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     }
   }
   setTimeout(function(){ ensure(); wrap(); normalize(); },1200);
-  setInterval(function(){ ensure(); wrap(); normalize(); },1500);
+  setInterval(function(){ ensure(); wrap(); normalize(); enforceCheap(); },700);
 })();
 </script>
 
@@ -7260,6 +7272,17 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     window.switchTab=fn;
     window.__scanWrapped=1;
   }
+  function activeOrigTab(){
+    var nav=document.querySelector("nav.tabs"); if(!nav) return null;
+    var r=null;
+    [].slice.call(nav.querySelectorAll("button.tab[data-tab]")).forEach(function(b){ if(/\bactive\b/.test(b.className)) r=b.getAttribute("data-tab"); });
+    return r;
+  }
+  function enforce(){
+    var p=document.getElementById("tab-"+ID); if(!p) return;
+    if(activeOrigTab()===ID){ p.hidden=false; p.style.display=""; hideOthers(); }
+    else { if(p.style.display!=="none"){ p.hidden=true; p.style.display="none"; } restoreOthers(); }
+  }
   function hideOthers(){
     [].slice.call(document.querySelectorAll("[id^=tab-]")).forEach(function(e){
       if(e.id==="tab-"+ID) return;
@@ -7298,7 +7321,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     if(el.textContent!==t) el.textContent=t;
   }
   setTimeout(function(){ panel(); ensureBtn(); wrap(); render(); },1400);
-  setInterval(function(){ panel(); ensureBtn(); wrap(); if(scanOpen()) hideOthers(); },1600);
+  setInterval(function(){ panel(); ensureBtn(); wrap(); enforce(); },700);
   setInterval(function(){ poll(false); },30000);
   setInterval(status,1000);
 })();
