@@ -6316,7 +6316,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     {id:"ind",label:"Industry",tabs:["calc","cheapsys","tree","research","invent","react"]},
     {id:"mat",label:"Materials",tabs:["ore","repro","pi"]},
     {id:"acct",label:"Account",tabs:["sso"]},
-    {id:"trade",label:"Trade",tabs:["arb","top","plan","scan"]},
+    {id:"trade",label:"Trade",tabs:["arb","top","plan","scan","pricecheck"]},
     {id:"intel",label:"Intel",tabs:["kills","fits"]}
   ];
   var KEY="eveTabGroupV1";
@@ -7496,6 +7496,175 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 </script>
 
 <style>#tab-scan .sc-form{gap:14px;align-items:flex-end;flex-wrap:wrap}#tab-scan .sc-form label{min-width:0}#tab-scan #sc-item{min-width:0;width:250px}#tab-scan #sc-loc{min-width:0;width:230px}#tab-scan #sc-locid{width:170px!important}#tab-scan #sc-rule{max-width:250px}#tab-scan #sc-target{width:140px}#tab-scan .sc-form input,#tab-scan .sc-form select{padding:10px 12px}#tab-scan #sc-add,#tab-scan #sc-notify{white-space:nowrap;padding:10px 20px!important;font-size:13px}@media (max-width:1250px){#tab-scan .sc-form{gap:10px}#tab-scan #sc-item{width:190px}#tab-scan #sc-loc{width:190px}#tab-scan #sc-rule{max-width:200px}#tab-scan #sc-target{width:110px}}</style>
+
+<style>
+#tab-pricecheck .pc-form{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin-bottom:12px}
+#tab-pricecheck .pc-form label{display:flex;flex-direction:column;gap:4px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+#tab-pricecheck input{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:10px 12px;font-family:inherit;font-size:14px;width:320px}
+#tab-pricecheck input:focus{outline:none;border-color:var(--accent-dim)}
+#tab-pricecheck table{width:100%;border-collapse:collapse;margin-top:4px}
+#tab-pricecheck th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:7px 8px;border-bottom:1px solid var(--border);white-space:nowrap}
+#tab-pricecheck td{padding:8px;border-bottom:1px solid rgba(255,255,255,.05);font-size:13px}
+#tab-pricecheck td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+#tab-pricecheck .best{color:var(--good);font-weight:600}
+#tab-pricecheck .up{color:var(--good)}#tab-pricecheck .dn{color:var(--bad)}
+#pc-note{font-size:12px;color:var(--muted);line-height:1.55;margin:10px 0 0;max-width:900px}
+#pc-head{font-size:15px;font-weight:600;margin:2px 0 8px}
+</style>
+<script>/* Price checker v1 */
+(function(){
+  var ID="pricecheck";
+  var HUBS=[
+    {n:"Jita IV-4",s:60003760,r:10000002,reg:"The Forge"},
+    {n:"Amarr VIII",s:60008494,r:10000043,reg:"Domain"},
+    {n:"Dodixie IX",s:60011866,r:10000032,reg:"Sinq Laison"},
+    {n:"Rens VI",s:60004588,r:10000030,reg:"Heimatar"},
+    {n:"Hek VIII",s:60005686,r:10000042,reg:"Metropolis"}
+  ];
+  var hist={}, busy=false;
+  function $(id){ return document.getElementById(id); }
+  function isk(n){ if(n==null) return "\u2014"; try{ return window.eveISK?window.eveISK(n):Math.round(n).toLocaleString(); }catch(e){ return Math.round(n).toLocaleString(); } }
+  function esc(s){ return String(s==null?"":s).replace(/[&<>]/g,function(c){ return c==="&"?"&amp;":(c==="<"?"&lt;":"&gt;"); }); }
+  function num(n){ return n==null?"\u2014":Math.round(n).toLocaleString(); }
+  async function typeId(name){
+    name=String(name||"").split("\t")[0].split("\n")[0].trim();
+    if(!name) return null;
+    try{
+      var r=await fetch("https://esi.evetech.net/latest/universe/ids/",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify([name])});
+      if(!r.ok) return null;
+      var o=await r.json();
+      var t=(o&&o.inventory_types&&o.inventory_types[0])||null;
+      return t?{id:t.id,name:t.name}:null;
+    }catch(e){ return null; }
+  }
+  async function history(region,tid){
+    var k=region+":"+tid;
+    if(hist[k]&&(Date.now()-hist[k].ts)<3600000) return hist[k].d;
+    try{
+      var r=await fetch("https://esi.evetech.net/latest/markets/"+region+"/history/?type_id="+tid);
+      var d=r.ok?await r.json():[];
+      hist[k]={ts:Date.now(),d:d};
+      return d;
+    }catch(e){ return []; }
+  }
+  function spark(rows){
+    if(!rows||rows.length<3) return "";
+    var v=rows.slice(-30).map(function(x){ return x.average; });
+    var mn=Math.min.apply(null,v), mx=Math.max.apply(null,v);
+    var w=90,h=22,rng=(mx-mn)||1;
+    var pts=v.map(function(y,i){ return (i*(w/(v.length-1))).toFixed(1)+","+(h-((y-mn)/rng)*h).toFixed(1); }).join(" ");
+    var up=v[v.length-1]>=v[0];
+    return "<svg width="+w+" height="+h+" style=\"vertical-align:middle\"><polyline points=\""+pts+"\" fill=none stroke=\""+(up?"var(--good)":"var(--bad)")+"\" stroke-width=1.5/></svg>";
+  }
+  function pct(a,b){ if(a==null||b==null||!b) return null; return 100*(a-b)/b; }
+  function panel(){
+    var arb=$("tab-arb"); if(!arb) return null;
+    var p=$("tab-"+ID);
+    if(!p){
+      p=document.createElement("div"); p.id="tab-"+ID; p.hidden=true; p.style.display="none";
+      arb.parentElement.insertBefore(p,arb.nextSibling);
+      p.innerHTML="<section class=\"panel\"><div>"+
+        "<div style=\"font-weight:600;margin-bottom:10px\">\ud83d\udd0e Price checker</div>"+
+        "<div class=pc-form><label>Item \u2014 type or paste from the game<input id=pc-item placeholder=\"e.g. Tritanium\"></label>"+
+        "<button id=pc-go class=tab style=\"padding:10px 20px\">Check price</button></div>"+
+        "<div id=pc-head></div><div id=pc-out></div><div id=pc-note></div>"+
+        "</div></section>";
+      $("pc-go").addEventListener("click",run);
+      $("pc-item").addEventListener("keydown",function(e){ if(e.key==="Enter") run(); });
+      $("pc-item").addEventListener("paste",function(){ var el=this; setTimeout(function(){ el.value=String(el.value||"").split("\t")[0].split("\n")[0].trim(); run(); },40); });
+    }
+    return p;
+  }
+  async function run(){
+    if(busy) return;
+    var nm=($("pc-item")||{}).value||"";
+    if(!nm.trim()) return;
+    busy=true;
+    var head=$("pc-head"), out=$("pc-out"), note=$("pc-note");
+    head.textContent="Looking up \u201c"+nm.trim()+"\u201d\u2026"; out.innerHTML=""; note.textContent="";
+    try{
+      var t=await typeId(nm);
+      if(!t){ head.textContent="No item called \u201c"+nm.trim()+"\u201d \u2014 names must match exactly."; busy=false; return; }
+      head.textContent=t.name;
+      var rows=await Promise.all(HUBS.map(async function(h){
+        var b=null;
+        try{ b=await window.EVEMKT.best(String(h.s),t.id); }catch(e){}
+        var hs=await history(h.r,t.id);
+        var last=hs.length?hs[hs.length-1]:null;
+        var d7=hs.length>7?hs[hs.length-8]:null;
+        var d30=hs.length>30?hs[hs.length-31]:null;
+        var vol30=0,cnt=0;
+        hs.slice(-30).forEach(function(x){ vol30+=x.volume||0; cnt++; });
+        return {h:h,sell:b&&b.sell,buy:b&&b.buy,avg:last&&last.average,vol:last&&last.volume,vol30:cnt?vol30/cnt:null,
+          c7:pct(last&&last.average,d7&&d7.average),c30:pct(last&&last.average,d30&&d30.average),hs:hs};
+      }));
+      var sells=rows.map(function(r){ return r.sell; }).filter(function(x){ return x>0; });
+      var buys=rows.map(function(r){ return r.buy; }).filter(function(x){ return x>0; });
+      var bestSell=sells.length?Math.min.apply(null,sells):null;
+      var bestBuy=buys.length?Math.max.apply(null,buys):null;
+      function chg(v){ if(v==null) return "\u2014"; var c=v>=0?"up":"dn"; return "<span class="+c+">"+(v>=0?"+":"")+v.toFixed(1)+"%</span>"; }
+      var body=rows.map(function(r){
+        var sc=(r.sell!=null&&r.sell===bestSell)?" class=\"n best\"":" class=n";
+        var bc=(r.buy!=null&&r.buy===bestBuy)?" class=\"n best\"":" class=n";
+        var spread=(r.sell&&r.buy)?(100*(r.sell-r.buy)/r.sell):null;
+        return "<tr><td><b>"+esc(r.h.n)+"</b> <span class=sc-wait style=\"color:var(--muted)\">"+esc(r.h.reg)+"</span></td>"+
+          "<td"+sc+">"+isk(r.sell)+"</td><td"+bc+">"+isk(r.buy)+"</td>"+
+          "<td class=n>"+(spread==null?"\u2014":spread.toFixed(1)+"%")+"</td>"+
+          "<td class=n>"+num(r.vol)+"</td><td class=n>"+num(r.vol30)+"</td>"+
+          "<td class=n>"+chg(r.c7)+"</td><td class=n>"+chg(r.c30)+"</td>"+
+          "<td>"+spark(r.hs)+"</td></tr>";
+      }).join("");
+      out.innerHTML="<table><thead><tr><th>Hub</th><th class=n>Best sell</th><th class=n>Best buy</th><th class=n>Spread</th><th class=n>Vol 24h</th><th class=n>Vol/day 30d</th><th class=n>7d</th><th class=n>30d</th><th>30-day trend</th></tr></thead><tbody>"+body+"</tbody></table>";
+      note.innerHTML="Best sell and best buy are orders at that exact station. Volume and trend come from CCP\u2019s regional daily history, so they cover the whole region rather than the one station \u2014 they are not directly comparable. Green marks the cheapest place to buy and the highest price someone will pay.";
+    }catch(e){ head.textContent="Could not load prices."; }
+    busy=false;
+  }
+  function activeOrigTab(){
+    var nav=document.querySelector("nav.tabs"); if(!nav) return null;
+    var r=null;
+    [].slice.call(nav.querySelectorAll("button.tab[data-tab]")).forEach(function(b){ if(/\bactive\b/.test(b.className)) r=b.getAttribute("data-tab"); });
+    return r;
+  }
+  function hideOthers(){ [].slice.call(document.querySelectorAll("[id^=tab-]")).forEach(function(e){ if(e.id!=="tab-"+ID){ e.hidden=true; e.style.display="none"; } }); }
+  function restoreOthers(){ [].slice.call(document.querySelectorAll("[id^=tab-]")).forEach(function(e){ if(e.id!=="tab-"+ID) e.style.display=""; }); }
+  function enforce(){
+    var p=$("tab-"+ID); if(!p) return;
+    if(activeOrigTab()===ID){ p.hidden=false; p.style.display=""; hideOthers(); }
+    else if(p.style.display!=="none"){ p.hidden=true; p.style.display="none"; restoreOthers(); }
+  }
+  function ensureBtn(){
+    var nav=document.querySelector("nav.tabs"); if(!nav) return;
+    if(nav.querySelector("button.tab[data-tab=pricecheck]")) return;
+    var b=document.createElement("button");
+    b.className="tab"; b.setAttribute("data-tab",ID); b.textContent="Price Checker";
+    b.addEventListener("click",function(e){ e.stopPropagation(); if(window.switchTab) window.switchTab(ID); });
+    nav.appendChild(b);
+  }
+  function wrap(){
+    if(typeof window.switchTab!=="function"||window.__pcWrapped) return;
+    var prev=window.switchTab;
+    var fn=function(id){
+      var p=panel();
+      if(id===ID){
+        prev("arb");
+        if(p){ p.hidden=false; p.style.display=""; }
+        hideOthers();
+        var nav=document.querySelector("nav.tabs");
+        if(nav) [].slice.call(nav.querySelectorAll("button.tab[data-tab]")).forEach(function(b){ if(b.getAttribute("data-tab")===ID) b.classList.add("active"); else b.classList.remove("active"); });
+        return;
+      }
+      if(p){ p.hidden=true; p.style.display="none"; }
+      restoreOthers();
+      return prev.apply(this,arguments);
+    };
+    fn.__pcWrap=1;
+    window.switchTab=fn;
+    window.__pcWrapped=1;
+  }
+  setTimeout(function(){ panel(); ensureBtn(); wrap(); },1600);
+  setInterval(function(){ panel(); ensureBtn(); wrap(); enforce(); },700);
+})();
+</script>
 </body>
 </html>
 
