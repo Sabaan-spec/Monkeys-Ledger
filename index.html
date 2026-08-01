@@ -7934,7 +7934,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     for(var i=0;i<ids.length;i+=200){
       try{
         var r=await fetch("https://market.fuzzwork.co.uk/aggregates/?region="+(REG[hub]||10000002)+"&types="+ids.slice(i,i+200).join(","));
-        if(r.ok){ var o=await r.json(); for(var k in o){ var s=o[k]&&o[k].sell; if(!s) continue; var v=parseFloat(s.percentile); if(!(v>0)) v=parseFloat(s.min); if(v>0) px[k]=v; } }
+        if(r.ok){ var o=await r.json(); for(var k in o){ var s=o[k]&&o[k].sell; if(!s) continue; var v=parseFloat(s.min); if(!(v>0)) v=parseFloat(s.percentile); if(v>0) px[k]=v; } }
       }catch(e){}
     }
     var head="<tr><th>Tier</th>"+WEATHER.map(function(w){ return "<th class=n>"+w+"</th>"; }).join("")+"</tr>";
@@ -7961,19 +7961,20 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       }));
       abyssCache=res.filter(Boolean);
     }
+    var HUBSTN={jita:60003760,amarr:60008494,dodixie:60011866,rens:60004588,hek:60005686};
+    var stn=HUBSTN[hub]||60003760;
     var hullIds=abyssCache.map(function(x){ return x.id; });
     var hpx={};
-    try{
-      var r2=await fetch("https://market.fuzzwork.co.uk/aggregates/?region="+(REG[hub]||10000002)+"&types="+hullIds.join(","));
-      if(r2.ok){ var o2=await r2.json(); for(var k2 in o2){ var s2=o2[k2]&&o2[k2].sell; if(!s2) continue; var v2=parseFloat(s2.percentile); if(!(v2>0)) v2=parseFloat(s2.min); if(v2>0) hpx[k2]=v2; } }
-    }catch(e){}
-    hulls="<h4>Triglavian and Abyssal hulls</h4><table><thead><tr><th>Hull</th><th>Class</th><th class=n>Base EHP</th><th class=n>Price @ hub</th></tr></thead><tbody>"+
+    await Promise.all(hullIds.map(async function(id){
+      try{ var b=await window.EVEMKT.best(String(stn),id); if(b&&b.sell>0) hpx[id]=b.sell; }catch(e){}
+    }));
+    hulls="<h4>Triglavian and Abyssal hulls</h4><table><thead><tr><th>Hull</th><th>Class</th><th class=n>Base EHP</th><th class=n>Cheapest at hub</th></tr></thead><tbody>"+
       abyssCache.sort(function(a,b){ return a.ehp-b.ehp; }).map(function(x){
         return "<tr><td><b>"+esc(x.name)+"</b></td><td style=\"color:var(--muted)\">"+esc(x.cls)+"</td><td class=n>"+(x.ehp?Math.round(x.ehp).toLocaleString():"\u2014")+"</td><td class=n>"+(hpx[x.id]?isk(hpx[x.id]):"\u2014")+"</td></tr>";
       }).join("")+"</tbody></table>";
     out.innerHTML=
       "<h4>Filament cost by tier and weather</h4><table><thead>"+head+"</thead><tbody>"+body+"</tbody></table>"+
-      "<div class=rf-note>Live sell prices at your Manufacturing hub. Tier 0\u20133 are the lower-risk runs, 4\u20136 escalate sharply in both difficulty and reward. A filament is consumed on entry, so this is your cost of admission per run.</div>"+
+      "<div class=rf-note>Cheapest sell order anywhere in your hub\u2019s region \u2014 filaments are light, so the region is the practical market. Tier 0\u20133 are the lower-risk runs, 4\u20136 escalate sharply in both difficulty and reward. A filament is consumed on entry, so this is your cost of admission per run.</div>"+
       hulls+
       "<div class=rf-note>Triglavian ships fire entropic disintegrators loaded with exotic plasma, which does <b>thermal and explosive</b> damage \u2014 verified from the charge data, not assumed. Their damage <b>ramps the longer they hold a target</b>, so breaking their lock resets it. Base EHP is the bare hull with no fittings.</div>"+
       "<div class=rf-note>What is deliberately not here: per-weather environmental modifiers and individual NPC behaviour. Those are community-documented rather than published in the game data, and a wrong number in an Abyssal pocket costs you the ship and the filament. The Convocation of Empyreans cheat sheet remains the reference for those.</div>";
