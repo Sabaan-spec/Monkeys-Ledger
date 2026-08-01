@@ -197,6 +197,19 @@ nav.tabs{gap:6px;flex-wrap:nowrap;overflow-x:auto;justify-content:safe center}na
 <meta name="apple-mobile-web-app-title" content="Kaalakiota Forge">
 </head>
 <body>
+<script>/* Shared ticker v1 */
+window.EVETICK=(function(){
+  var fns=[], id=null;
+  function run(){
+    if(document.hidden) return;
+    for(var i=0;i<fns.length;i++){ try{ fns[i](); }catch(e){} }
+  }
+  id=setInterval(run,700);
+  document.addEventListener("visibilitychange",function(){ if(!document.hidden) run(); });
+  return { add:function(f){ if(typeof f==="function") fns.push(f); return fns.length; }, count:function(){ return fns.length; }, run:run };
+})();
+</script>
+
 <script>/* Fast switch v1 */
 (function(){try{
   if(!sessionStorage.getItem("eveFastSwitch"))return;
@@ -6638,7 +6651,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     }
   }
   setTimeout(function(){ ensure(); wrap(); normalize(); },1200);
-  setInterval(function(){ ensure(); wrap(); normalize(); enforceCheap(); },700);
+  window.EVETICK.add(function(){ ensure(); wrap(); normalize(); enforceCheap(); });
 })();
 </script>
 
@@ -7381,7 +7394,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     if(el.textContent!==t) el.textContent=t;
   }
   setTimeout(function(){ panel(); ensureBtn(); wrap(); render(); },1400);
-  setInterval(function(){ panel(); ensureBtn(); wrap(); enforce(); },700);
+  window.EVETICK.add(function(){ panel(); ensureBtn(); wrap(); enforce(); });
   setInterval(function(){ poll(false); },30000);
   setTimeout(function(){ syncOrders(true); },4000);
   setInterval(function(){ syncOrders(false); },120000);
@@ -7749,7 +7762,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     window.__pcWrapped=1;
   }
   setTimeout(function(){ panel(); ensureBtn(); wrap(); },1600);
-  setInterval(function(){ panel(); ensureBtn(); wrap(); enforce(); },700);
+  window.EVETICK.add(function(){ panel(); ensureBtn(); wrap(); enforce(); });
 })();
 </script>
 
@@ -8063,7 +8076,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     window.__rfWrapped=1;
   }
   setTimeout(function(){ panel(); ensureBtn(); wrap(); },1800);
-  setInterval(function(){ panel(); ensureBtn(); wrap(); enforce(); },700);
+  window.EVETICK.add(function(){ panel(); ensureBtn(); wrap(); enforce(); });
 })();
 </script>
 
@@ -8363,7 +8376,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     window.__dsWrapped=1;
   }
   setTimeout(function(){ panel(); ensureBtn(); wrap(); },1900);
-  setInterval(function(){ panel(); ensureBtn(); wrap(); enforce(); },700);
+  window.EVETICK.add(function(){ panel(); ensureBtn(); wrap(); enforce(); });
 })();
 </script>
 
