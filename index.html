@@ -6560,8 +6560,14 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
   }
   function show(on){
     var p=ensure(), c=calc(); if(!p||!c) return;
-    if(on){ c.hidden=true; c.style.display="none"; p.hidden=false; p.style.display=""; }
-    else { p.hidden=true; p.style.display="none"; c.style.display=""; }
+    var all=[].slice.call(document.querySelectorAll("[id^=tab-]"));
+    if(on){
+      all.forEach(function(e){ if(e.id!=="tab-"+ID){ e.hidden=true; e.style.display="none"; } });
+      p.hidden=false; p.style.display="";
+    } else {
+      p.hidden=true; p.style.display="none";
+      all.forEach(function(e){ if(e.id!=="tab-"+ID) e.style.display=""; });
+    }
   }
   function wrap(){
     if(typeof window.switchTab!=="function"||window.__cheapWrapped) return;
