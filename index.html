@@ -6328,7 +6328,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     {id:"mat",label:"Materials",tabs:["ore","repro","pi"]},
     {id:"acct",label:"Account",tabs:["sso"]},
     {id:"trade",label:"Trade",tabs:["arb","top","plan","scan","pricecheck"]},
-    {id:"intel",label:"Intel",tabs:["kills","fits","reference"]}
+    {id:"intel",label:"Intel",tabs:["kills","fits","dscan","reference"]}
   ];
   var KEY="eveTabGroupV1";
   function origNav(){ return document.querySelector("nav.tabs"); }
@@ -7991,6 +7991,232 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     window.__rfWrapped=1;
   }
   setTimeout(function(){ panel(); ensureBtn(); wrap(); },1800);
+  setInterval(function(){ panel(); ensureBtn(); wrap(); enforce(); },700);
+})();
+</script>
+
+<style>
+#tab-dscan textarea{width:100%;min-height:130px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:10px 12px;font-family:var(--mono);font-size:12px;line-height:1.4}
+#tab-dscan textarea:focus{outline:none;border-color:var(--accent-dim)}
+#tab-dscan .ds-bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:10px 0}
+#tab-dscan .ds-bar button{background:none;border:1px solid var(--border);color:var(--text);border-radius:2px;padding:9px 18px;font-size:13px;font-family:inherit;cursor:pointer}
+#tab-dscan .ds-bar button:hover{border-color:var(--accent-dim)}
+#tab-dscan .ds-cards{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}
+#tab-dscan .ds-card{border:1px solid var(--border);border-radius:2px;padding:9px 14px;min-width:120px}
+#tab-dscan .ds-card .k{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+#tab-dscan .ds-card .v{font-size:19px;font-weight:600;margin-top:2px}
+#tab-dscan table{width:100%;border-collapse:collapse;margin-top:4px}
+#tab-dscan th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:7px 8px;border-bottom:1px solid var(--border)}
+#tab-dscan td{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.05);font-size:13px}
+#tab-dscan td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+#tab-dscan .warn{color:var(--warn);font-weight:600}
+#tab-dscan .bad{color:var(--bad);font-weight:600}
+#tab-dscan h4{margin:16px 0 6px;font-size:13px;font-weight:600}
+#ds-note{font-size:12px;color:var(--muted);line-height:1.55;margin-top:10px;max-width:900px}
+</style>
+<script>/* D-Scan tab v1 */
+(function(){
+  var ID="dscan";
+  var THREAT={
+    "Interdictor":"warp bubbles \u2014 you may not be able to leave",
+    "Heavy Interdiction Cruiser":"warp disruption field \u2014 hard tackle",
+    "Stealth Bomber":"bomb runs, cloaked until they strike",
+    "Force Recon Ship":"cloaky, long point, often a cyno",
+    "Combat Recon Ship":"heavy ewar, no probes needed",
+    "Logistics":"reps \u2014 the rest of their fleet is harder to kill",
+    "Command Destroyer":"can boosh you off grid",
+    "Titan":"capital escalation",
+    "Supercarrier":"capital escalation",
+    "Dreadnought":"capital escalation",
+    "Carrier":"capital escalation",
+    "Force Auxiliary":"capital logistics",
+    "Black Ops":"covert bridge \u2014 more may arrive instantly",
+    "Covert Ops":"probing you down"
+  };
+  var byType=null, lastRows=null;
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s==null?"":s).replace(/[&<>]/g,function(c){ return c==="&"?"&amp;":(c==="<"?"&lt;":"&gt;"); }); }
+  function isk(n){ if(n==null) return "\u2014"; try{ return window.eveISK?window.eveISK(n):Math.round(n).toLocaleString(); }catch(e){ return Math.round(n).toLocaleString(); } }
+  function index(){
+    if(byType) return byType;
+    byType={};
+    try{
+      var idx=JSON.parse(localStorage.getItem("eveCatIdxV1")||"null");
+      if(idx&&idx.groups) idx.groups.forEach(function(g){ (g.types||[]).forEach(function(t){ byType[t]={g:g.name,cat:g.cat}; }); });
+    }catch(e){}
+    return byType;
+  }
+  function parse(text){
+    var out=[];
+    String(text||"").split(/\r?\n/).forEach(function(line){
+      if(!line.trim()) return;
+      var p=line.split("\t").map(function(x){ return x.trim(); });
+      if(p.length>=3){ out.push({name:p[1]||"",type:p[2]||"",dist:p[3]||""}); }
+      else if(p.length===2){ out.push({name:p[0]||"",type:p[1]||"",dist:""}); }
+      else { out.push({name:"",type:p[0]||"",dist:""}); }
+    });
+    return out;
+  }
+  function distKm(s){
+    s=String(s||"").replace(/,/g,"").trim();
+    var m=/^([0-9.]+)\s*(km|m|AU)?/i.exec(s);
+    if(!m) return null;
+    var v=parseFloat(m[1]); if(!isFinite(v)) return null;
+    var u=(m[2]||"km").toLowerCase();
+    if(u==="au") return v*149597871;
+    if(u==="m") return v/1000;
+    return v;
+  }
+  async function resolve(names){
+    var out={};
+    for(var i=0;i<names.length;i+=900){
+      var chunk=names.slice(i,i+900);
+      try{
+        var r=await fetch("https://esi.evetech.net/latest/universe/ids/",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(chunk)});
+        if(!r.ok) continue;
+        var o=await r.json();
+        (o.inventory_types||[]).forEach(function(t){ out[t.name.toLowerCase()]=t.id; });
+      }catch(e){}
+    }
+    return out;
+  }
+  async function prices(ids){
+    var px={};
+    var hub=($("hub")||{}).value||"jita";
+    var REG={jita:10000002,amarr:10000043,dodixie:10000032,rens:10000030,hek:10000042};
+    for(var i=0;i<ids.length;i+=200){
+      try{
+        var r=await fetch("https://market.fuzzwork.co.uk/aggregates/?region="+(REG[hub]||10000002)+"&types="+ids.slice(i,i+200).join(","));
+        if(!r.ok) continue;
+        var o=await r.json();
+        for(var k in o){ var s=o[k]&&o[k].sell; if(!s) continue; var v=parseFloat(s.percentile); if(!(v>0)) v=parseFloat(s.min); if(v>0) px[k]=v; }
+      }catch(e){}
+    }
+    return px;
+  }
+  async function run(){
+    var ta=$("ds-in"); if(!ta) return;
+    var rows=parse(ta.value);
+    var out=$("ds-out"), note=$("ds-note");
+    if(!rows.length){ out.innerHTML="<div style=\"color:var(--muted)\">Nothing pasted yet.</div>"; return; }
+    out.innerHTML="<div style=\"color:var(--muted)\">Reading "+rows.length+" lines\u2026</div>";
+    var idxMap=index();
+    var names=[]; rows.forEach(function(r){ if(r.type&&names.indexOf(r.type)<0) names.push(r.type); });
+    var ids=await resolve(names);
+    var groups={}, cats={}, unknown=[], typeCount={}, distances=[];
+    rows.forEach(function(r){
+      var id=ids[String(r.type).toLowerCase()];
+      var meta=id?idxMap[id]:null;
+      var d=distKm(r.dist); if(d!=null) distances.push(d);
+      if(!id||!meta){ unknown.push(r.type); return; }
+      r.id=id; r.group=meta.g; r.cat=meta.cat;
+      groups[meta.g]=(groups[meta.g]||0)+1;
+      cats[meta.cat]=(cats[meta.cat]||0)+1;
+      typeCount[id]=typeCount[id]||{n:0,name:r.type,g:meta.g,cat:meta.cat};
+      typeCount[id].n++;
+    });
+    var shipIds=Object.keys(typeCount).filter(function(k){ return typeCount[k].cat===6; });
+    var px=await prices(shipIds);
+    var hullValue=0; shipIds.forEach(function(k){ if(px[k]) hullValue+=px[k]*typeCount[k].n; });
+    var ships=cats[6]||0, structures=(cats[65]||0)+(cats[23]||0), drones=cats[18]||0, deployables=cats[22]||0;
+    var threats=[];
+    Object.keys(groups).forEach(function(g){ if(THREAT[g]) threats.push({g:g,n:groups[g],why:THREAT[g]}); });
+    threats.sort(function(a,b){ return b.n-a.n; });
+    var cards="<div class=ds-cards>"+
+      "<div class=ds-card><div class=k>Objects</div><div class=v>"+rows.length+"</div></div>"+
+      "<div class=ds-card><div class=k>Ships</div><div class=v>"+ships+"</div></div>"+
+      "<div class=ds-card><div class=k>Drones</div><div class=v>"+drones+"</div></div>"+
+      "<div class=ds-card><div class=k>Structures</div><div class=v>"+structures+"</div></div>"+
+      "<div class=ds-card><div class=k>Deployables</div><div class=v>"+deployables+"</div></div>"+
+      "<div class=ds-card><div class=k>Hull value on grid</div><div class=v>"+isk(hullValue)+"</div></div>"+
+      "</div>";
+    var th="";
+    if(threats.length){
+      th="<h4>Worth noticing</h4><table><thead><tr><th>Class</th><th class=n>Count</th><th>Why it matters</th></tr></thead><tbody>"+
+        threats.map(function(t){ return "<tr><td class=bad>"+esc(t.g)+"</td><td class=n>"+t.n+"</td><td>"+esc(t.why)+"</td></tr>"; }).join("")+"</tbody></table>";
+    }
+    var gk=Object.keys(groups).sort(function(a,b){ return groups[b]-groups[a]; });
+    var gt="<h4>By class</h4><table><thead><tr><th>Class</th><th class=n>Count</th></tr></thead><tbody>"+
+      gk.map(function(g){ return "<tr><td>"+esc(g)+"</td><td class=n>"+groups[g]+"</td></tr>"; }).join("")+"</tbody></table>";
+    var tk=Object.keys(typeCount).sort(function(a,b){ return typeCount[b].n-typeCount[a].n; }).slice(0,25);
+    var tt="<h4>By type</h4><table><thead><tr><th>Type</th><th>Class</th><th class=n>Count</th><th class=n>Unit @ hub</th></tr></thead><tbody>"+
+      tk.map(function(k){ var t=typeCount[k]; return "<tr><td>"+esc(t.name)+"</td><td style=\"color:var(--muted)\">"+esc(t.g)+"</td><td class=n>"+t.n+"</td><td class=n>"+(px[k]?isk(px[k]):"\u2014")+"</td></tr>"; }).join("")+"</tbody></table>";
+    var dist="";
+    if(distances.length){
+      distances.sort(function(a,b){ return a-b; });
+      var near=distances[0], far=distances[distances.length-1];
+      dist="<h4>Range</h4><div style=\"font-size:13px\">Closest "+Math.round(near).toLocaleString()+" km \u00b7 furthest "+Math.round(far).toLocaleString()+" km \u00b7 "+distances.length+" of "+rows.length+" lines had a distance.</div>";
+    }
+    var unk="";
+    if(unknown.length){
+      var u=[]; unknown.forEach(function(x){ if(u.indexOf(x)<0) u.push(x); });
+      unk="<h4>Not recognised</h4><div style=\"font-size:13px;color:var(--muted)\">"+esc(u.slice(0,20).join(", "))+(u.length>20?(" and "+(u.length-20)+" more"):"")+"</div>";
+    }
+    out.innerHTML=cards+th+gt+tt+dist+unk;
+    note.innerHTML="Paste comes straight from the in-game Directional Scanner \u2014 select the rows and copy. Hull value prices the ships seen at your Manufacturing hub and ignores fittings, so the real number on grid is higher. A D-scan only covers 14.3 AU and only where your scanner is pointed.";
+  }
+  function panel(){
+    var k=$("tab-kills"); if(!k) return null;
+    var p=$("tab-"+ID);
+    if(!p){
+      p=document.createElement("div"); p.id="tab-"+ID; p.hidden=true; p.style.display="none";
+      k.parentElement.insertBefore(p,k.nextSibling);
+      p.innerHTML="<section class=\"panel\"><div>"+
+        "<div style=\"font-weight:600;margin-bottom:8px\">\ud83d\udce1 D-Scan</div>"+
+        "<div style=\"font-size:12px;color:var(--muted);margin-bottom:8px\">In the Directional Scanner window select all rows and copy, then paste below.</div>"+
+        "<textarea id=ds-in placeholder=\"Paste D-scan results here\u2026\"></textarea>"+
+        "<div class=ds-bar><button id=ds-go>Analyse</button><button id=ds-clear>Clear</button></div>"+
+        "<div id=ds-out></div><div id=ds-note></div>"+
+        "</div></section>";
+      $("ds-go").addEventListener("click",run);
+      $("ds-clear").addEventListener("click",function(){ $("ds-in").value=""; $("ds-out").innerHTML=""; $("ds-note").innerHTML=""; });
+      $("ds-in").addEventListener("paste",function(){ setTimeout(run,60); });
+    }
+    return p;
+  }
+  function activeOrigTab(){
+    var nav=document.querySelector("nav.tabs"); if(!nav) return null;
+    var r=null;
+    [].slice.call(nav.querySelectorAll("button.tab[data-tab]")).forEach(function(b){ if(/\bactive\b/.test(b.className)) r=b.getAttribute("data-tab"); });
+    return r;
+  }
+  function hideOthers(){ [].slice.call(document.querySelectorAll("[id^=tab-]")).forEach(function(e){ if(e.id!=="tab-"+ID){ e.hidden=true; e.style.display="none"; } }); }
+  function restoreOthers(){ [].slice.call(document.querySelectorAll("[id^=tab-]")).forEach(function(e){ if(e.id!=="tab-"+ID) e.style.display=""; }); }
+  function enforce(){
+    var p=$("tab-"+ID); if(!p) return;
+    if(activeOrigTab()===ID){ p.hidden=false; p.style.display=""; hideOthers(); }
+    else if(p.style.display!=="none"){ p.hidden=true; p.style.display="none"; restoreOthers(); }
+  }
+  function ensureBtn(){
+    var nav=document.querySelector("nav.tabs"); if(!nav) return;
+    if(nav.querySelector("button.tab[data-tab=dscan]")) return;
+    var b=document.createElement("button");
+    b.className="tab"; b.setAttribute("data-tab",ID); b.textContent="D-Scan";
+    b.addEventListener("click",function(e){ e.stopPropagation(); if(window.switchTab) window.switchTab(ID); });
+    nav.appendChild(b);
+  }
+  function wrap(){
+    if(typeof window.switchTab!=="function"||window.__dsWrapped) return;
+    var prev=window.switchTab;
+    var fn=function(id){
+      var p=panel();
+      if(id===ID){
+        prev("kills");
+        if(p){ p.hidden=false; p.style.display=""; }
+        hideOthers();
+        var nav=document.querySelector("nav.tabs");
+        if(nav) [].slice.call(nav.querySelectorAll("button.tab[data-tab]")).forEach(function(b){ if(b.getAttribute("data-tab")===ID) b.classList.add("active"); else b.classList.remove("active"); });
+        return;
+      }
+      if(p){ p.hidden=true; p.style.display="none"; }
+      restoreOthers();
+      return prev.apply(this,arguments);
+    };
+    fn.__dsWrap=1;
+    window.switchTab=fn;
+    window.__dsWrapped=1;
+  }
+  setTimeout(function(){ panel(); ensureBtn(); wrap(); },1900);
   setInterval(function(){ panel(); ensureBtn(); wrap(); enforce(); },700);
 })();
 </script>
