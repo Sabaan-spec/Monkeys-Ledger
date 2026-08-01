@@ -6341,7 +6341,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     {id:"mat",label:"Materials",tabs:["ore","repro","pi"]},
     {id:"acct",label:"Account",tabs:["sso"]},
     {id:"trade",label:"Trade",tabs:["arb","top","plan","scan","pricecheck"]},
-    {id:"intel",label:"Intel",tabs:["kills","demand","dscan","fits","reference"]}
+    {id:"intel",label:"Intel",tabs:["kills","demand","dscan","fits","fitbay","reference"]}
   ];
   var KEY="eveTabGroupV1";
   function origNav(){ return document.querySelector("nav.tabs"); }
@@ -8887,6 +8887,298 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   }
   window.EVETICK.add(mount);
   setTimeout(mount,2500);
+})();
+</script>
+<style>/* Fitting bay v1 */
+#fb-wrap{display:grid;grid-template-columns:minmax(430px,1fr) minmax(320px,420px);gap:20px;align-items:start}
+@media (max-width:900px){#fb-wrap{grid-template-columns:1fr}}
+#fb-ring{width:100%;max-width:520px}
+.fb-sec{border-top:1px solid var(--border);padding:7px 0 3px;margin-top:6px}
+.fb-sec h5{margin:0 0 6px;font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.fb-row{display:flex;justify-content:space-between;gap:14px;padding:3px 0;font-size:13px}
+.fb-row b{font-weight:600;font-variant-numeric:tabular-nums}
+.fb-slot{display:flex;align-items:center;gap:8px;padding:4px 6px;border:1px solid var(--border);border-radius:2px;margin-bottom:4px;font-size:13px;background:var(--bg)}
+.fb-slot .fb-x{margin-left:auto;cursor:pointer;color:var(--muted);padding:0 4px}
+.fb-slot .fb-x:hover{color:var(--bad)}
+.fb-slot.empty{color:var(--muted);border-style:dashed}
+#fb-add{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:9px 11px;font-family:inherit;font-size:14px;width:100%;box-sizing:border-box}
+#fb-sug{position:fixed;z-index:9999;background:var(--panel);border:1px solid var(--border);border-radius:2px;max-height:240px;overflow:auto;display:none;box-shadow:var(--shadow)}
+#fb-sug div{padding:6px 10px;cursor:pointer;font-size:13px;color:var(--text)}
+#fb-sug div:hover{background:var(--accent-dim)}
+.fb-bad{color:var(--bad)}
+.fb-good{color:var(--good)}
+#fb-note{font-size:12px;color:var(--muted);line-height:1.5;margin-top:10px}
+.fb-open{margin-top:8px;padding:5px 12px;font-size:12px}
+</style>
+<script>/* Fitting bay v1 */
+(function(){
+  var ID="fitbay", STOR="eveFitBayV1", DOG="eveTypeDogV1";
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s==null?"":s).replace(/[&<>]/g,function(c){ return c==="&"?"&amp;":(c==="<"?"&lt;":"&gt;"); }); }
+  function num(n,d){ n=Number(n)||0; return n.toLocaleString(undefined,{minimumFractionDigits:d||0,maximumFractionDigits:d||0}); }
+  var A={hi:14,med:13,low:12,rig:1137,turret:102,launcher:101,cpu:48,pg:11,cpuUse:50,pgUse:30,calib:1132,calibUse:1153,
+    cap:482,rech:55,sh:263,ar:265,st:9,speed:37,mass:4,agi:70,wmul:600,wbase:1281,range:76,scan:564,sig:552,maxT:192,dbw:1271,dbay:283,capNeed:6};
+  var RES={shield:[271,272,273,274],armor:[267,268,269,270],hull:[113,111,109,110]};
+  var EFF={hi:12,med:13,low:11,rig:2663};
+  var dc={}; try{ dc=JSON.parse(localStorage.getItem(DOG)||"{}"); }catch(e){ dc={}; }
+  function saveDog(){ try{ var ks=Object.keys(dc); if(ks.length>500){ ks.slice(0,ks.length-500).forEach(function(k){ delete dc[k]; }); } localStorage.setItem(DOG,JSON.stringify(dc)); }catch(e){} }
+  async function typ(id){
+    id=Number(id); if(!id) return null;
+    if(dc[id]) return dc[id];
+    try{
+      var r=await fetch("https://esi.evetech.net/latest/universe/types/"+id+"/");
+      if(!r.ok) return null;
+      var j=await r.json();
+      var a={}; (j.dogma_attributes||[]).forEach(function(x){ a[x.attribute_id]=x.value; });
+      dc[id]={n:j.name,g:j.group_id,a:a,e:(j.dogma_effects||[]).map(function(x){ return x.effect_id; })};
+      saveDog();
+      return dc[id];
+    }catch(e){ return null; }
+  }
+  var NAMES=null, RNAME=null;
+  function names(){ if(NAMES) return NAMES; try{ NAMES=JSON.parse(localStorage.getItem("eveTypeNamesV1")||"{}"); }catch(e){ NAMES={}; } return NAMES; }
+  function rname(){ if(RNAME) return RNAME; RNAME={}; var n=names(); for(var k in n) RNAME[String(n[k]).toUpperCase()]=Number(k); return RNAME; }
+  var fit={hull:0,mods:[]};
+  try{ var s=JSON.parse(localStorage.getItem(STOR)||"{}"); fit.hull=Number(s.hull)||0; fit.mods=Array.isArray(s.mods)?s.mods.map(Number):[]; }catch(e){}
+  function save(){ try{ localStorage.setItem(STOR,JSON.stringify(fit)); }catch(e){} }
+  function slotOf(t){
+    if(!t||!t.e) return null;
+    if(t.e.indexOf(EFF.hi)>=0) return "hi";
+    if(t.e.indexOf(EFF.med)>=0) return "med";
+    if(t.e.indexOf(EFF.low)>=0) return "low";
+    if(t.e.indexOf(EFF.rig)>=0) return "rig";
+    return null;
+  }
+  function pct(reson){ return (1-(reson==null?1:reson))*100; }
+  function ehp(h){
+    var out=0;
+    [["sh",RES.shield],["ar",RES.armor],["st",RES.hull]].forEach(function(p){
+      var hp=h.a[A[p[0]]]||0, r=p[1].map(function(id){ var v=h.a[id]; return v==null?1:v; });
+      var avg=(r[0]+r[1]+r[2]+r[3])/4;
+      out+=avg>0?hp/avg:0;
+    });
+    return out;
+  }
+  function align(h){ var m=h.a[A.mass]||0, g=h.a[A.agi]||0; return (-Math.log(0.25)*g*m)/1000000; }
+  function ringSVG(counts,filled){
+    var R=210, cx=250, cy=250, out=[];
+    out.push("<circle cx="+cx+" cy="+cy+" r="+R+" fill=none stroke=\"var(--border)\" stroke-width=26 opacity=.55/>");
+    var arcs=[["hi",-160,-105],["med",-85,-30],["low",-10,45],["rig",70,110]];
+    arcs.forEach(function(ar){
+      var key=ar[0], n=counts[key]||0;
+      if(!n) return;
+      var a0=ar[1], a1=ar[2];
+      for(var i=0;i<n;i++){
+        var t=n===1?0.5:(i/(n-1));
+        var deg=a0+(a1-a0)*t, rad=deg*Math.PI/180;
+        var x=cx+R*Math.cos(rad), y=cy+R*Math.sin(rad);
+        var used=(filled[key]||0)>i;
+        out.push("<rect x="+(x-13)+" y="+(y-13)+" width=26 height=26 rx=3 fill=\""+(used?"var(--accent-dim)":"var(--bg)")+"\" stroke=\""+(used?"var(--accent)":"var(--border)")+"\" stroke-width=1.5/>");
+      }
+      var mid=(a0+a1)/2*Math.PI/180;
+      var lx=cx+(R-46)*Math.cos(mid), ly=cy+(R-46)*Math.sin(mid);
+      out.push("<text x="+lx+" y="+ly+" fill=\"var(--muted)\" font-size=11 text-anchor=middle letter-spacing=1>"+key.toUpperCase()+"</text>");
+    });
+    return "<svg id=fb-ring viewBox=\"0 0 500 500\" xmlns=\"http://www.w3.org/2000/svg\">"+out.join("")+"</svg>";
+  }
+  var busy=false;
+  async function render(){
+    var host=$("fb-body"); if(!host||busy) return;
+    busy=true;
+    try{
+      if(!fit.hull){ host.innerHTML="<div style=\"color:var(--muted);padding:18px 0\">Search for a hull above to start, or press <b>Open in fitting bay</b> on any recommended fit.</div>"; busy=false; return; }
+      var h=await typ(fit.hull);
+      if(!h){ host.innerHTML="<div class=fb-bad>Could not load that hull from ESI.</div>"; busy=false; return; }
+      var mods=[];
+      for(var i=0;i<fit.mods.length;i++){ var m=await typ(fit.mods[i]); if(m) mods.push({id:fit.mods[i],t:m}); }
+      var counts={hi:h.a[A.hi]||0,med:h.a[A.med]||0,low:h.a[A.low]||0,rig:h.a[A.rig]||0};
+      var used={hi:0,med:0,low:0,rig:0};
+      var cpu=0,pg=0,cal=0;
+      mods.forEach(function(m){
+        var sl=slotOf(m.t); if(sl) used[sl]=(used[sl]||0)+1;
+        cpu+=m.t.a[A.cpuUse]||0; pg+=m.t.a[A.pgUse]||0; cal+=m.t.a[A.calibUse]||0;
+      });
+      var cpuT=h.a[A.cpu]||0, pgT=h.a[A.pg]||0, calT=h.a[A.calib]||400;
+      var over=[];
+      ["hi","med","low","rig"].forEach(function(sl){ if(used[sl]>counts[sl]) over.push(sl.toUpperCase()+" slots"); });
+      if(cpu>cpuT) over.push("CPU"); if(pg>pgT) over.push("powergrid"); if(cal>calT) over.push("calibration");
+      var slotHTML=["hi","med","low","rig"].map(function(sl){
+        var lbl={hi:"High",med:"Mid",low:"Low",rig:"Rig"}[sl];
+        var rows=mods.filter(function(m){ return slotOf(m.t)===sl; }).map(function(m){
+          return "<div class=fb-slot><span>"+esc(m.t.n)+"</span><span class=fb-x data-del=\""+m.id+"\">\u00d7</span></div>";
+        });
+        var nUsed=rows.length;
+        var empty=Math.max(0,(counts[sl]||0)-nUsed);
+        for(var e=0;e<empty;e++) rows.push("<div class=\"fb-slot empty\">empty</div>");
+        if(!counts[sl]&&!nUsed) return "";
+        return "<div class=fb-sec><h5>"+lbl+" \u2014 "+nUsed+" / "+(counts[sl]||0)+"</h5>"+rows.join("")+"</div>";
+      }).join("");
+      function res(layer){ return RES[layer].map(function(id){ return "<b>"+num(pct(h.a[id]),0)+"%</b>"; }).join(" "); }
+      var wspd=(h.a[A.wbase]||1)*(h.a[A.wmul]||1);
+      var stats="<div class=fb-sec><h5>Fitting</h5>"+
+        "<div class=fb-row><span>CPU</span><b class=\""+(cpu>cpuT?"fb-bad":"")+"\">"+num(cpu,1)+" / "+num(cpuT,0)+" tf</b></div>"+
+        "<div class=fb-row><span>Powergrid</span><b class=\""+(pg>pgT?"fb-bad":"")+"\">"+num(pg,1)+" / "+num(pgT,0)+" MW</b></div>"+
+        (cal?"<div class=fb-row><span>Calibration</span><b class=\""+(cal>calT?"fb-bad":"")+"\">"+num(cal,0)+" / "+num(calT,0)+"</b></div>":"")+
+        "<div class=fb-row><span>Turret / launcher hardpoints</span><b>"+num(h.a[A.turret],0)+" / "+num(h.a[A.launcher],0)+"</b></div></div>"+
+        "<div class=fb-sec><h5>Defense \u2014 hull baseline</h5>"+
+        "<div class=fb-row><span>Effective HP (omni)</span><b>"+num(ehp(h),0)+" ehp</b></div>"+
+        "<div class=fb-row><span>Shield "+num(h.a[A.sh],0)+" hp</span><span>"+res("shield")+"</span></div>"+
+        "<div class=fb-row><span>Armor "+num(h.a[A.ar],0)+" hp</span><span>"+res("armor")+"</span></div>"+
+        "<div class=fb-row><span>Structure "+num(h.a[A.st],0)+" hp</span><span>"+res("hull")+"</span></div>"+
+        "<div class=fb-row><span style=\"color:var(--muted);font-size:11px\">EM / Explosive / Kinetic / Thermal</span></div></div>"+
+        "<div class=fb-sec><h5>Capacitor</h5>"+
+        "<div class=fb-row><span>Capacity</span><b>"+num(h.a[A.cap],0)+" GJ</b></div>"+
+        "<div class=fb-row><span>Recharge</span><b>"+num((h.a[A.rech]||0)/1000,1)+" s</b></div>"+
+        "<div class=fb-row><span>Peak recharge</span><b>"+num(2.5*(h.a[A.cap]||0)/((h.a[A.rech]||1)/1000),1)+" GJ/s</b></div></div>"+
+        "<div class=fb-sec><h5>Navigation \u2014 hull baseline</h5>"+
+        "<div class=fb-row><span>Max velocity</span><b>"+num(h.a[A.speed],0)+" m/s</b></div>"+
+        "<div class=fb-row><span>Mass</span><b>"+num((h.a[A.mass]||0)/1000,0)+" t</b></div>"+
+        "<div class=fb-row><span>Inertia modifier</span><b>"+num(h.a[A.agi],4)+"</b></div>"+
+        "<div class=fb-row><span>Align time</span><b>"+num(align(h),2)+" s</b></div>"+
+        "<div class=fb-row><span>Warp speed</span><b>"+num(wspd,1)+" AU/s</b></div></div>"+
+        "<div class=fb-sec><h5>Targeting</h5>"+
+        "<div class=fb-row><span>Lock range</span><b>"+num((h.a[A.range]||0)/1000,1)+" km</b></div>"+
+        "<div class=fb-row><span>Scan resolution</span><b>"+num(h.a[A.scan],0)+" mm</b></div>"+
+        "<div class=fb-row><span>Signature radius</span><b>"+num(h.a[A.sig],0)+" m</b></div>"+
+        "<div class=fb-row><span>Max locked targets</span><b>"+num(h.a[A.maxT],0)+"</b></div></div>"+
+        ((h.a[A.dbay]||h.a[A.dbw])?("<div class=fb-sec><h5>Drones</h5>"+
+        "<div class=fb-row><span>Bandwidth</span><b>"+num(h.a[A.dbw],0)+" Mbit/s</b></div>"+
+        "<div class=fb-row><span>Drone bay</span><b>"+num(h.a[A.dbay],0)+" m3</b></div></div>"):"");
+      host.innerHTML="<div id=fb-wrap><div><h4 style=\"margin:0 0 4px\">"+esc(h.n)+"</h4>"+
+        (over.length?"<div class=fb-bad style=\"font-size:12px;margin-bottom:8px\">Over limit: "+esc(over.join(", "))+"</div>":"<div class=fb-good style=\"font-size:12px;margin-bottom:8px\">Fits within CPU, powergrid and slots.</div>")+
+        ringSVG(counts,used)+slotHTML+"</div><div>"+stats+"</div></div>";
+      [].forEach.call(host.querySelectorAll("[data-del]"),function(x){
+        x.addEventListener("click",function(){
+          var id=Number(x.getAttribute("data-del"));
+          var i=fit.mods.indexOf(id); if(i>=0){ fit.mods.splice(i,1); save(); render(); }
+        });
+      });
+    }catch(e){ host.innerHTML="<div class=fb-bad>Something went wrong building the fit.</div>"; }
+    busy=false;
+  }
+  function sugBox(){ var b=$("fb-sug"); if(!b){ b=document.createElement("div"); b.id="fb-sug"; document.body.appendChild(b); } return b; }
+  function suggest(){
+    var inp=$("fb-add"); if(!inp) return;
+    var box=sugBox();
+    var q=inp.value.trim().toUpperCase();
+    if(q.length<3){ box.style.display="none"; return; }
+    var n=names(), a=[], b=[];
+    for(var k in n){ var u=String(n[k]).toUpperCase(); if(u.indexOf(q)===0){ if(a.length<8) a.push([k,n[k]]); } else if(u.indexOf(q)>0){ if(b.length<8) b.push([k,n[k]]); } if(a.length>=8&&b.length>=8) break; }
+    var rows=a.concat(b).slice(0,10);
+    if(!rows.length){ box.style.display="none"; return; }
+    box.innerHTML="";
+    rows.forEach(function(r){
+      var d=document.createElement("div"); d.textContent=r[1];
+      d.addEventListener("mousedown",function(ev){ ev.preventDefault(); addType(Number(r[0])); inp.value=""; box.style.display="none"; });
+      box.appendChild(d);
+    });
+    var rc=inp.getBoundingClientRect();
+    box.style.display="block"; box.style.left=rc.left+"px"; box.style.minWidth=rc.width+"px";
+    var below=window.innerHeight-rc.bottom;
+    if(below<180&&rc.top>below){ box.style.top=""; box.style.bottom=(window.innerHeight-rc.top+4)+"px"; }
+    else{ box.style.bottom=""; box.style.top=(rc.bottom+4)+"px"; }
+  }
+  async function addType(id){
+    var t=await typ(id); if(!t) return;
+    var msg=$("fb-msg");
+    if(t.a[A.hi]!=null&&t.a[A.cpu]!=null&&!slotOf(t)){ fit.hull=id; fit.mods=[]; save(); if(msg) msg.textContent=""; render(); return; }
+    if(!slotOf(t)){ if(msg) msg.textContent=t.n+" is not a fittable module."; return; }
+    if(!fit.hull){ if(msg) msg.textContent="Pick a hull first."; return; }
+    if(msg) msg.textContent="";
+    fit.mods.push(id); save(); render();
+  }
+  function panel(){
+    var k=$("tab-kills"); if(!k) return null;
+    var p=$("tab-"+ID);
+    if(!p){
+      p=document.createElement("div"); p.id="tab-"+ID; p.hidden=true; p.style.display="none";
+      k.parentElement.insertBefore(p,k.nextSibling);
+      p.innerHTML="<section class=\"panel\"><div>"+
+        "<h4>\ud83d\udee0 Fitting bay</h4>"+
+        "<div style=\"display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px\">"+
+        "<label style=\"display:flex;flex-direction:column;gap:4px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);flex:1;min-width:260px\">Hull or module<input id=fb-add placeholder=\"Type a ship to start, then modules\u2026\" autocomplete=off spellcheck=false></label>"+
+        "<button id=fb-clear class=tab style=\"padding:9px 16px\">Clear</button><span id=fb-msg style=\"font-size:12px;color:var(--muted)\"></span></div>"+
+        "<div id=fb-body></div>"+
+        "<div id=fb-note>Numbers come straight from the hull\u2019s own attributes as published by CCP, so slots, CPU, powergrid, calibration, resists, align time and warp speed are exact. Module effects on HP, resists, speed and capacitor \u2014 and weapon DPS \u2014 are <b>not</b> applied yet; those come next.</div>"+
+        "</div></section>";
+      var inp=p.querySelector("#fb-add");
+      inp.addEventListener("input",suggest);
+      inp.addEventListener("blur",function(){ setTimeout(function(){ var b=$("fb-sug"); if(b) b.style.display="none"; },170); });
+      p.querySelector("#fb-clear").addEventListener("click",function(){ fit={hull:0,mods:[]}; save(); render(); });
+      render();
+    }
+    return p;
+  }
+  function activeOrigTab(){
+    var nav=document.querySelector("nav.tabs"); if(!nav) return null;
+    var r=null;
+    [].forEach.call(nav.querySelectorAll("button.tab[data-tab]"),function(b){ if(/\bactive\b/.test(b.className)) r=b.getAttribute("data-tab"); });
+    return r;
+  }
+  function hideOthers(){ [].forEach.call(document.querySelectorAll("[id^=tab-]"),function(e){ if(e.id!=="tab-"+ID){ e.hidden=true; e.style.display="none"; } }); }
+  function restoreOthers(){ [].forEach.call(document.querySelectorAll("[id^=tab-]"),function(e){ if(e.id!=="tab-"+ID) e.style.display=""; }); }
+  function enforce(){
+    var p=$("tab-"+ID); if(!p) return;
+    if(activeOrigTab()===ID){ p.hidden=false; p.style.display=""; hideOthers(); }
+    else if(p.style.display!=="none"){ p.hidden=true; p.style.display="none"; restoreOthers(); }
+  }
+  function ensureBtn(){
+    var nav=document.querySelector("nav.tabs"); if(!nav) return;
+    if(nav.querySelector("button.tab[data-tab="+ID+"]")) return;
+    var b=document.createElement("button");
+    b.className="tab"; b.setAttribute("data-tab",ID); b.textContent="Fitting";
+    b.addEventListener("click",function(e){ e.stopPropagation(); if(window.switchTab) window.switchTab(ID); });
+    nav.appendChild(b);
+  }
+  function wrap(){
+    if(typeof window.switchTab!=="function"||window.__fbWrapped) return;
+    var prev=window.switchTab;
+    window.switchTab=function(id){
+      var p=panel();
+      if(id===ID){
+        prev("kills");
+        if(p){ p.hidden=false; p.style.display=""; }
+        hideOthers();
+        var nav=document.querySelector("nav.tabs");
+        if(nav) [].forEach.call(nav.querySelectorAll("button.tab[data-tab]"),function(b){ if(b.getAttribute("data-tab")===ID) b.classList.add("active"); else b.classList.remove("active"); });
+        return;
+      }
+      if(p){ p.hidden=true; p.style.display="none"; }
+      restoreOthers();
+      return prev.apply(this,arguments);
+    };
+    window.__fbWrapped=1;
+  }
+  function injectOpen(){
+    var res=$("sf-results"); if(!res) return;
+    [].forEach.call(res.querySelectorAll(".fit-cat"),function(card){
+      if(card.querySelector(".fb-open")) return;
+      var b=document.createElement("button");
+      b.className="tab fb-open"; b.textContent="Open in fitting bay";
+      b.addEventListener("click",function(){
+        var mp=rname(), hull=0, mods=[];
+        var hn=(($("sf-search")||{}).value||"").trim().toUpperCase();
+        if(mp[hn]) hull=mp[hn];
+        [].forEach.call(card.querySelectorAll("*"),function(el){
+          if(el.children.length) return;
+          var t=(el.textContent||"").trim();
+          if(!t||/^(high|mid|low|rig|drone|subsystem)s?$/i.test(t)) return;
+          var m=t.match(/^(?:(\d+)x\s+)?(.+)$/);
+          if(!m) return;
+          var q=Math.min(8,Number(m[1])||1), nm=m[2].trim().toUpperCase();
+          var id=mp[nm];
+          if(id) for(var i=0;i<q;i++) mods.push(id);
+        });
+        if(!hull) return;
+        fit={hull:hull,mods:mods}; save();
+        panel(); render();
+        if(window.switchTab) window.switchTab(ID);
+      });
+      card.appendChild(b);
+    });
+  }
+  window.EVETICK.add(function(){ panel(); ensureBtn(); wrap(); enforce(); injectOpen(); });
+  setTimeout(function(){ panel(); ensureBtn(); wrap(); },2600);
 })();
 </script>
 </body>
