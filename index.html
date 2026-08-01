@@ -8953,6 +8953,14 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     if(t.e.indexOf(EFF.rig)>=0) return "rig";
     return null;
   }
+  var ROMAN=["0","I","II","III","IV","V"];
+  function skillLvl(name){
+    try{
+      var src=window.EVESKILLS||window.EVESSO||null;
+      if(src&&typeof src.level==="function"){ var v=src.level(name); if(v!=null) return Math.max(0,Math.min(5,Number(v))); }
+    }catch(e){}
+    return 5;
+  }
   function pct(reson){ return (1-(reson==null?1:reson))*100; }
   function ehp(h){
     var out=0;
@@ -9045,7 +9053,9 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         var sl=slotOf(m.t); if(sl) used[sl]=(used[sl]||0)+1;
         cpu+=m.t.a[A.cpuUse]||0; pg+=m.t.a[A.pgUse]||0; cal+=m.t.a[A.calibUse]||0;
       });
-      var cpuT=h.a[A.cpu]||0, pgT=h.a[A.pg]||0, calT=h.a[A.calib]||400;
+      var cpuLvl=skillLvl("CPU Management"), pgLvl=skillLvl("Power Grid Management");
+      var cpuBase=h.a[A.cpu]||0, pgBase=h.a[A.pg]||0;
+      var cpuT=cpuBase*(1+0.05*cpuLvl), pgT=pgBase*(1+0.05*pgLvl), calT=h.a[A.calib]||400;
       var over=[];
       ["hi","med","low","rig"].forEach(function(sl){ if(used[sl]>counts[sl]) over.push(sl.toUpperCase()+" slots"); });
       if(cpu>cpuT) over.push("CPU"); if(pg>pgT) over.push("powergrid"); if(cal>calT) over.push("calibration");
@@ -9066,7 +9076,9 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       var wspd=(h.a[A.wbase]||1)*(h.a[A.wmul]||1);
       var stats="<div class=fb-sec><h5>Fitting</h5>"+
         "<div class=fb-row><span>CPU</span><b class=\""+(cpu>cpuT?"fb-bad":"")+"\">"+num(cpu,1)+" / "+num(cpuT,0)+" tf</b></div>"+
+        "<div class=fb-row><span style=\"color:var(--muted);font-size:11px\">"+num(cpuBase,0)+" hull + CPU Management "+ROMAN[cpuLvl]+"</span></div>"+
         "<div class=fb-row><span>Powergrid</span><b class=\""+(pg>pgT?"fb-bad":"")+"\">"+num(pg,1)+" / "+num(pgT,0)+" MW</b></div>"+
+        "<div class=fb-row><span style=\"color:var(--muted);font-size:11px\">"+num(pgBase,0)+" hull + Power Grid Management "+ROMAN[pgLvl]+"</span></div>"+
         (cal?"<div class=fb-row><span>Calibration</span><b class=\""+(cal>calT?"fb-bad":"")+"\">"+num(cal,0)+" / "+num(calT,0)+"</b></div>":"")+
         "<div class=fb-row><span>Turret / launcher hardpoints</span><b>"+num(h.a[A.turret],0)+" / "+num(h.a[A.launcher],0)+"</b></div></div>"+
         "<div class=fb-sec><h5>Defense \u2014 hull baseline</h5>"+
@@ -9148,7 +9160,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         "<label style=\"display:flex;flex-direction:column;gap:4px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);flex:1;min-width:260px\">Hull or module<input id=fb-add placeholder=\"Type a ship to start, then modules\u2026\" autocomplete=off spellcheck=false></label>"+
         "<button id=fb-clear class=tab style=\"padding:9px 16px\">Clear</button><span id=fb-msg style=\"font-size:12px;color:var(--muted)\"></span></div>"+
         "<div id=fb-body></div>"+
-        "<div id=fb-note>Numbers come straight from the hull\u2019s own attributes as published by CCP, so slots, CPU, powergrid, calibration, resists, align time and warp speed are exact. Module effects on HP, resists, speed and capacitor \u2014 and weapon DPS \u2014 are <b>not</b> applied yet; those come next.</div>"+
+        "<div id=fb-note>Hull figures are CCP\u2019s published attributes, so slots, calibration, resists, align time and warp speed are exact. CPU and powergrid output include <b>CPU Management</b> and <b>Power Grid Management</b> at level V \u2014 without them a laser battleship reads as over-grid when it fits fine in game. Not yet applied: Weapon Upgrades and Advanced Weapon Upgrades (which cut weapon CPU and grid further, so heavy weapon fits still read high), module effects on HP, resists, speed and capacitor, and weapon DPS.</div>"+
         "</div></section>";
       var inp=p.querySelector("#fb-add");
       inp.addEventListener("input",suggest);
