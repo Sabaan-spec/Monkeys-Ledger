@@ -2705,7 +2705,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 </script>
 
 <script>
-/* Auto route planner — jumps + security limits, per-system profit, kills risk */
+/* Auto route route planner — jumps + security limits, per-system profit, kills risk */
 (function(){
   function $(id){return document.getElementById(id);}
   function ready(cb){function ok(){return typeof HUBS!=='undefined'&&typeof fuzzAgg==='function'&&document.querySelector('nav.tabs');}if(ok()){cb();return;}var n=0,iv=setInterval(function(){if(ok()||n++>300){clearInterval(iv);if(ok())cb();}},100);}
@@ -2716,7 +2716,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     stl.textContent='#tab-plan .suggestions{position:absolute;z-index:60;left:0;right:0;top:100%;max-height:260px;overflow:auto;margin:2px 0 0;padding:0;list-style:none;background:var(--bg-2);border:1px solid var(--border);border-radius:6px}#tab-plan .suggestions li{padding:5px 9px;cursor:pointer;font-size:.82rem}#tab-plan .suggestions li:hover{background:rgba(120,180,255,.12)}#tab-plan #pl-bar{height:6px;background:var(--bg-2);border-radius:4px;overflow:hidden;margin:6px 0}#tab-plan #pl-bar>i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}#tab-plan tr.route{cursor:pointer}#tab-plan tr.route:hover td{background:rgba(120,180,255,.08)}#tab-plan .rk-low{color:var(--good)}#tab-plan .rk-med{color:var(--warn)}#tab-plan .rk-high{color:var(--bad);font-weight:600}';
     document.head.appendChild(stl);
 
-    var btn=document.createElement('button');btn.className='tab';btn.setAttribute('data-tab','plan');btn.textContent='Planner';
+    var btn=document.createElement('button');btn.className='tab';btn.setAttribute('data-tab','plan');btn.textContent='Route Planner';
     document.querySelector('nav.tabs').appendChild(btn);
 
     var div=document.createElement('div');div.id='tab-plan';div.hidden=true;
@@ -3459,7 +3459,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 })();
 </script>
 <script>
-/* Planner live tracker */
+/* Route Planner live tracker */
 (function(){
   function $(id){return document.getElementById(id);}
   var st=document.createElement('style');st.textContent='@keyframes plpulse{0%{box-shadow:0 0 0 0 rgba(84,194,138,.55)}70%{box-shadow:0 0 0 7px rgba(84,194,138,0)}100%{box-shadow:0 0 0 0 rgba(84,194,138,0)}}.pl-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#54c28a;animation:plpulse 1.6s infinite;margin-right:6px;vertical-align:middle}.pl-liveind{font-size:.78rem;font-weight:700;color:#54c28a;letter-spacing:.03em}.pl-liveind.off{color:#7a8c99}.pl-liveind.off .pl-dot{background:#7a8c99;animation:none;box-shadow:none}';document.head.appendChild(st);
@@ -3866,7 +3866,7 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     var p=IDX?Promise.resolve(IDX):fetch(ESI+'/industry/systems/').then(function(r){return r.json();}).then(function(j){IDX=j;return j;});
     p.then(async function(list){
       var m=map();
-      if(!m||!m.sys){st.textContent='System map not built yet \u2014 open the Planner tab and click \u201cBuild / refresh map\u201d once.';return;}
+      if(!m||!m.sys){st.textContent='System map not built yet \u2014 open the Route Planner tab and click \u201cBuild / refresh map\u201d once.';return;}
       var dist=null;
       if(home&&maxJ>0){var hid=sysIdByName(home);if(!hid){st.textContent='Home system \u201c'+home+'\u201d not found.';return;}dist=bfs(hid,maxJ);}
       var rows=[];
