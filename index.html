@@ -6341,7 +6341,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     {id:"mat",label:"Materials",tabs:["ore","repro","pi"]},
     {id:"acct",label:"Account",tabs:["sso"]},
     {id:"trade",label:"Trade",tabs:["arb","top","plan","scan","pricecheck"]},
-    {id:"intel",label:"Intel",tabs:["kills","fits","dscan","reference"]}
+    {id:"intel",label:"Intel",tabs:["kills","demand","dscan","fits","reference"]}
   ];
   var KEY="eveTabGroupV1";
   function origNav(){ return document.querySelector("nav.tabs"); }
@@ -7408,38 +7408,38 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
 
 <style>#tab-scan .sc-none{color:var(--bad);opacity:.85}</style>
 
-<style>#sc-toasts{position:fixed;right:18px;bottom:18px;z-index:99999;display:flex;flex-direction:column;gap:10px;max-width:390px;pointer-events:none}.sc-toast{pointer-events:auto;background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--good);border-radius:3px;padding:12px 14px;box-shadow:var(--shadow);font-size:13px;color:var(--text);animation:scIn .18s ease}.sc-toast .t{font-weight:600;margin-bottom:4px;letter-spacing:.02em}.sc-toast .m{color:var(--muted);font-size:12px;line-height:1.5}.sc-toast .row{display:flex;gap:8px;margin-top:9px}.sc-toast button{background:none;border:1px solid var(--border);color:var(--text);border-radius:2px;padding:4px 10px;font-size:12px;font-family:inherit;cursor:pointer}.sc-toast button:hover{border-color:var(--accent-dim)}@keyframes scIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}</style>
-
-<style>
-#kd-panel{margin-top:14px}
-#kd-panel h4{margin:0 0 8px;font-size:14px;font-weight:600}
-#kd-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
-@media (max-width:900px){#kd-grid{grid-template-columns:1fr}}
-#kd-panel table{width:100%;border-collapse:collapse}
-#kd-panel th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:5px 6px;border-bottom:1px solid var(--border)}
-#kd-panel td{padding:5px 6px;border-bottom:1px solid rgba(255,255,255,.05);font-size:13px}
-#kd-panel td.n{text-align:right;font-variant-numeric:tabular-nums}
-#kd-panel .bp{color:var(--good);font-weight:600}
-#kd-note{font-size:12px;color:var(--muted);margin:6px 0 10px;line-height:1.5}
-#kd-run{text-decoration:underline;cursor:pointer;color:var(--text)}
-</style>
-<script>/* Destruction demand v1 */
+<style>#sc-toasts{position:fixed;right:18px;bottom:18px;z-index:99999;display:flex;flex-direction:column;gap:10px;max-width:390px;pointer-events:none}.sc-toast{pointer-events:auto;background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--good);border-radius:3px;padding:12px 14px;box-shadow:var(--shadow);font-size:13px;color:var(--text);animation:scIn .18s ease}.sc-toast .t{font-weight:600;margin-bottom:4px;letter-spacing:.02em}.sc-toast .m{color:var(--muted);font-size:12px;line-height:1.5}.sc-toast .row{display:flex;gap:8px;margin-top:9px}.sc-toast button{background:none;border:1px solid var(--border);color:var(--text);border-radius:2px;padding:4px 10px;font-size:12px;font-family:inherit;cursor:pointer}.sc-toast button:hover{border-color:var(--accent-dim)}@keyframes scIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}<<script>/* Destruction demand v2 */
 (function(){
+  var ID="demand";
   var HUBREG={jita:10000002,amarr:10000043,dodixie:10000032,rens:10000030,hek:10000042};
   var FITTED=function(f){ return (f>=11&&f<=34)||(f>=92&&f<=99)||(f>=125&&f<=132); };
   var busy=false, lastKey="";
   function $(id){ return document.getElementById(id); }
   function isk(n){ if(n==null) return "\u2014"; try{ return window.eveISK?window.eveISK(n):Math.round(n).toLocaleString(); }catch(e){ return Math.round(n).toLocaleString(); } }
   function esc(s){ return String(s==null?"":s).replace(/[&<>]/g,function(c){ return c==="&"?"&amp;":(c==="<"?"&lt;":"&gt;"); }); }
-  function host(){
-    var t=$("tab-kills"); if(!t) return null;
-    var p=$("kd-panel");
+  function regionSel(){ return $("kd-region")||$("kl-region"); }
+  function panel(){
+    var k=$("tab-kills"); if(!k) return null;
+    var p=$("tab-"+ID);
     if(!p){
-      p=document.createElement("div"); p.id="kd-panel";
+      p=document.createElement("div"); p.id="tab-"+ID; p.hidden=true; p.style.display="none";
+      k.parentElement.insertBefore(p,k.nextSibling);
       p.innerHTML="<section class=\"panel\"><div>"+
-        "<h4>\ud83d\udd28 What is dying here \u2014 and what you could build</h4>"+
-        "<div id=kd-note></div><div id=kd-grid></div></div></section>";
-      t.appendChild(p);
+        "<div id=kd-panel><h4>\ud83d\udd28 What is dying here \u2014 and what you could build</h4>"+
+        "<div style=\"display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:10px\">"+
+        "<label style=\"display:flex;flex-direction:column;gap:4px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)\">Region<select id=kd-region style=\"background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:9px 11px;font-family:inherit;font-size:14px;min-width:200px\"></select></label>"+
+        "<button id=kd-go class=tab style=\"padding:9px 18px\">Refresh</button></div>"+
+        "<div id=kd-note></div><div id=kd-grid></div></div></div></section>";
+      var sel=p.querySelector("#kd-region");
+      var src=$("kl-region");
+      if(src){ [].slice.call(src.options).forEach(function(o){ var x=document.createElement("option"); x.value=o.value; x.textContent=o.textContent; sel.appendChild(x); }); }
+      var hub=($("hub")||{}).value;
+      if(HUBREG[hub]) sel.value=String(HUBREG[hub]);
+      sel.addEventListener("change",function(){ run(true); });
+      p.querySelector("#kd-go").addEventListener("click",function(){ run(true); });
+    } else if(!p.querySelector("#kd-region option")){
+      var sel2=p.querySelector("#kd-region"), src2=$("kl-region");
+      if(sel2&&src2&&src2.options.length){ [].slice.call(src2.options).forEach(function(o){ var x=document.createElement("option"); x.value=o.value; x.textContent=o.textContent; sel2.appendChild(x); }); var hb=($("hub")||{}).value; if(HUBREG[hb]) sel2.value=String(HUBREG[hb]); }
     }
     return p;
   }
@@ -7462,9 +7462,9 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     return "<div><h4>"+title+"</h4><table><thead><tr><th>Item</th><th class=n>Lost</th><th class=n>Unit @ hub</th><th class=n>Replacement value</th></tr></thead><tbody>"+body+"</tbody></table></div>";
   }
   async function run(force){
-    var p=host(); if(!p) return;
+    var p=panel(); if(!p) return;
     if(busy) return;
-    var sel=$("kl-region"); if(!sel) return;
+    var sel=regionSel(); if(!sel||!sel.value) return;
     var region=sel.value;
     var hub=($("hub")||{}).value||"jita";
     var key=region+"|"+hub;
@@ -7494,7 +7494,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       try{ nm=await EVEAPI.names(ids)||{}; }catch(e){ nm={}; }
       tH.forEach(function(r){ r.name=nm[r.id]||("Type "+r.id); });
       tM.forEach(function(r){ r.name=nm[r.id]||("Type "+r.id); });
-      var px=await fuzz(HUBREG[hub]||10000002,ids.map(String));
+      var px=await fuzz(Number(region),ids.map(String));
       var bpOk=!!(window.EVEBP&&window.EVEBP.ok);
       $("kd-grid").innerHTML=table("Hulls lost",tH,px,bpOk)+table("Fitted modules lost",tM,px,bpOk);
       var span="";
@@ -7504,17 +7504,57 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       }
       var msg=z.length+" recent kills"+span+", priced at the cheapest order in "+esc(hub)+" itself. Cargo is excluded \u2014 only fitted slots, rigs and subsystems count.";
       if(!bpOk) msg+=" Connect a character to see which of these you hold blueprints for.";
-      msg+=" <span id=kd-run>refresh</span>";
       if(note) note.innerHTML=msg;
-      var rr=$("kd-run"); if(rr) rr.addEventListener("click",function(){ run(true); });
     }catch(e){ if(note) note.textContent="Could not load destruction data."; }
     busy=false;
   }
-  function tick(){ var t=$("tab-kills"); if(!t||t.offsetParent===null) return; host(); run(false); }
-  setTimeout(tick,2500);
-  setInterval(tick,4000);
+  function activeOrigTab(){
+    var nav=document.querySelector("nav.tabs"); if(!nav) return null;
+    var r=null;
+    [].slice.call(nav.querySelectorAll("button.tab[data-tab]")).forEach(function(b){ if(/\bactive\b/.test(b.className)) r=b.getAttribute("data-tab"); });
+    return r;
+  }
+  function hideOthers(){ [].slice.call(document.querySelectorAll("[id^=tab-]")).forEach(function(e){ if(e.id!=="tab-"+ID){ e.hidden=true; e.style.display="none"; } }); }
+  function restoreOthers(){ [].slice.call(document.querySelectorAll("[id^=tab-]")).forEach(function(e){ if(e.id!=="tab-"+ID) e.style.display=""; }); }
+  function enforce(){
+    var p=$("tab-"+ID); if(!p) return;
+    if(activeOrigTab()===ID){ p.hidden=false; p.style.display=""; hideOthers(); run(false); }
+    else if(p.style.display!=="none"){ p.hidden=true; p.style.display="none"; restoreOthers(); }
+  }
+  function ensureBtn(){
+    var nav=document.querySelector("nav.tabs"); if(!nav) return;
+    if(nav.querySelector("button.tab[data-tab=demand]")) return;
+    var b=document.createElement("button");
+    b.className="tab"; b.setAttribute("data-tab",ID); b.textContent="Build Demand";
+    b.addEventListener("click",function(e){ e.stopPropagation(); if(window.switchTab) window.switchTab(ID); });
+    nav.appendChild(b);
+  }
+  function wrap(){
+    if(typeof window.switchTab!=="function"||window.__kdWrapped) return;
+    var prev=window.switchTab;
+    var fn=function(id){
+      var p=panel();
+      if(id===ID){
+        prev("kills");
+        if(p){ p.hidden=false; p.style.display=""; }
+        hideOthers();
+        var nav=document.querySelector("nav.tabs");
+        if(nav) [].slice.call(nav.querySelectorAll("button.tab[data-tab]")).forEach(function(b){ if(b.getAttribute("data-tab")===ID) b.classList.add("active"); else b.classList.remove("active"); });
+        run(false);
+        return;
+      }
+      if(p){ p.hidden=true; p.style.display="none"; }
+      restoreOthers();
+      return prev.apply(this,arguments);
+    };
+    fn.__kdWrap=1;
+    window.switchTab=fn;
+    window.__kdWrapped=1;
+  }
+  setTimeout(function(){ panel(); ensureBtn(); wrap(); },2000);
+  window.EVETICK.add(function(){ panel(); ensureBtn(); wrap(); enforce(); });
 })();
-</script>
+</script></script>
 
 <style>#tab-scan .sc-form{gap:14px;align-items:flex-end;flex-wrap:wrap}#tab-scan .sc-form label{min-width:0}#tab-scan #sc-item{min-width:0;width:250px}#tab-scan #sc-loc{min-width:0;width:230px}#tab-scan #sc-locid{width:170px!important}#tab-scan #sc-rule{max-width:250px}#tab-scan #sc-target{width:140px}#tab-scan .sc-form input,#tab-scan .sc-form select{padding:10px 12px}#tab-scan #sc-add,#tab-scan #sc-notify{white-space:nowrap;padding:10px 20px!important;font-size:13px}@media (max-width:1250px){#tab-scan .sc-form{gap:10px}#tab-scan #sc-item{width:190px}#tab-scan #sc-loc{width:190px}#tab-scan #sc-rule{max-width:200px}#tab-scan #sc-target{width:110px}}</style>
 
