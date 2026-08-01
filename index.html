@@ -7189,12 +7189,25 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
     var lg=$("sc-log");
     if(lg) lg.innerHTML=log.length?log.slice(0,12).map(function(e){ return "<li>"+esc(e.t)+" \u2014 "+esc(e.m)+"</li>"; }).join(""):"<li class=sc-wait>Nothing yet.</li>";
   }
+  function toast(text){
+    var host=document.getElementById("sc-toasts");
+    if(!host){ host=document.createElement("div"); host.id="sc-toasts"; document.body.appendChild(host); }
+    var d=document.createElement("div"); d.className="sc-toast";
+    d.innerHTML="<div class=t>\u23f1 Market scanner alert</div><div class=m></div><div class=row><button data-a=go>Open scanner</button><button data-a=x>Dismiss</button></div>";
+    d.querySelector(".m").textContent=text;
+    d.querySelector("[data-a=go]").addEventListener("click",function(){ try{ if(window.switchTab) window.switchTab(ID); }catch(e){} d.remove(); });
+    d.querySelector("[data-a=x]").addEventListener("click",function(){ d.remove(); });
+    host.appendChild(d);
+    while(host.children.length>4) host.removeChild(host.firstChild);
+    setTimeout(function(){ if(d.parentElement) d.remove(); },30000);
+  }
   function fire(w,text){
     var now=Date.now();
     if(now-(w.firedAt||0)<COOLDOWN) return;
     w.firedAt=now;
     log.unshift({t:new Date().toLocaleTimeString(),m:text});
     save();
+    try{ toast(text); }catch(e){}
     try{ if(typeof Notification!=="undefined"&&Notification.permission==="granted") new Notification("Market scanner",{body:text}); }catch(e){}
   }
   async function poll(force){
@@ -7294,6 +7307,8 @@ document.addEventListener("click",e=>{["rp-suggestions","ab-suggestions"].forEac
 <style>#tab-scan tr.sc-buy td:first-child{box-shadow:inset 3px 0 0 var(--good)}#tab-scan tr.sc-sell td:first-child{box-shadow:inset 3px 0 0 var(--accent)}#tab-scan tr.sc-cost td:first-child{box-shadow:inset 3px 0 0 var(--warn)}#tab-scan tr.sc-under td:first-child{box-shadow:inset 3px 0 0 var(--bad)}#tab-scan tr.sc-buy .sc-arrow{color:var(--good)}#tab-scan tr.sc-sell .sc-arrow{color:var(--accent)}#tab-scan tr.sc-cost .sc-arrow{color:var(--warn)}#tab-scan tr.sc-under .sc-arrow{color:var(--bad)}#tab-scan .sc-dir{white-space:nowrap}#tab-scan td.num{text-align:right;font-variant-numeric:tabular-nums}#tab-scan th{white-space:nowrap}</style>
 
 <style>#tab-scan .sc-none{color:var(--bad);opacity:.85}</style>
+
+<style>#sc-toasts{position:fixed;right:18px;bottom:18px;z-index:99999;display:flex;flex-direction:column;gap:10px;max-width:390px;pointer-events:none}.sc-toast{pointer-events:auto;background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--good);border-radius:3px;padding:12px 14px;box-shadow:var(--shadow);font-size:13px;color:var(--text);animation:scIn .18s ease}.sc-toast .t{font-weight:600;margin-bottom:4px;letter-spacing:.02em}.sc-toast .m{color:var(--muted);font-size:12px;line-height:1.5}.sc-toast .row{display:flex;gap:8px;margin-top:9px}.sc-toast button{background:none;border:1px solid var(--border);color:var(--text);border-radius:2px;padding:4px 10px;font-size:12px;font-family:inherit;cursor:pointer}.sc-toast button:hover{border-color:var(--accent-dim)}@keyframes scIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}</style>
 </body>
 </html>
 
