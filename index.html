@@ -8564,6 +8564,9 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
 #sf-bar button{padding:8px 14px}
 #sf-bar button.on{background:var(--accent-dim);border-color:var(--accent);color:var(--text)}
 #sf-status{font-size:12px;color:var(--muted);align-self:center;max-width:640px}
+#sf-status.bad{color:var(--warn)}
+#sf-help{flex-basis:100%;font-size:12px;color:var(--muted);line-height:1.5;margin-top:-2px}
+#sf-help b{color:var(--text);font-weight:600}
 </style>
 <script>/* System filter v1 */
 (function(){
@@ -8576,7 +8579,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   function map(){ if(MAP) return MAP; try{ MAP=(JSON.parse(localStorage.getItem("eveMapV2")||"{}").sys)||{}; }catch(e){ MAP={}; } return MAP; }
   function list(){ if(LIST) return LIST; var m=map(); LIST=Object.keys(m).map(function(k){ return {id:Number(k),name:String(m[k][2]||""),sec:m[k][0]}; }); return LIST; }
   function rname(){ if(RNAME) return RNAME; RNAME={}; try{ var n=JSON.parse(localStorage.getItem("eveTypeNamesV1")||"{}"); for(var k in n) RNAME[String(n[k]).toUpperCase()]=Number(k); }catch(e){} return RNAME; }
-  function status(t){ var e=$("sf-status"); if(e) e.textContent=t; }
+  function status(t,bad){ var e=$("sf-status"); if(e){ e.textContent=t; e.className=bad?"bad":""; } }
   function regionId(){ return (($("mb-region")||{}).value)||""; }
   function stockKey(){ return regionId()+"|"+st.sysId; }
   function getStock(){ try{ var o=JSON.parse(localStorage.getItem(STOCK)||"{}"); return o[stockKey()]||null; }catch(e){ return null; } }
@@ -8674,7 +8677,8 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     if(scanning){ cancelFlag=true; return; }
     var region=regionId();
     if(!region){ status("Pick a region first."); return; }
-    if(!st.sysId){ status("Type a system name first."); return; }
+    if(!st.sysId) resolveTyped();
+    if(!st.sysId){ status("Pick a system first \u2014 type its name and choose it from the dropdown.",1); return; }
     scanning=true; cancelFlag=false;
     var btn=$("sf-scan"); if(btn) btn.textContent="Cancel scan";
     var base="https://esi.evetech.net/latest/markets/"+region+"/orders/?order_type=sell";
@@ -8701,7 +8705,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       else{
         var ids=Object.keys(found);
         setStock(ids); loadSet(); applyTree(); slock=Date.now()+9000;
-        status(ids.length.toLocaleString()+" item types have sell orders in "+st.sys+". The browse list is now filtered.");
+        status(ids.length.toLocaleString()+" item types have stock in "+st.sys+". Expand a category on the left \u2014 everything with no stock there is now hidden.");
       }
     }catch(e){ status("Scan failed \u2014 ESI did not respond."); }
     scanning=false;
@@ -8735,15 +8739,32 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     if(below<160&&r.top>below){ box.style.top=""; box.style.bottom=(window.innerHeight-r.top+4)+"px"; }
     else{ box.style.bottom=""; box.style.top=(r.bottom+4)+"px"; }
   }
+  function resolveTyped(){
+    var inp=$("sf-sys"); if(!inp) return false;
+    var q=(inp.value||"").trim(); if(!q) return false;
+    if(st.sysId&&st.sys&&st.sys.toUpperCase()===q.toUpperCase()) return true;
+    var all=list(), U=q.toUpperCase(), exact=null, pre=[];
+    for(var i=0;i<all.length;i++){
+      var u=all[i].name.toUpperCase();
+      if(u===U){ exact=all[i]; break; }
+      if(u.indexOf(U)===0) pre.push(all[i]);
+    }
+    var hit=exact||(pre.length===1?pre[0]:null);
+    if(hit){ pick(hit); return true; }
+    return false;
+  }
   function pick(x){
     st.sys=x.name; st.sysId=x.id; save();
     var inp=$("sf-sys"); if(inp) inp.value=x.name;
     var box=$("sf-sug"); if(box) box.style.display="none";
     lastKey=""; allowed=null; loadSet(); applyTree(); applyOrders();
-    if(!stockSet) status("Ready. Turn on \u201cOnly this system\u201d, then scan the region to filter the item list.");
+    var sc=getStock();
+    if(sc) status(st.sys+" selected \u2014 a stock scan from "+Math.max(1,Math.round((Date.now()-sc.t)/60000))+" min ago is loaded for this region.");
+    else status(st.sys+" selected. Turn on \u201cOnly this system\u201d to filter the order book; press Scan region to filter the Browse list too.");
   }
   function toggle(){
-    if(!st.sysId&&st.on===false){ status("Type a system name first."); return; }
+    if(!st.sysId) resolveTyped();
+    if(!st.sysId){ status("I do not recognise that system name \u2014 pick one from the dropdown.",1); return; }
     st.on=!st.on; save();
     var b=$("sf-toggle"); if(b) b.className="tab"+(st.on?" on":"");
     lastKey="";
@@ -8758,11 +8779,14 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     bar.innerHTML="<label>System<input id=sf-sys placeholder=\"e.g. Amarr\" autocomplete=off spellcheck=false></label>"+
       "<button id=sf-toggle class=tab>Only this system</button>"+
       "<button id=sf-scan class=tab>Scan region</button>"+
-      "<span id=sf-status></span><div id=sf-sug></div>";
+      "<span id=sf-status></span><div id=sf-sug></div>"+
+      "<div id=sf-help><b>Only this system</b> hides every order below that is not in that system. <b>Scan region</b> reads the whole region order book once (20\u201360s) and then also hides items with no stock there from the Browse list on the left.</div>";
     main.insertBefore(bar,row?row.nextSibling:main.firstChild);
     var inp=$("sf-sys");
     inp.value=st.sys||"";
     inp.addEventListener("input",suggest);
+    inp.addEventListener("change",resolveTyped);
+    inp.addEventListener("keydown",function(ev){ if(ev.key==="Enter"){ ev.preventDefault(); var b=$("sf-sug"); if(b) b.style.display="none"; resolveTyped(); } });
     inp.addEventListener("focus",suggest);
     inp.addEventListener("blur",function(){ setTimeout(function(){ var b=$("sf-sug"); if(b) b.style.display="none"; },160); });
     $("sf-toggle").addEventListener("click",toggle);
