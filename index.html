@@ -7445,16 +7445,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       p=document.createElement("div"); p.id="tab-"+ID; p.hidden=true; p.style.display="none";
       k.parentElement.insertBefore(p,k.nextSibling);
       p.innerHTML="<section class=\"panel\"><div>"+
-        "<style>#kd-grid{display:grid;grid-template-columns:1fr;gap:26px}
-@media (min-width:1100px){#kd-grid{grid-template-columns:1fr 1fr}}
-#kd-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:12px 0 4px}
-.kd-card{border:1px solid var(--border);border-radius:2px;padding:11px 13px;background:var(--bg)}
-.kd-card b{display:block;font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;margin-bottom:2px}
-.kd-card span{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
-.kd-card small{display:block;font-size:11px;color:var(--muted);margin-top:3px}
-#kd-panel .bar{position:relative;display:block;height:4px;border-radius:2px;background:var(--accent-dim);margin-top:4px}
-#kd-panel tbody tr:hover{background:rgba(84,194,218,.06)}
-#kd-panel table{width:100%;border-collapse:collapse}#kd-panel th,#kd-panel td{padding:5px 12px;white-space:nowrap}#kd-panel th:first-child,#kd-panel td:first-child{white-space:normal;width:58%;text-align:left}#kd-panel th.n,#kd-panel td.n{text-align:right}#kd-panel h4{margin:16px 0 6px}</style><div id=kd-panel><h4>\ud83d\udd28 What is dying here \u2014 and what you could build</h4>"+
+        "<style>#kd-panel table{width:100%;border-collapse:collapse}#kd-panel th,#kd-panel td{padding:5px 12px;white-space:nowrap}#kd-panel th:first-child,#kd-panel td:first-child{white-space:normal;width:58%;text-align:left}#kd-panel th.n,#kd-panel td.n{text-align:right}#kd-panel h4{margin:16px 0 6px}</style><div id=kd-panel><h4>\ud83d\udd28 What is dying here \u2014 and what you could build</h4>"+
         "<div style=\"display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:10px\">"+
         "<label style=\"display:flex;flex-direction:column;gap:4px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)\">Region<select id=kd-region style=\"background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:9px 11px;font-family:inherit;font-size:14px;min-width:200px\"></select></label>"+
         "<button id=kd-go class=tab style=\"padding:9px 18px\">Refresh</button></div>"+
@@ -7475,19 +7466,14 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     }));
     return px;
   }
-  function table(title,rows,px,bpOk,sub){
-    var maxN=0, totV=0;
-    rows.forEach(function(r){ if(r.n>maxN) maxN=r.n; var u=px[r.id]; if(u) totV+=u*r.n; });
+  function table(title,rows,px,bpOk){
     var body=rows.map(function(r){
       var can=bpOk&&window.EVEBP&&window.EVEBP.byProduct&&window.EVEBP.byProduct[r.id];
-      var pctW=maxN?Math.max(3,Math.round(r.n/maxN*100)):0;
       var unit=px[r.id]||null;
-      var val=unit?unit*r.n:0;
-      var share=totV?Math.round(val/totV*100):0;
-      return "<tr><td>"+esc(r.name)+(can?" <span class=bp>\u2713 you can build</span>":"")+"<span class=bar style=\"width:"+pctW+"%\"></span></td>"+
-        "<td class=n>"+r.n+"</td><td class=n>"+isk(unit)+"</td><td class=n>"+(unit?isk(val):"\u2014")+"</td><td class=n style=\"color:var(--muted)\">"+(share?share+"%":"\u2014")+"</td></tr>";
+      return "<tr><td>"+esc(r.name)+(can?" <span class=bp>\u2713 you can build</span>":"")+"</td>"+
+        "<td class=n>"+r.n+"</td><td class=n>"+isk(unit)+"</td><td class=n>"+(unit?isk(unit*r.n):"\u2014")+"</td></tr>";
     }).join("");
-    return "<div><h4>"+title+"</h4>"+(sub?("<div style=\"font-size:12px;color:var(--muted);margin:-2px 0 8px\">"+sub+"</div>"):"")+"<table><thead><tr><th>Item</th><th class=n>Lost</th><th class=n>Unit @ hub</th><th class=n>Replacement value</th><th class=n>Share</th></tr></thead><tbody>"+body+"</tbody></table></div>";
+    return "<div><h4>"+title+"</h4><table><thead><tr><th>Item</th><th class=n>Lost</th><th class=n>Unit @ hub</th><th class=n>Replacement value</th></tr></thead><tbody>"+body+"</tbody></table></div>";
   }
   async function run(force){
     var p=panel(); if(!p) return;
@@ -7524,24 +7510,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       tM.forEach(function(r){ r.name=nm[r.id]||("Type "+r.id); });
       var px=await fuzz(Number(region),ids.map(String));
       var bpOk=!!(window.EVEBP&&window.EVEBP.ok);
-      function sumV(rs){ var v=0; rs.forEach(function(r){ var u=px[r.id]; if(u) v+=u*r.n; }); return v; }
-      function sumN(rs){ var n=0; rs.forEach(function(r){ n+=r.n; }); return n; }
-      var vH=sumV(tH), vM=sumV(tM), nH=sumN(tH), nM=sumN(tM);
-      var topHull=tH[0];
-      var richest=tH.slice().sort(function(a,b){ return ((px[b.id]||0)*b.n)-((px[a.id]||0)*a.n); })[0];
-      var buildable=bpOk?tH.filter(function(r){ return window.EVEBP&&window.EVEBP.byProduct&&window.EVEBP.byProduct[r.id]; }).length:0;
-      var hrs2=times.length?((Math.max.apply(null,times)-Math.min.apply(null,times))/3600000):0;
-      var cards="<div id=kd-cards>"+
-        "<div class=kd-card><b>"+isk(vH+vM)+"</b><span>Replaceable value</span><small>hulls and fitted modules</small></div>"+
-        "<div class=kd-card><b>"+z.length+"</b><span>Kills sampled</span><small>"+(hrs2?(hrs2<1?Math.round(hrs2*60)+" minutes":hrs2.toFixed(1)+" hours"):"recent")+"</small></div>"+
-        "<div class=kd-card><b>"+(hrs2?(z.length/hrs2).toFixed(1):"\u2014")+"</b><span>Kills per hour</span><small>in this region</small></div>"+
-        "<div class=kd-card><b>"+esc(topHull?topHull.name:"\u2014")+"</b><span>Most lost hull</span><small>"+(topHull?topHull.n+" destroyed":"")+"</small></div>"+
-        "<div class=kd-card><b>"+esc(richest?richest.name:"\u2014")+"</b><span>Biggest ISK sink</span><small>"+((richest&&px[richest.id])?isk(px[richest.id]*richest.n):"")+"</small></div>"+
-        (bpOk?("<div class=kd-card><b>"+buildable+"</b><span>You can build</span><small>of the top "+tH.length+" hulls</small></div>"):"")+
-        "</div>";
-      var old=$("kd-cards"); if(old) old.remove();
-      $("kd-note").insertAdjacentHTML("afterend",cards);
-      $("kd-grid").innerHTML=table("Hulls lost",tH,px,bpOk,isk(vH)+" across "+nH+" ships")+table("Fitted modules lost",tM,px,bpOk,isk(vM)+" across "+nM+" modules");
+      $("kd-grid").innerHTML=table("Hulls lost",tH,px,bpOk)+table("Fitted modules lost",tM,px,bpOk);
       var span="";
       if(times.length){
         var hrs=(Math.max.apply(null,times)-Math.min.apply(null,times))/3600000;
@@ -8577,7 +8546,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   .wrap{max-width:none;padding:0 clamp(30px,2.2vw,56px)}
   header .wrap{max-width:1360px}
   .controls .field.grow{max-width:640px}
-  #kd-panel table{max-width:none}
+  #kd-panel table{max-width:1250px}
 }
 @media (min-width:1900px){
   #tab-sso.acc-cols{column-count:4}
