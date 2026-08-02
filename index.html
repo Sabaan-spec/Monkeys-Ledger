@@ -2740,7 +2740,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     stl.textContent='#tab-plan .suggestions{position:absolute;z-index:60;left:0;right:0;top:100%;max-height:260px;overflow:auto;margin:2px 0 0;padding:0;list-style:none;background:var(--bg-2);border:1px solid var(--border);border-radius:6px}#tab-plan .suggestions li{padding:5px 9px;cursor:pointer;font-size:.82rem}#tab-plan .suggestions li:hover{background:rgba(120,180,255,.12)}#tab-plan #pl-bar{height:6px;background:var(--bg-2);border-radius:4px;overflow:hidden;margin:6px 0}#tab-plan #pl-bar>i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}#tab-plan tr.route{cursor:pointer}#tab-plan tr.route:hover td{background:rgba(120,180,255,.08)}#tab-plan .rk-low{color:var(--good)}#tab-plan .rk-med{color:var(--warn)}#tab-plan .rk-high{color:var(--bad);font-weight:600}';
     document.head.appendChild(stl);
 
-    var btn=document.createElement('button');btn.className='tab';btn.setAttribute('data-tab','plan');btn.textContent='Route Planner';
+    var btn=document.createElement('button');btn.className='tab';btn.setAttribute('data-tab','plan');btn.textContent='Freight Planner';
     document.querySelector('nav.tabs').appendChild(btn);
 
     var div=document.createElement('div');div.id='tab-plan';div.hidden=true;
@@ -3483,7 +3483,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
 })();
 </script>
 <script>
-/* Route Planner live tracker */
+/* Freight Planner live tracker */
 (function(){
   function $(id){return document.getElementById(id);}
   var st=document.createElement('style');st.textContent='@keyframes plpulse{0%{box-shadow:0 0 0 0 rgba(84,194,138,.55)}70%{box-shadow:0 0 0 7px rgba(84,194,138,0)}100%{box-shadow:0 0 0 0 rgba(84,194,138,0)}}.pl-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#54c28a;animation:plpulse 1.6s infinite;margin-right:6px;vertical-align:middle}.pl-liveind{font-size:.78rem;font-weight:700;color:#54c28a;letter-spacing:.03em}.pl-liveind.off{color:#7a8c99}.pl-liveind.off .pl-dot{background:#7a8c99;animation:none;box-shadow:none}';document.head.appendChild(st);
@@ -3890,7 +3890,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     var p=IDX?Promise.resolve(IDX):fetch(ESI+'/industry/systems/').then(function(r){return r.json();}).then(function(j){IDX=j;return j;});
     p.then(async function(list){
       var m=map();
-      if(!m||!m.sys){st.textContent='System map not built yet \u2014 open the Route Planner tab and click \u201cBuild / refresh map\u201d once.';return;}
+      if(!m||!m.sys){st.textContent='System map not built yet \u2014 open the Freight Planner tab and click \u201cBuild / refresh map\u201d once.';return;}
       var dist=null;
       if(home&&maxJ>0){var hid=sysIdByName(home);if(!hid){st.textContent='Home system \u201c'+home+'\u201d not found.';return;}dist=bfs(hid,maxJ);}
       var rows=[];
@@ -9412,7 +9412,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       k.parentElement.insertBefore(p,k.nextSibling);
       var opts=SHIPS.map(function(s){ return "<option value="+s[0]+">"+s[1]+"</option>"; }).join("");
       p.innerHTML="<section class=\"panel\"><div>"+
-        "<h4>\ud83d\ude80 Jump router</h4>"+
+        "<h4>\ud83d\ude80 Jump planner</h4>"+
         "<div id=jm-bar><label>Jump freighter<select id=jm-ship>"+opts+"</select></label>"+
         "<button id=jm-scan class=tab style=\"padding:9px 16px\">Build jump map</button>"+
         "<span id=jm-status></span><div id=jm-prog><i></i></div></div>"+
@@ -9442,7 +9442,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     var nav=document.querySelector("nav.tabs"); if(!nav) return;
     if(nav.querySelector("button.tab[data-tab="+ID+"]")) return;
     var b=document.createElement("button");
-    b.className="tab"; b.setAttribute("data-tab",ID); b.textContent="Jump Router";
+    b.className="tab"; b.setAttribute("data-tab",ID); b.textContent="Jump Planner";
     b.addEventListener("click",function(e){ e.stopPropagation(); if(window.switchTab) window.switchTab(ID); });
     nav.appendChild(b);
   }
