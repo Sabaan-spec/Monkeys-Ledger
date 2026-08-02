@@ -7510,6 +7510,23 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       tM.forEach(function(r){ r.name=nm[r.id]||("Type "+r.id); });
       var px=await fuzz(Number(region),ids.map(String));
       var bpOk=!!(window.EVEBP&&window.EVEBP.ok);
+      var vH=0,vM=0,nH=0,nM=0;
+      tH.forEach(function(r){ nH+=r.n; var u=px[r.id]; if(u) vH+=u*r.n; });
+      tM.forEach(function(r){ nM+=r.n; var u=px[r.id]; if(u) vM+=u*r.n; });
+      var richest=tH.slice().sort(function(a,b){ return ((px[b.id]||0)*b.n)-((px[a.id]||0)*a.n); })[0];
+      var canBuild=0;
+      if(bpOk&&window.EVEBP&&window.EVEBP.byProduct){ tH.forEach(function(r){ if(window.EVEBP.byProduct[r.id]) canBuild++; }); }
+      var hrs2=times.length?((Math.max.apply(null,times)-Math.min.apply(null,times))/3600000):0;
+      var cards="<div id=kd-cards>";
+      cards+="<div class=kd-card><b>"+isk(vH+vM)+"</b><span>Replaceable value</span><small>hulls and fitted modules</small></div>";
+      cards+="<div class=kd-card><b>"+z.length+"</b><span>Kills sampled</span><small>"+(hrs2?(hrs2<1?(Math.round(hrs2*60)+" minutes"):(hrs2.toFixed(1)+" hours")):"recent")+"</small></div>";
+      cards+="<div class=kd-card><b>"+(hrs2?(z.length/hrs2).toFixed(1):"\u2014")+"</b><span>Kills per hour</span><small>in this region</small></div>";
+      cards+="<div class=kd-card><b>"+esc(tH[0]?tH[0].name:"\u2014")+"</b><span>Most lost hull</span><small>"+(tH[0]?(tH[0].n+" destroyed"):"")+"</small></div>";
+      cards+="<div class=kd-card><b>"+esc(richest?richest.name:"\u2014")+"</b><span>Biggest ISK sink</span><small>"+((richest&&px[richest.id])?isk(px[richest.id]*richest.n):"")+"</small></div>";
+      if(bpOk) cards+="<div class=kd-card><b>"+canBuild+"</b><span>You can build</span><small>of the top "+tH.length+" hulls</small></div>";
+      cards+="</div>";
+      var oldc=$("kd-cards"); if(oldc&&oldc.parentNode) oldc.parentNode.removeChild(oldc);
+      $("kd-note").insertAdjacentHTML("afterend",cards);
       $("kd-grid").innerHTML=table("Hulls lost",tH,px,bpOk)+table("Fitted modules lost",tM,px,bpOk);
       var span="";
       if(times.length){
