@@ -9057,6 +9057,21 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       var cpuLvl=skillLvl("CPU Management"), pgLvl=skillLvl("Power Grid Management"), HPM=hpm();
       var cpuBase=h.a[A.cpu]||0, pgBase=h.a[A.pg]||0;
       var cpuT=cpuBase*(1+0.05*cpuLvl), pgT=pgBase*(1+0.05*pgLvl), calT=h.a[A.calib]||400;
+      var STK=[1,0.8691,0.5706,0.2830,0.1060,0.0300];
+      function stk(base,list){ list.sort(function(a,b){ return Math.abs(b)-Math.abs(a); }); var v=base; for(var i=0;i<list.length;i++){ v=v*(1+(list[i]/100)*(STK[i]||0)); } return v; }
+      var shFlat=0, shPct=[], arFlat=0;
+      mods.forEach(function(m){
+        if(m.t.a[72]) shFlat+=m.t.a[72];
+        if(m.t.a[337]) shPct.push(m.t.a[337]);
+        if(m.t.a[1159]) arFlat+=m.t.a[1159];
+      });
+      var SHB=[984,987,986,985];
+      var LAY={sh:{hp:stk((h.a[A.sh]||0)*HPM.sh+shFlat,shPct.slice()),r:[]},ar:{hp:(h.a[A.ar]||0)*HPM.ar+arFlat,r:[]},st:{hp:(h.a[A.st]||0)*HPM.st,r:[]}};
+      RES.shield.forEach(function(id,ix){ var b=[]; mods.forEach(function(m){ var v=m.t.a[SHB[ix]]; if(v) b.push(v); }); LAY.sh.r.push(stk(h.a[id]==null?1:h.a[id],b)); });
+      RES.armor.forEach(function(id){ var b=[]; mods.forEach(function(m){ var v=m.t.a[id]; if(v!=null&&v<1) b.push((v-1)*100); }); LAY.ar.r.push(stk(h.a[id]==null?1:h.a[id],b)); });
+      RES.hull.forEach(function(id){ LAY.st.r.push(h.a[id]==null?1:h.a[id]); });
+      var ehpTot=0;
+      ["sh","ar","st"].forEach(function(k){ var L=LAY[k], avg=(L.r[0]+L.r[1]+L.r[2]+L.r[3])/4; ehpTot+=avg>0?L.hp/avg:0; });
       var over=[];
       ["hi","med","low","rig"].forEach(function(sl){ if(used[sl]>counts[sl]) over.push(sl.toUpperCase()+" slots"); });
       if(cpu>cpuT) over.push("CPU"); if(pg>pgT) over.push("powergrid"); if(cal>calT) over.push("calibration");
@@ -9073,7 +9088,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         if(!counts[sl]&&!nUsed) return "";
         return "<div class=fb-sec><h5>"+lbl+" \u2014 "+nUsed+" / "+(counts[sl]||0)+"</h5>"+rows.join("")+"</div>";
       }).join("");
-      function res(layer){ return RES[layer].map(function(id){ return "<b>"+num(pct(h.a[id]),0)+"%</b>"; }).join(" "); }
+      function res(key){ return LAY[key].r.map(function(v){ return "<b>"+num(pct(v),0)+"%</b>"; }).join(" "); }
       var wspd=(h.a[A.wbase]||1)*(h.a[A.wmul]||1);
       var stats="<div class=fb-sec><h5>Fitting</h5>"+
         "<div class=fb-row><span>CPU</span><b class=\""+(cpu>cpuT?"fb-bad":"")+"\">"+num(cpu,1)+" / "+num(cpuT,0)+" tf</b></div>"+
@@ -9082,11 +9097,11 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         "<div class=fb-row><span style=\"color:var(--muted);font-size:11px\">"+num(pgBase,0)+" hull + Power Grid Management "+ROMAN[pgLvl]+"</span></div>"+
         (cal?"<div class=fb-row><span>Calibration</span><b class=\""+(cal>calT?"fb-bad":"")+"\">"+num(cal,0)+" / "+num(calT,0)+"</b></div>":"")+
         "<div class=fb-row><span>Turret / launcher hardpoints</span><b>"+num(h.a[A.turret],0)+" / "+num(h.a[A.launcher],0)+"</b></div></div>"+
-        "<div class=fb-sec><h5>Defense \u2014 hull baseline</h5>"+
-        "<div class=fb-row><span>Effective HP (omni)</span><b>"+num(ehp(h),0)+" ehp</b></div>"+
-        "<div class=fb-row><span>Shield "+num((h.a[A.sh]||0)*HPM.sh,0)+" hp</span><span>"+res("shield")+"</span></div>"+
-        "<div class=fb-row><span>Armor "+num((h.a[A.ar]||0)*HPM.ar,0)+" hp</span><span>"+res("armor")+"</span></div>"+
-        "<div class=fb-row><span>Structure "+num((h.a[A.st]||0)*HPM.st,0)+" hp</span><span>"+res("hull")+"</span></div>"+
+        "<div class=fb-sec><h5>Defense</h5>"+
+        "<div class=fb-row><span>Effective HP (omni)</span><b>"+num(ehpTot,0)+" ehp</b></div>"+
+        "<div class=fb-row><span>Shield "+num(LAY.sh.hp,0)+" hp</span><span>"+res("sh")+"</span></div>"+
+        "<div class=fb-row><span>Armor "+num(LAY.ar.hp,0)+" hp</span><span>"+res("ar")+"</span></div>"+
+        "<div class=fb-row><span>Structure "+num(LAY.st.hp,0)+" hp</span><span>"+res("st")+"</span></div>"+
         "<div class=fb-row><span style=\"color:var(--muted);font-size:11px\">EM / Thermal / Kinetic / Explosive \u2014 same order as the in-game fitting window</span></div>"+
         "<div class=fb-row><span style=\"color:var(--muted);font-size:11px\">HP includes Shield Management, Hull Upgrades and Mechanics at V</span></div></div>"+
         "<div class=fb-sec><h5>Capacitor</h5>"+
@@ -9109,7 +9124,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         "<div class=fb-row><span>Drone bay</span><b>"+num(h.a[A.dbay],0)+" m3</b></div></div>"):"");
       host.innerHTML="<div id=fb-wrap><div><h4 style=\"margin:0 0 4px\">"+esc(h.n)+"</h4>"+
         (over.length?"<div class=fb-bad style=\"font-size:12px;margin-bottom:8px\">Over limit: "+esc(over.join(", "))+"</div>":"<div class=fb-good style=\"font-size:12px;margin-bottom:8px\">Fits within CPU, powergrid and slots.</div>")+
-        "<div id=fb-left><div>"+ringSVG(counts,used,byslot,h.n,num(ehp(h),0)+" ehp \u00b7 hull baseline",{cpu:{used:cpu,tot:cpuT,label:"CPU",txt:num(cpu,1)+" / "+num(cpuT,0)+" tf"},pg:{used:pg,tot:pgT,label:"POWERGRID",txt:num(pg,1)+" / "+num(pgT,0)+" MW"}})+"</div><div>"+slotHTML+"</div></div>"+"</div><div>"+stats+"</div></div>";
+        "<div id=fb-left><div>"+ringSVG(counts,used,byslot,h.n,num(ehpTot,0)+" ehp",{cpu:{used:cpu,tot:cpuT,label:"CPU",txt:num(cpu,1)+" / "+num(cpuT,0)+" tf"},pg:{used:pg,tot:pgT,label:"POWERGRID",txt:num(pg,1)+" / "+num(pgT,0)+" MW"}})+"</div><div>"+slotHTML+"</div></div>"+"</div><div>"+stats+"</div></div>";
       [].forEach.call(host.querySelectorAll("[data-del]"),function(x){
         x.addEventListener("click",function(){
           var id=Number(x.getAttribute("data-del"));
