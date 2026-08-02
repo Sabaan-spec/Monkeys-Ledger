@@ -9526,9 +9526,11 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   function nameOf(id){ var s=sys()[id]; return s?s[2]:("System "+id); }
   function regionOf(id){ var s=sys()[id]; return s?s[1]:0; }
   function dist(a,b){ var dx=a[0]-b[0], dy=a[1]-b[1], dz=a[2]-b[2]; return Math.sqrt(dx*dx+dy*dy+dz*dz); }
+  function hist(id){ try{ return (window.EVEKILLHIST&&window.EVEKILLHIST.total)?window.EVEKILLHIST.total(id):0; }catch(e){ return 0; } }
   function riskOf(id){
     var k=(KILLS&&KILLS[id])||0, s=secOf(id), w=0;
     w += k*3;
+    w += hist(id)*0.5;
     if(s<0) w+=2; else if(s<0.45) w+=1;
     if(SOV&&SOV[id]) w+=1;
     return w;
@@ -9575,7 +9577,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       var reg=NAMES[regionOf(id)]||"";
       out.push("<div class=jr-hop><span class=jr-n>"+(i||"")+"</span><span>"+esc(nameOf(id))+
         " <span class=\""+cls+"\">"+s.toFixed(1)+"</span>"+
-        "<div class=jr-meta>"+esc(reg)+" \u00b7 "+esc(sov)+" \u00b7 "+(k?("<span class=jr-k>"+k+" kills/hr</span>"):"0 kills/hr")+"</div></span>"+
+        "<div class=jr-meta>"+esc(reg)+" \u00b7 "+esc(sov)+" \u00b7 "+(k?("<span class=jr-k>"+k+" kills/hr</span>"):"0 kills/hr")+(hist(id)?(" \u00b7 "+hist(id)+" in "+(window.EVEKILLHIST.span()||window.EVEKILLHIST.hours())+"h"):"")+"</div></span>"+
         "<span class=jr-meta>"+(i?num(ly,2)+" ly":"start")+"</span></div>");
     }
     return {html:out.join(""), ly:totLy};
@@ -9638,7 +9640,8 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       }
       out.innerHTML=card("Fewest jumps",short)+card("Lowest risk",safeR);
       var live=0, tot=0; if(KILLS){ for(var kk in KILLS){ tot++; if(KILLS[kk]>0) live++; } }
-      msg("Range "+num(range,2)+" ly per jump. Kill feed live: "+num(live,0)+" of "+num(tot,0)+" systems have ship kills this hour. Highsec is excluded as a waypoint \u2014 cynos cannot be lit there.");
+      var hh=(window.EVEKILLHIST?window.EVEKILLHIST.hours():0);
+      msg("Range "+num(range,2)+" ly per jump. History: "+hh+" of 24 hourly samples collected. Kill feed live: "+num(live,0)+" of "+num(tot,0)+" systems have ship kills this hour. Highsec is excluded as a waypoint \u2014 cynos cannot be lit there.");
     }catch(e){ msg("Could not plot that route.",1); }
     busy=false;
   }
@@ -9682,6 +9685,62 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   }
   window.EVETICK.add(mount);
   setTimeout(mount,3000);
+})();
+</script>
+<script>/* Kill history v1 */
+(function(){
+  var KEY="eveKillHistV1", HOUR=3600000, MAXN=24;
+  var store=null, busy=false;
+  function load(){
+    if(store) return store;
+    try{ var o=JSON.parse(localStorage.getItem(KEY)||"null"); if(o&&Array.isArray(o.s)) store=o; }catch(e){}
+    if(!store) store={v:1,s:[]};
+    return store;
+  }
+  function save(){ try{ localStorage.setItem(KEY,JSON.stringify(store)); }catch(e){} }
+  function prune(){
+    var cut=Date.now()-25*HOUR;
+    store.s=store.s.filter(function(x){ return x.t>cut; });
+    while(store.s.length>MAXN) store.s.shift();
+  }
+  async function sample(force){
+    if(busy) return false;
+    load();
+    var last=store.s.length?store.s[store.s.length-1].t:0;
+    if(!force&&Date.now()-last<55*60*1000) return false;
+    busy=true;
+    try{
+      var r=await fetch("https://esi.evetech.net/latest/universe/system_kills/");
+      if(r.ok){
+        var arr=await r.json(), k={};
+        arr.forEach(function(x){ if(x.ship_kills>0) k[x.system_id]=x.ship_kills; });
+        store.s.push({t:Date.now(),k:k});
+        prune(); save();
+      }
+    }catch(e){}
+    busy=false;
+    return true;
+  }
+  function total(id){
+    load();
+    var n=0;
+    for(var i=0;i<store.s.length;i++){ var v=store.s[i].k[id]; if(v) n+=v; }
+    return n;
+  }
+  function hours(){ load(); return store.s.length; }
+  function span(){
+    load();
+    if(store.s.length<2) return 0;
+    return Math.round((store.s[store.s.length-1].t-store.s[0].t)/HOUR);
+  }
+  window.EVEKILLHIST={ sample:sample, total:total, hours:hours, span:span };
+  setTimeout(function(){ sample(false); },6000);
+  var lastTry=0;
+  window.EVETICK.add(function(){
+    if(Date.now()-lastTry<10*60*1000) return;
+    lastTry=Date.now();
+    sample(false);
+  });
 })();
 </script>
 </body>
