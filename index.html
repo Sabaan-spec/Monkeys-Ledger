@@ -9086,10 +9086,13 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         if(m.t.a[1159]) arFlat+=m.t.a[1159];
       });
       var SHB=[984,987,986,985];
+      var dcs=fitted.filter(function(m){ return m.t.a[974]!=null; });
+      function dcP(id){ var v=1; dcs.forEach(function(m){ var x=m.t.a[id]; if(x!=null) v*=x; }); return v; }
+      var H2DC={113:974,111:975,109:976,110:977};
       var LAY={sh:{hp:stk((h.a[A.sh]||0)*HPM.sh+shFlat,shPct.slice()),r:[]},ar:{hp:(h.a[A.ar]||0)*HPM.ar+arFlat,r:[]},st:{hp:(h.a[A.st]||0)*HPM.st,r:[]}};
-      RES.shield.forEach(function(id,ix){ var b=[]; fitted.forEach(function(m){ var v=m.t.a[SHB[ix]]; if(v) b.push(v); }); LAY.sh.r.push(stk(h.a[id]==null?1:h.a[id],b)); });
-      RES.armor.forEach(function(id){ var b=[]; fitted.forEach(function(m){ var v=m.t.a[id]; if(v!=null&&v<1) b.push((v-1)*100); }); LAY.ar.r.push(stk(h.a[id]==null?1:h.a[id],b)); });
-      RES.hull.forEach(function(id){ LAY.st.r.push(h.a[id]==null?1:h.a[id]); });
+      RES.shield.forEach(function(id,ix){ var b=[]; fitted.forEach(function(m){ var v=m.t.a[SHB[ix]]; if(v) b.push(v); }); LAY.sh.r.push(stk(h.a[id]==null?1:h.a[id],b)*dcP(id)); });
+      RES.armor.forEach(function(id){ var b=[]; fitted.forEach(function(m){ if(m.t.a[974]!=null) return; var v=m.t.a[id]; if(v!=null&&v<1) b.push((v-1)*100); }); LAY.ar.r.push(stk(h.a[id]==null?1:h.a[id],b)*dcP(id)); });
+      RES.hull.forEach(function(id){ LAY.st.r.push((h.a[id]==null?1:h.a[id])*dcP(H2DC[id])); });
       var ehpTot=0;
       ["sh","ar","st"].forEach(function(k){ var L=LAY[k], avg=(L.r[0]+L.r[1]+L.r[2]+L.r[3])/4; ehpTot+=avg>0?L.hp/avg:0; });
       var over=[];
@@ -9124,6 +9127,25 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         "<div class=fb-row><span>Structure "+num(LAY.st.hp,0)+" hp</span><span>"+res("st")+"</span></div>"+
         "<div class=fb-row><span style=\"color:var(--muted);font-size:11px\">EM / Thermal / Kinetic / Explosive \u2014 same order as the in-game fitting window</span></div>"+
         "<div class=fb-row><span style=\"color:var(--muted);font-size:11px\">HP includes Shield Management, Hull Upgrades and Mechanics \u2014 skills from "+skillSrc()+"</span></div></div>"+
+        (function(){
+          var turrets=mods.filter(function(m){ return slotOf(m.t)==="hi"&&m.t.a[51]&&m.t.a[64]; });
+          var ammo=mods.filter(function(m){ return !slotOf(m.t)&&(m.t.a[114]!=null||m.t.a[116]!=null||m.t.a[117]!=null||m.t.a[118]!=null); })[0];
+          if(!turrets.length) return "";
+          if(!ammo) return "<div class=fb-sec><h5>Offense</h5><div class=fb-row><span>"+turrets.length+" turrets fitted</span><b>add ammo to see DPS</b></div><div class=fb-row><span style=\"color:var(--muted);font-size:11px\">Type an ammo name into the search box above</span></div></div>";
+          var dm=[],rm=[];
+          mods.forEach(function(m){ if(slotOf(m.t)==="low"){ if(m.t.a[64]&&m.t.a[64]>1) dm.push((m.t.a[64]-1)*100); if(m.t.a[204]&&m.t.a[204]<1) rm.push((m.t.a[204]-1)*100); } });
+          var ss=skillLvl("Surgical Strike"), rf=skillLvl("Rapid Firing");
+          var chg=(ammo.t.a[114]||0)+(ammo.t.a[116]||0)+(ammo.t.a[117]||0)+(ammo.t.a[118]||0);
+          var vol=0;
+          turrets.forEach(function(tu){
+            var dmg=chg*(tu.t.a[64]||1)*stk(1,dm.slice())*(1+0.03*ss);
+            var cyc=((tu.t.a[51]||1000)/1000)*stk(1,rm.slice())*(1-0.04*rf);
+            vol+=dmg/cyc;
+          });
+          return "<div class=fb-sec><h5>Offense \u2014 turrets</h5>"+
+            "<div class=fb-row><span>"+turrets.length+"x with "+esc(ammo.t.n)+"</span><b>"+num(vol,1)+" DPS</b></div>"+
+            "<div class=fb-row><span style=\"color:var(--muted);font-size:11px\">Includes damage mods (stacked), Surgical Strike "+ss+", Rapid Firing "+rf+". Hull role bonuses and turret-class skills are traits ESI does not expose \u2014 real DPS is usually higher.</span></div></div>";
+        })()+
         "<div class=fb-sec><h5>Capacitor</h5>"+
         "<div class=fb-row><span>Capacity</span><b>"+num(h.a[A.cap],0)+" GJ</b></div>"+
         "<div class=fb-row><span>Recharge</span><b>"+num((h.a[A.rech]||0)/1000,1)+" s</b></div>"+
@@ -9180,7 +9202,10 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     var t=await typ(id); if(!t) return;
     var msg=$("fb-msg");
     if(t.a[A.hi]!=null&&t.a[A.cpu]!=null&&!slotOf(t)){ fit.hull=id; fit.mods=[]; save(); if(msg) msg.textContent=""; render(); return; }
-    if(!slotOf(t)){ if(msg) msg.textContent=t.n+" is not a fittable module."; return; }
+    if(!slotOf(t)){
+      if(t.a[114]!=null||t.a[116]!=null||t.a[117]!=null||t.a[118]!=null){ if(!fit.hull){ if(msg) msg.textContent="Pick a hull first."; return; } if(msg) msg.textContent=""; fit.mods.push(id); save(); render(); return; }
+      if(msg) msg.textContent=t.n+" is not a fittable module."; return;
+    }
     if(!fit.hull){ if(msg) msg.textContent="Pick a hull first."; return; }
     if(msg) msg.textContent="";
     fit.mods.push(id); save(); render();
