@@ -9910,6 +9910,83 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
 #kd-panel tbody tr:hover{background:rgba(84,194,218,.06)}
 #kd-panel table{width:100%;border-collapse:collapse}
 </style>
+<style>/* Storage manager v1 */
+#sm-modal{position:fixed;inset:0;background:rgba(3,7,11,.82);z-index:10000;display:none;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto}
+#sm-box{background:var(--panel);border:1px solid var(--border);border-radius:3px;max-width:720px;width:100%;padding:20px 22px;box-shadow:var(--shadow)}
+#sm-box h4{margin:0 0 4px}
+#sm-sub{font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5}
+#sm-list{max-height:52vh;overflow:auto;border-top:1px solid var(--border)}
+.sm-row{display:grid;grid-template-columns:1fr 78px 92px;gap:10px;align-items:center;padding:7px 2px;border-bottom:1px solid var(--border);font-size:13px}
+.sm-row .sm-k{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sm-row .sm-sz{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+.sm-tag{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.sm-btn{padding:3px 10px;font-size:11px}
+#sm-foot{display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap}
+#sm-msg{font-size:12px;color:var(--muted)}
+</style>
+<script>/* Storage manager v1 */
+(function(){
+  var KEEP={eveSsoAccounts:1,eveSettings:1,eveScanV1:1,eveScanDismissV1:1,eveTxStoreV1:1,eveCostBasis:1,eveNetWorthV1:1,eveGoalV1:1,eveFitBayV1:1,eveSysFilterV1:1,eveTabGroupV1:1,eveMineHrsV1:1,eveStructV1:1};
+  function $(id){ return document.getElementById(id); }
+  function size(k){ var v=localStorage.getItem(k)||""; return (k.length+v.length)*2; }
+  function fmt(b){ return b>=1048576?((b/1048576).toFixed(2)+" MB"):(Math.round(b/1024)+" KB"); }
+  function rows(){
+    var out=[], tot=0;
+    for(var i=0;i<localStorage.length;i++){ var k=localStorage.key(i); var s=size(k); tot+=s; out.push({k:k,s:s}); }
+    out.sort(function(a,b){ return b.s-a.s; });
+    return {rows:out, total:tot};
+  }
+  function draw(){
+    var d=rows(), html="";
+    d.rows.forEach(function(r){
+      var keep=!!KEEP[r.k];
+      html+="<div class=sm-row><span class=sm-k>"+r.k+"<div class=sm-tag>"+(keep?"your data \u2014 kept":"cache \u2014 rebuilds itself")+"</div></span>"+
+        "<span class=sm-sz>"+fmt(r.s)+"</span>"+
+        (keep?"<span class=sm-tag style=\"text-align:right\">protected</span>":"<button class=\"tab sm-btn\" data-clear=\""+r.k+"\">Clear</button>")+"</div>";
+    });
+    $("sm-list").innerHTML=html;
+    $("sm-total").textContent=fmt(d.total);
+    [].forEach.call($("sm-list").querySelectorAll("[data-clear]"),function(b){
+      b.addEventListener("click",function(){
+        var k=b.getAttribute("data-clear");
+        try{ localStorage.removeItem(k); }catch(e){}
+        $("sm-msg").textContent="Cleared "+k+". It will rebuild next time it is needed.";
+        draw();
+      });
+    });
+  }
+  function clearAll(){
+    var d=rows(), n=0, freed=0;
+    d.rows.forEach(function(r){ if(!KEEP[r.k]){ freed+=r.s; try{ localStorage.removeItem(r.k); n++; }catch(e){} } });
+    $("sm-msg").textContent="Cleared "+n+" caches, freeing "+fmt(freed)+". Reload to rebuild what you use.";
+    draw();
+  }
+  function open(){ var m=$("sm-modal"); if(m){ m.style.display="flex"; $("sm-msg").textContent=""; draw(); } }
+  function build(){
+    if($("sm-modal")) return;
+    var m=document.createElement("div"); m.id="sm-modal";
+    m.innerHTML="<div id=sm-box><h4>Storage</h4><div id=sm-sub>Browsers cap this app at about 5 MB. Anything marked <b>cache</b> is downloaded data that rebuilds itself on demand \u2014 clearing it is safe and costs only the time to fetch it again. Anything marked <b>your data</b> cannot be recovered and is never touched.</div>"+
+      "<div id=sm-list></div>"+
+      "<div id=sm-foot><b id=sm-total></b><button id=sm-all class=tab>Clear all caches</button><button id=sm-close class=tab>Close</button><span id=sm-msg></span></div></div>";
+    document.body.appendChild(m);
+    $("sm-all").addEventListener("click",clearAll);
+    $("sm-close").addEventListener("click",function(){ m.style.display="none"; });
+    m.addEventListener("click",function(e){ if(e.target===m) m.style.display="none"; });
+  }
+  function mount(){
+    build();
+    var host=$("eve-data"); if(!host||$("sm-open")) return;
+    var b=document.createElement("button");
+    b.id="sm-open"; b.className="tab"; b.textContent="Manage storage";
+    b.style.marginLeft="8px";
+    b.addEventListener("click",open);
+    host.appendChild(b);
+  }
+  window.EVESTORE={ open:open };
+  window.EVETICK.add(mount);
+  setTimeout(mount,3000);
+})();
+</script>
 </body>
 </html>
 
