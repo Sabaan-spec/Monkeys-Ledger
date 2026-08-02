@@ -8922,7 +8922,8 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   function num(n,d){ n=Number(n)||0; return n.toLocaleString(undefined,{minimumFractionDigits:d||0,maximumFractionDigits:d||0}); }
   var A={hi:14,med:13,low:12,rig:1137,turret:102,launcher:101,cpu:48,pg:11,cpuUse:50,pgUse:30,calib:1132,calibUse:1153,
     cap:482,rech:55,sh:263,ar:265,st:9,speed:37,mass:4,agi:70,wmul:600,wbase:1281,range:76,scan:564,sig:552,maxT:192,dbw:1271,dbay:283,capNeed:6};
-  var RES={shield:[271,272,273,274],armor:[267,268,269,270],hull:[113,111,109,110]};
+  var RES={shield:[271,274,273,272],armor:[267,270,269,268],hull:[113,110,109,111]};
+  function hpm(){ return {sh:1+0.05*skillLvl("Shield Management"), ar:1+0.05*skillLvl("Hull Upgrades"), st:1+0.05*skillLvl("Mechanics")}; }
   var EFF={hi:12,med:13,low:11,rig:2663};
   var dc={}; try{ dc=JSON.parse(localStorage.getItem(DOG)||"{}"); }catch(e){ dc={}; }
   function saveDog(){ try{ var ks=Object.keys(dc); if(ks.length>500){ ks.slice(0,ks.length-500).forEach(function(k){ delete dc[k]; }); } localStorage.setItem(DOG,JSON.stringify(dc)); }catch(e){} }
@@ -8965,7 +8966,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   function ehp(h){
     var out=0;
     [["sh",RES.shield],["ar",RES.armor],["st",RES.hull]].forEach(function(p){
-      var hp=h.a[A[p[0]]]||0, r=p[1].map(function(id){ var v=h.a[id]; return v==null?1:v; });
+      var hp=(h.a[A[p[0]]]||0)*hpm()[p[0]], r=p[1].map(function(id){ var v=h.a[id]; return v==null?1:v; });
       var avg=(r[0]+r[1]+r[2]+r[3])/4;
       out+=avg>0?hp/avg:0;
     });
@@ -9053,7 +9054,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         var sl=slotOf(m.t); if(sl) used[sl]=(used[sl]||0)+1;
         cpu+=m.t.a[A.cpuUse]||0; pg+=m.t.a[A.pgUse]||0; cal+=m.t.a[A.calibUse]||0;
       });
-      var cpuLvl=skillLvl("CPU Management"), pgLvl=skillLvl("Power Grid Management");
+      var cpuLvl=skillLvl("CPU Management"), pgLvl=skillLvl("Power Grid Management"), HPM=hpm();
       var cpuBase=h.a[A.cpu]||0, pgBase=h.a[A.pg]||0;
       var cpuT=cpuBase*(1+0.05*cpuLvl), pgT=pgBase*(1+0.05*pgLvl), calT=h.a[A.calib]||400;
       var over=[];
@@ -9083,10 +9084,11 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         "<div class=fb-row><span>Turret / launcher hardpoints</span><b>"+num(h.a[A.turret],0)+" / "+num(h.a[A.launcher],0)+"</b></div></div>"+
         "<div class=fb-sec><h5>Defense \u2014 hull baseline</h5>"+
         "<div class=fb-row><span>Effective HP (omni)</span><b>"+num(ehp(h),0)+" ehp</b></div>"+
-        "<div class=fb-row><span>Shield "+num(h.a[A.sh],0)+" hp</span><span>"+res("shield")+"</span></div>"+
-        "<div class=fb-row><span>Armor "+num(h.a[A.ar],0)+" hp</span><span>"+res("armor")+"</span></div>"+
-        "<div class=fb-row><span>Structure "+num(h.a[A.st],0)+" hp</span><span>"+res("hull")+"</span></div>"+
-        "<div class=fb-row><span style=\"color:var(--muted);font-size:11px\">EM / Explosive / Kinetic / Thermal</span></div></div>"+
+        "<div class=fb-row><span>Shield "+num((h.a[A.sh]||0)*HPM.sh,0)+" hp</span><span>"+res("shield")+"</span></div>"+
+        "<div class=fb-row><span>Armor "+num((h.a[A.ar]||0)*HPM.ar,0)+" hp</span><span>"+res("armor")+"</span></div>"+
+        "<div class=fb-row><span>Structure "+num((h.a[A.st]||0)*HPM.st,0)+" hp</span><span>"+res("hull")+"</span></div>"+
+        "<div class=fb-row><span style=\"color:var(--muted);font-size:11px\">EM / Thermal / Kinetic / Explosive \u2014 same order as the in-game fitting window</span></div>"+
+        "<div class=fb-row><span style=\"color:var(--muted);font-size:11px\">HP includes Shield Management, Hull Upgrades and Mechanics at V</span></div></div>"+
         "<div class=fb-sec><h5>Capacitor</h5>"+
         "<div class=fb-row><span>Capacity</span><b>"+num(h.a[A.cap],0)+" GJ</b></div>"+
         "<div class=fb-row><span>Recharge</span><b>"+num((h.a[A.rech]||0)/1000,1)+" s</b></div>"+
