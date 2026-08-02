@@ -9533,10 +9533,12 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     if(SOV&&SOV[id]) w+=1;
     return w;
   }
+  var AVOID={};
   function solve(from,to,range,safe){
     var m=jmap(); if(!m) return null;
     var nodes=[];
-    for(var k in m){ var id=Number(k); if(m[k][3]<0.45||id===from||id===to) nodes.push(id); }
+    function blocked(id){ if(id===from||id===to) return false; if(AVOID.s&&AVOID.s[id]) return true; if(AVOID.r&&AVOID.r[regionOf(id)]) return true; return false; }
+    for(var k in m){ var id=Number(k); if(blocked(id)) continue; if(m[k][3]<0.45||id===from||id===to) nodes.push(id); }
     var pos={}; nodes.forEach(function(i){ pos[i]=m[i]; });
     var dst={}, prev={}, done={};
     nodes.forEach(function(i){ dst[i]=Infinity; });
@@ -9594,6 +9596,21 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       var jdc=5, jfc=5;
       try{ var acc=window.EVEACC; if(acc&&acc.byName){ var g=function(n){ var v=acc.byName[n]; if(typeof v==="number") return v; if(v&&v.active_skill_level!=null) return v.active_skill_level; return 5; }; jdc=g("Jump Drive Calibration"); jfc=g("Jump Fuel Conservation"); } }catch(e){}
       var range=(at[867]||0)*(1+0.20*jdc);
+      var bay=at[1549]||0, fuelId=at[866]||0;
+      var fuelName="isotopes", fuelVol=0, fuelPrice=0;
+      if(fuelId){
+        try{ var ft=await fetch("https://esi.evetech.net/latest/universe/types/"+fuelId+"/").then(function(r){ return r.json(); }); fuelName=ft.name; fuelVol=ft.volume||0; }catch(e){}
+        try{ if(window.EVEMKT&&window.EVEMKT.best){ var hb=($("hub")||{}).value||"jita"; var STN={jita:60003760,amarr:60008494,dodixie:60011866,rens:60004588,hek:60005686}; var bp=await window.EVEMKT.best(String(STN[hb]||60003760),Number(fuelId)); if(bp&&bp.sell>0) fuelPrice=bp.sell; } }catch(e){}
+      }
+      AVOID={s:{},r:{}};
+      var av=(($("jr-avoid")||{}).value||"").split(",").map(function(x){ return x.trim().toUpperCase(); }).filter(Boolean);
+      if(av.length){
+        var S=sys();
+        av.forEach(function(q){
+          for(var k2 in S){ if(String(S[k2][2]||"").toUpperCase()===q){ AVOID.s[k2]=1; } }
+          for(var rid in NAMES){ if(String(NAMES[rid]).toUpperCase()===q) AVOID.r[rid]=1; }
+        });
+      }
       var perLy=(at[868]||0)*(1-0.10*jfc);
       msg("Loading kills and sovereignty\u2026");
       await feeds();
@@ -9611,7 +9628,13 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         var jumps=path.length-1;
         var fuel=h.ly*perLy;
         var risk=path.reduce(function(s,i){ return s+riskOf(i); },0);
-        return "<div class=jr-card><h5>"+title+"</h5><div class=jr-sum>"+jumps+" jumps \u00b7 "+num(h.ly,2)+" ly \u00b7 "+num(fuel,0)+" isotopes ("+num(fuel*0.5,0)+" with Jump Freighters V) \u00b7 risk "+num(risk,0)+"</div>"+h.html+"</div>";
+        var vol=fuel*fuelVol, volJF=fuel*0.5*fuelVol;
+        var fits=(bay>0)?(volJF<=bay):true;
+        var isk=fuel*fuelPrice, iskJF=fuel*0.5*fuelPrice;
+        var l2="<div class=jr-sum>"+num(fuel,0)+" \u2013 "+num(fuel*0.5,0)+" "+esc(fuelName)+(fuelVol?(" \u00b7 "+num(vol,0)+" \u2013 "+num(volJF,0)+" m3"):"")+(bay?(" of a "+num(bay,0)+" m3 bay"):"")+"</div>";
+        if(bay&&fuelVol) l2+="<div class=jr-sum"+(fits?"":" style=\"color:var(--bad)\"")+">"+(fits?"Whole route fits in the fuel bay":"Will not fit in one load \u2014 refuel en route")+"</div>";
+        if(fuelPrice) l2+="<div class=jr-sum>"+num(isk,0)+" \u2013 "+num(iskJF,0)+" ISK of fuel</div>";
+        return "<div class=jr-card><h5>"+title+"</h5><div class=jr-sum>"+jumps+" jumps \u00b7 "+num(h.ly,2)+" ly \u00b7 risk "+num(risk,0)+"</div>"+l2+h.html+"</div>";
       }
       out.innerHTML=card("Fewest jumps",short)+card("Lowest risk",safeR);
       msg("Range "+num(range,2)+" ly per jump. Kills are ESI\u2019s last-hour figures. Highsec is excluded as a waypoint \u2014 cynos cannot be lit there.");
@@ -9649,6 +9672,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     wrap.innerHTML="<div class=jm-sec><h5>Plot a route</h5>"+
       "<div id=jr-bar><label>From<input id=jr-from placeholder=\"e.g. Jita\" autocomplete=off spellcheck=false></label>"+
       "<label>To<input id=jr-to placeholder=\"e.g. 1DQ1-A\" autocomplete=off spellcheck=false></label>"+
+      "<label>Avoid<input id=jr-avoid placeholder=\"systems or regions, comma separated\" autocomplete=off spellcheck=false style=\"min-width:260px\"></label>"+
       "<button id=jr-go class=tab style=\"padding:9px 18px\">Plot</button><span id=jr-msg></span></div>"+
       "<div id=jr-out></div></div>";
     body.parentElement.insertBefore(wrap,body.nextSibling);
