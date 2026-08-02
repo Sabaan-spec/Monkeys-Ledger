@@ -8955,13 +8955,31 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     return null;
   }
   var ROMAN=["0","I","II","III","IV","V"];
+  function skillMap(){
+    try{
+      var a=window.EVEACC;
+      if(!a) return null;
+      var m=a.byName;
+      if(m&&typeof m==="object"&&Object.keys(m).length) return m;
+    }catch(e){}
+    return null;
+  }
   function skillLvl(name){
     try{
-      var src=window.EVESKILLS||window.EVESSO||null;
-      if(src&&typeof src.level==="function"){ var v=src.level(name); if(v!=null) return Math.max(0,Math.min(5,Number(v))); }
+      var m=skillMap();
+      if(m){
+        var v=m[name];
+        if(v==null) v=m[String(name).toLowerCase()];
+        if(typeof v==="number") return Math.max(0,Math.min(5,v));
+        if(v&&typeof v==="object"){
+          var lv=(v.active_skill_level!=null)?v.active_skill_level:((v.level!=null)?v.level:((v.lvl!=null)?v.lvl:((v.trained_skill_level!=null)?v.trained_skill_level:null)));
+          if(lv!=null) return Math.max(0,Math.min(5,Number(lv)));
+        }
+      }
     }catch(e){}
     return 5;
   }
+  function skillSrc(){ return skillMap()?"your character":"all level V — no character linked"; }
   function pct(reson){ return (1-(reson==null?1:reson))*100; }
   function ehp(h){
     var out=0;
@@ -9104,7 +9122,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         "<div class=fb-row><span>Armor "+num(LAY.ar.hp,0)+" hp</span><span>"+res("ar")+"</span></div>"+
         "<div class=fb-row><span>Structure "+num(LAY.st.hp,0)+" hp</span><span>"+res("st")+"</span></div>"+
         "<div class=fb-row><span style=\"color:var(--muted);font-size:11px\">EM / Thermal / Kinetic / Explosive \u2014 same order as the in-game fitting window</span></div>"+
-        "<div class=fb-row><span style=\"color:var(--muted);font-size:11px\">HP includes Shield Management, Hull Upgrades and Mechanics at V</span></div></div>"+
+        "<div class=fb-row><span style=\"color:var(--muted);font-size:11px\">HP includes Shield Management, Hull Upgrades and Mechanics \u2014 skills from "+skillSrc()+"</span></div></div>"+
         "<div class=fb-sec><h5>Capacitor</h5>"+
         "<div class=fb-row><span>Capacity</span><b>"+num(h.a[A.cap],0)+" GJ</b></div>"+
         "<div class=fb-row><span>Recharge</span><b>"+num((h.a[A.rech]||0)/1000,1)+" s</b></div>"+
