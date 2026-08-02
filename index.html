@@ -6340,7 +6340,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     {id:"ind",label:"Industry",tabs:["calc","cheapsys","tree","research","invent","react"]},
     {id:"mat",label:"Materials",tabs:["ore","repro","pi"]},
     {id:"acct",label:"Account",tabs:["sso"]},
-    {id:"trade",label:"Trade",tabs:["arb","top","plan","scan","pricecheck"]},
+    {id:"trade",label:"Trade",tabs:["arb","top","plan","jump","scan","pricecheck"]},
     {id:"intel",label:"Intel",tabs:["kills","demand","dscan","fits","fitbay","reference"]}
   ];
   var KEY="eveTabGroupV1";
@@ -9276,6 +9276,197 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   }
   window.EVETICK.add(function(){ panel(); ensureBtn(); wrap(); enforce(); injectOpen(); });
   setTimeout(function(){ panel(); ensureBtn(); wrap(); },2600);
+})();
+</script>
+<style>/* Jump map v1 */
+#jm-bar{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin:10px 0 8px}
+#jm-bar label{display:flex;flex-direction:column;gap:4px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+#jm-ship{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:9px 11px;font-family:inherit;font-size:14px;min-width:210px}
+#jm-status{font-size:12px;color:var(--muted);align-self:center;max-width:620px}
+#jm-status.bad{color:var(--warn)}
+#jm-prog{height:6px;background:var(--bg);border:1px solid var(--border);border-radius:3px;overflow:hidden;flex-basis:100%;max-width:520px;display:none}
+#jm-prog i{display:block;height:100%;background:var(--accent);width:0}
+.jm-sec{border-top:1px solid var(--border);padding:8px 0 3px;margin-top:8px}
+.jm-sec h5{margin:0 0 6px;font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.jm-row{display:flex;justify-content:space-between;gap:14px;padding:3px 0;font-size:13px}
+.jm-row b{font-weight:600;font-variant-numeric:tabular-nums}
+#jm-note{font-size:12px;color:var(--muted);line-height:1.5;margin-top:10px;max-width:900px}
+</style>
+<script>/* Jump map v1 */
+(function(){
+  var ID="jump", MAP="eveJumpMapV1";
+  var LY=9.4607304725808e15;
+  var SHIPS=[[28844,"Rhea"],[28850,"Ark"],[28846,"Nomad"],[28848,"Anshar"]];
+  function $(id){ return document.getElementById(id); }
+  function num(n,d){ n=Number(n)||0; return n.toLocaleString(undefined,{minimumFractionDigits:d||0,maximumFractionDigits:d||0}); }
+  function status(t,bad){ var e=$("jm-status"); if(e){ e.textContent=t; e.className=bad?"bad":""; } }
+  function skillMap(){ try{ var a=window.EVEACC; if(a&&a.byName&&typeof a.byName==="object"&&Object.keys(a.byName).length) return a.byName; }catch(e){} return null; }
+  function skillLvl(name){
+    try{
+      var m=skillMap(); if(!m) return 5;
+      var v=m[name]; if(v==null) v=m[String(name).toLowerCase()];
+      if(typeof v==="number") return Math.max(0,Math.min(5,v));
+      if(v&&typeof v==="object"){
+        var lv=(v.active_skill_level!=null)?v.active_skill_level:((v.level!=null)?v.level:((v.trained_skill_level!=null)?v.trained_skill_level:null));
+        if(lv!=null) return Math.max(0,Math.min(5,Number(lv)));
+      }
+    }catch(e){}
+    return 5;
+  }
+  function skillSrc(){ return skillMap()?"your character":"all level V \u2014 no character linked"; }
+  var MEM=null;
+  function loadMap(){
+    if(MEM) return MEM;
+    try{ var o=JSON.parse(localStorage.getItem(MAP)||"null"); if(o&&o.s&&Object.keys(o.s).length){ MEM=o; return MEM; } }catch(e){}
+    return null;
+  }
+  var dog={};
+  async function typ(id){
+    if(dog[id]) return dog[id];
+    try{
+      var r=await fetch("https://esi.evetech.net/latest/universe/types/"+id+"/");
+      if(!r.ok) return null;
+      var t=await r.json(), a={};
+      (t.dogma_attributes||[]).forEach(function(x){ a[x.attribute_id]=x.value; });
+      dog[id]={n:t.name,a:a};
+      return dog[id];
+    }catch(e){ return null; }
+  }
+  var scanning=false, cancelFlag=false;
+  async function scan(){
+    if(scanning){ cancelFlag=true; return; }
+    scanning=true; cancelFlag=false;
+    var btn=$("jm-scan"); if(btn) btn.textContent="Cancel";
+    var bar=$("jm-prog"); if(bar) bar.style.display="block";
+    try{
+      status("Fetching the system list\u2026");
+      var ids=await fetch("https://esi.evetech.net/latest/universe/systems/").then(function(r){ return r.json(); });
+      ids=ids.filter(function(i){ return i<31000000; });
+      var total=ids.length, done=0, S={};
+      status("Reading "+num(total,0)+" systems\u2026");
+      var next=0;
+      async function worker(){
+        while(next<total&&!cancelFlag){
+          var i=next++;
+          var id=ids[i];
+          try{
+            var r=await fetch("https://esi.evetech.net/latest/universe/systems/"+id+"/");
+            if(r.ok){
+              var s=await r.json();
+              if(s&&s.position){
+                S[id]=[Math.round(s.position.x/LY*100)/100,Math.round(s.position.y/LY*100)/100,Math.round(s.position.z/LY*100)/100,Math.round((s.security_status||0)*100)/100];
+              }
+            }
+          }catch(e){}
+          done++;
+          if(done%25===0||done===total){
+            var pc=done/total;
+            var f=$("jm-prog"); if(f&&f.firstChild) f.firstChild.style.width=(pc*100).toFixed(1)+"%";
+            status("Reading systems \u2014 "+num(done,0)+" / "+num(total,0)+" ("+Math.round(pc*100)+"%)");
+          }
+        }
+      }
+      var ws=[]; for(var w=0;w<10;w++) ws.push(worker());
+      await Promise.all(ws);
+      if(cancelFlag){ status("Scan cancelled \u2014 nothing saved."); }
+      else{
+        var obj={v:1,t:Date.now(),s:S};
+        try{ localStorage.setItem(MAP,JSON.stringify(obj)); MEM=obj; status(num(Object.keys(S).length,0)+" systems mapped and saved. Range and route planning can use this now."); }
+        catch(e){ MEM=obj; status("Mapped "+num(Object.keys(S).length,0)+" systems but could not save \u2014 browser storage is full. It will work until you reload.",1); }
+        render();
+      }
+    }catch(e){ status("Could not read the system list from ESI.",1); }
+    scanning=false;
+    var b2=$("jm-scan"); if(b2) b2.textContent="Build jump map";
+    var p2=$("jm-prog"); if(p2) p2.style.display="none";
+  }
+  async function render(){
+    var host=$("jm-body"); if(!host) return;
+    var sel=$("jm-ship");
+    var shipId=sel?Number(sel.value):SHIPS[0][0];
+    var t=await typ(shipId);
+    var jdc=skillLvl("Jump Drive Calibration"), jfc=skillLvl("Jump Fuel Conservation");
+    var base=t?(t.a[867]||0):0;
+    var range=base*(1+0.20*jdc);
+    var perLy=t?(t.a[868]||0):0;
+    var fuelNoJF=perLy*(1-0.10*jfc);
+    var fuelWithJF=fuelNoJF*0.5;
+    var m=loadMap();
+    var mapRow=m?("<div class=jm-row><span>Systems mapped</span><b>"+num(Object.keys(m.s).length,0)+"</b></div>"+
+      "<div class=jm-row><span>Built</span><b>"+new Date(m.t).toLocaleString()+"</b></div>"):
+      "<div class=jm-row><span>Jump map</span><b class=bad>not built yet</b></div>";
+    host.innerHTML="<div class=jm-sec><h5>Jump drive \u2014 skills from "+skillSrc()+"</h5>"+
+      "<div class=jm-row><span>Hull range</span><b>"+num(base,1)+" ly</b></div>"+
+      "<div class=jm-row><span>Jump Drive Calibration "+jdc+" (+20% per level)</span><b>"+num(range,2)+" ly</b></div>"+
+      "<div class=jm-row><span>Isotopes per light year</span><b>"+num(perLy,0)+"</b></div>"+
+      "<div class=jm-row><span>With Jump Fuel Conservation "+jfc+"</span><b>"+num(fuelNoJF,0)+" / ly</b></div>"+
+      "<div class=jm-row><span>Also with Jump Freighters V (hull trait)</span><b>"+num(fuelWithJF,0)+" / ly</b></div>"+
+      "<div class=jm-row><span>Full-range jump costs</span><b>"+num(fuelNoJF*range,0)+" \u2013 "+num(fuelWithJF*range,0)+" isotopes</b></div>"+
+      "</div><div class=jm-sec><h5>Jump map</h5>"+mapRow+"</div>";
+  }
+  function panel(){
+    var k=$("tab-arb"); if(!k) return null;
+    var p=$("tab-"+ID);
+    if(!p){
+      p=document.createElement("div"); p.id="tab-"+ID; p.hidden=true; p.style.display="none";
+      k.parentElement.insertBefore(p,k.nextSibling);
+      var opts=SHIPS.map(function(s){ return "<option value="+s[0]+">"+s[1]+"</option>"; }).join("");
+      p.innerHTML="<section class=\"panel\"><div>"+
+        "<h4>\ud83d\ude80 Jump router</h4>"+
+        "<div id=jm-bar><label>Jump freighter<select id=jm-ship>"+opts+"</select></label>"+
+        "<button id=jm-scan class=tab style=\"padding:9px 16px\">Build jump map</button>"+
+        "<span id=jm-status></span><div id=jm-prog><i></i></div></div>"+
+        "<div id=jm-body></div>"+
+        "<div id=jm-note>The jump map stores every k-space system\u2019s position so ranges can be measured. ESI has no bulk endpoint for this, so it is roughly 5,500 separate reads \u2014 one to two minutes, once. It is then cached and reused. Range uses Jump Drive Calibration at +20% per level and fuel uses Jump Fuel Conservation at -10% per level, both read from the skills themselves. The Jump Freighters skill also cuts fuel by 10% per level, but that is a hull trait ESI does not expose, so fuel is shown as a range with and without it.</div>"+
+        "</div></section>";
+      p.querySelector("#jm-scan").addEventListener("click",scan);
+      p.querySelector("#jm-ship").addEventListener("change",render);
+      render();
+    }
+    return p;
+  }
+  function activeOrigTab(){
+    var nav=document.querySelector("nav.tabs"); if(!nav) return null;
+    var r=null;
+    [].forEach.call(nav.querySelectorAll("button.tab[data-tab]"),function(b){ if(/\bactive\b/.test(b.className)) r=b.getAttribute("data-tab"); });
+    return r;
+  }
+  function hideOthers(){ [].forEach.call(document.querySelectorAll("[id^=tab-]"),function(e){ if(e.id!=="tab-"+ID){ e.hidden=true; e.style.display="none"; } }); }
+  function restoreOthers(){ [].forEach.call(document.querySelectorAll("[id^=tab-]"),function(e){ if(e.id!=="tab-"+ID) e.style.display=""; }); }
+  function enforce(){
+    var p=$("tab-"+ID); if(!p) return;
+    if(activeOrigTab()===ID){ p.hidden=false; p.style.display=""; hideOthers(); }
+    else if(p.style.display!=="none"){ p.hidden=true; p.style.display="none"; restoreOthers(); }
+  }
+  function ensureBtn(){
+    var nav=document.querySelector("nav.tabs"); if(!nav) return;
+    if(nav.querySelector("button.tab[data-tab="+ID+"]")) return;
+    var b=document.createElement("button");
+    b.className="tab"; b.setAttribute("data-tab",ID); b.textContent="Jump Router";
+    b.addEventListener("click",function(e){ e.stopPropagation(); if(window.switchTab) window.switchTab(ID); });
+    nav.appendChild(b);
+  }
+  function wrap(){
+    if(typeof window.switchTab!=="function"||window.__jmWrapped) return;
+    var prev=window.switchTab;
+    window.switchTab=function(id){
+      var p=panel();
+      if(id===ID){
+        prev("arb");
+        if(p){ p.hidden=false; p.style.display=""; }
+        hideOthers();
+        var nav=document.querySelector("nav.tabs");
+        if(nav) [].forEach.call(nav.querySelectorAll("button.tab[data-tab]"),function(b){ if(b.getAttribute("data-tab")===ID) b.classList.add("active"); else b.classList.remove("active"); });
+        return;
+      }
+      if(p){ p.hidden=true; p.style.display="none"; }
+      restoreOthers();
+      return prev.apply(this,arguments);
+    };
+    window.__jmWrapped=1;
+  }
+  window.EVETICK.add(function(){ panel(); ensureBtn(); wrap(); enforce(); });
+  setTimeout(function(){ panel(); ensureBtn(); wrap(); },2700);
 })();
 </script>
 </body>
