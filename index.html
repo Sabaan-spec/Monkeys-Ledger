@@ -9469,6 +9469,196 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   setTimeout(function(){ panel(); ensureBtn(); wrap(); },2700);
 })();
 </script>
+<style>/* Jump route v1 */
+#jr-bar{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin:4px 0 8px}
+#jr-bar label{display:flex;flex-direction:column;gap:4px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+#jr-bar input{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:9px 11px;font-family:inherit;font-size:14px;min-width:190px}
+#jr-sug{position:fixed;z-index:9999;background:var(--panel);border:1px solid var(--border);border-radius:2px;max-height:240px;overflow:auto;display:none;box-shadow:var(--shadow)}
+#jr-sug div{padding:6px 10px;cursor:pointer;font-size:13px;color:var(--text)}
+#jr-sug div:hover{background:var(--accent-dim)}
+#jr-msg{font-size:12px;color:var(--muted);align-self:center;max-width:600px}
+#jr-msg.bad{color:var(--warn)}
+#jr-out{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:10px}
+@media (max-width:1100px){#jr-out{grid-template-columns:1fr}}
+.jr-card{border:1px solid var(--border);border-radius:2px;padding:12px 14px;background:var(--bg)}
+.jr-card h5{margin:0 0 4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);font-weight:600}
+.jr-sum{font-size:12px;color:var(--muted);margin-bottom:8px}
+.jr-hop{display:grid;grid-template-columns:22px 1fr auto;gap:8px;padding:5px 0;border-top:1px solid var(--border);font-size:13px;align-items:baseline}
+.jr-hop:first-of-type{border-top:0}
+.jr-n{color:var(--muted);font-size:11px}
+.jr-meta{font-size:11px;color:var(--muted)}
+.jr-k{color:var(--bad);font-weight:600}
+.jr-sec-h{color:var(--good)}.jr-sec-l{color:var(--warn)}.jr-sec-n{color:var(--bad)}
+</style>
+<script>/* Jump route v1 */
+(function(){
+  var MAP="eveJumpMapV1";
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s==null?"":s).replace(/[&<>]/g,function(c){ return c==="&"?"&amp;":(c==="<"?"&lt;":"&gt;"); }); }
+  function num(n,d){ n=Number(n)||0; return n.toLocaleString(undefined,{minimumFractionDigits:d||0,maximumFractionDigits:d||0}); }
+  function msg(t,bad){ var e=$("jr-msg"); if(e){ e.textContent=t; e.className=bad?"bad":""; } }
+  var SYS=null;
+  function sys(){ if(SYS) return SYS; try{ SYS=(JSON.parse(localStorage.getItem("eveMapV2")||"{}").sys)||{}; }catch(e){ SYS={}; } return SYS; }
+  var JM=null;
+  function jmap(){ if(JM) return JM; try{ var o=JSON.parse(localStorage.getItem(MAP)||"null"); if(o&&o.s) JM=o.s; }catch(e){} return JM; }
+  var KILLS=null, SOV=null, NAMES={};
+  async function feeds(){
+    if(!KILLS){
+      try{ var k=await fetch("https://esi.evetech.net/latest/universe/system_kills/").then(function(r){ return r.json(); });
+        KILLS={}; k.forEach(function(x){ KILLS[x.system_id]=x.ship_kills||0; });
+      }catch(e){ KILLS={}; }
+    }
+    if(!SOV){
+      try{ var s=await fetch("https://esi.evetech.net/latest/sovereignty/map/").then(function(r){ return r.json(); });
+        SOV={}; s.forEach(function(x){ if(x.alliance_id) SOV[x.system_id]=x.alliance_id; });
+      }catch(e){ SOV={}; }
+    }
+  }
+  async function resolve(ids){
+    var want=ids.filter(function(i){ return i&&!NAMES[i]; });
+    if(!want.length) return;
+    try{
+      var r=await fetch("https://esi.evetech.net/latest/universe/names/",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(want.slice(0,900))});
+      if(r.ok) (await r.json()).forEach(function(x){ NAMES[x.id]=x.name; });
+    }catch(e){}
+  }
+  function secOf(id){ var m=jmap(); return m&&m[id]?m[id][3]:0; }
+  function nameOf(id){ var s=sys()[id]; return s?s[2]:("System "+id); }
+  function regionOf(id){ var s=sys()[id]; return s?s[1]:0; }
+  function dist(a,b){ var dx=a[0]-b[0], dy=a[1]-b[1], dz=a[2]-b[2]; return Math.sqrt(dx*dx+dy*dy+dz*dz); }
+  function riskOf(id){
+    var k=(KILLS&&KILLS[id])||0, s=secOf(id), w=0;
+    w += k*3;
+    if(s<0) w+=2; else if(s<0.45) w+=1;
+    if(SOV&&SOV[id]) w+=1;
+    return w;
+  }
+  function solve(from,to,range,safe){
+    var m=jmap(); if(!m) return null;
+    var nodes=[];
+    for(var k in m){ var id=Number(k); if(m[k][3]<0.45||id===from||id===to) nodes.push(id); }
+    var pos={}; nodes.forEach(function(i){ pos[i]=m[i]; });
+    var dst={}, prev={}, done={};
+    nodes.forEach(function(i){ dst[i]=Infinity; });
+    if(dst[from]===undefined) return null;
+    dst[from]=0;
+    for(var iter=0;iter<nodes.length;iter++){
+      var u=-1, best=Infinity;
+      for(var a=0;a<nodes.length;a++){ var n=nodes[a]; if(!done[n]&&dst[n]<best){ best=dst[n]; u=n; } }
+      if(u<0||best===Infinity) break;
+      if(u===to) break;
+      done[u]=1;
+      var pu=pos[u];
+      for(var b=0;b<nodes.length;b++){
+        var v=nodes[b]; if(done[v]||v===u) continue;
+        if(v!==to&&pos[v][3]>=0.45) continue;
+        if(dist(pu,pos[v])>range) continue;
+        var cost = safe ? (1+riskOf(v)) : 1;
+        if(dst[u]+cost<dst[v]){ dst[v]=dst[u]+cost; prev[v]=u; }
+      }
+    }
+    if(dst[to]===Infinity) return null;
+    var path=[to], cur=to, guard=0;
+    while(cur!==from&&guard++<200){ cur=prev[cur]; if(cur==null) return null; path.unshift(cur); }
+    return path;
+  }
+  function hopHtml(path){
+    var m=jmap(), out=[], totLy=0;
+    for(var i=0;i<path.length;i++){
+      var id=path[i], s=secOf(id), k=(KILLS&&KILLS[id])||0;
+      var cls = s>=0.45?"jr-sec-h":(s>0?"jr-sec-l":"jr-sec-n");
+      var ly = i? dist(m[path[i-1]],m[id]) : 0;
+      totLy+=ly;
+      var sov=(SOV&&SOV[id])?(NAMES[SOV[id]]||"sov held"):"unclaimed";
+      var reg=NAMES[regionOf(id)]||"";
+      out.push("<div class=jr-hop><span class=jr-n>"+(i||"")+"</span><span>"+esc(nameOf(id))+
+        " <span class=\""+cls+"\">"+s.toFixed(1)+"</span>"+
+        "<div class=jr-meta>"+esc(reg)+" \u00b7 "+esc(sov)+(k?(" \u00b7 <span class=jr-k>"+k+" kills/hr</span>"):"")+"</div></span>"+
+        "<span class=jr-meta>"+(i?num(ly,2)+" ly":"start")+"</span></div>");
+    }
+    return {html:out.join(""), ly:totLy};
+  }
+  var busy=false;
+  async function run(){
+    if(busy) return; busy=true;
+    try{
+      var m=jmap();
+      if(!m){ msg("Build the jump map first \u2014 the button above.",1); busy=false; return; }
+      var a=($("jr-from")||{}).__id, b=($("jr-to")||{}).__id;
+      if(!a||!b){ msg("Pick a start and a destination from the dropdowns.",1); busy=false; return; }
+      if(!m[a]||!m[b]){ msg("One of those systems is not in the jump map.",1); busy=false; return; }
+      var shipSel=$("jm-ship");
+      var shipId=shipSel?Number(shipSel.value):28844;
+      var t=await fetch("https://esi.evetech.net/latest/universe/types/"+shipId+"/").then(function(r){ return r.json(); });
+      var at={}; (t.dogma_attributes||[]).forEach(function(x){ at[x.attribute_id]=x.value; });
+      var jdc=5, jfc=5;
+      try{ var acc=window.EVEACC; if(acc&&acc.byName){ var g=function(n){ var v=acc.byName[n]; if(typeof v==="number") return v; if(v&&v.active_skill_level!=null) return v.active_skill_level; return 5; }; jdc=g("Jump Drive Calibration"); jfc=g("Jump Fuel Conservation"); } }catch(e){}
+      var range=(at[867]||0)*(1+0.20*jdc);
+      var perLy=(at[868]||0)*(1-0.10*jfc);
+      msg("Loading kills and sovereignty\u2026");
+      await feeds();
+      msg("Solving\u2026");
+      await new Promise(function(r){ setTimeout(r,20); });
+      var short=solve(a,b,range,false);
+      var safeR=solve(a,b,range,true);
+      var ids=[];
+      [short,safeR].forEach(function(p){ if(p) p.forEach(function(i){ if(SOV&&SOV[i]) ids.push(SOV[i]); ids.push(regionOf(i)); }); });
+      await resolve(ids.filter(function(v,i,ar){ return v&&ar.indexOf(v)===i; }));
+      var out=$("jr-out");
+      function card(title,path){
+        if(!path) return "<div class=jr-card><h5>"+title+"</h5><div class=jr-sum>No route found within "+num(range,2)+" ly per jump.</div></div>";
+        var h=hopHtml(path);
+        var jumps=path.length-1;
+        var fuel=h.ly*perLy;
+        var risk=path.reduce(function(s,i){ return s+riskOf(i); },0);
+        return "<div class=jr-card><h5>"+title+"</h5><div class=jr-sum>"+jumps+" jumps \u00b7 "+num(h.ly,2)+" ly \u00b7 "+num(fuel,0)+" isotopes ("+num(fuel*0.5,0)+" with Jump Freighters V) \u00b7 risk "+num(risk,0)+"</div>"+h.html+"</div>";
+      }
+      out.innerHTML=card("Fewest jumps",short)+card("Lowest risk",safeR);
+      msg("Range "+num(range,2)+" ly per jump. Kills are ESI\u2019s last-hour figures. Highsec is excluded as a waypoint \u2014 cynos cannot be lit there.");
+    }catch(e){ msg("Could not plot that route.",1); }
+    busy=false;
+  }
+  function sugBox(){ var b=$("jr-sug"); if(!b){ b=document.createElement("div"); b.id="jr-sug"; document.body.appendChild(b); } return b; }
+  function attach(inp){
+    inp.addEventListener("input",function(){
+      var box=sugBox(), q=inp.value.trim().toUpperCase();
+      inp.__id=0;
+      if(q.length<2){ box.style.display="none"; return; }
+      var s=sys(), a=[], b=[];
+      for(var k in s){ var u=String(s[k][2]||"").toUpperCase(); if(u.indexOf(q)===0){ if(a.length<8) a.push(k); } else if(u.indexOf(q)>0){ if(b.length<6) b.push(k); } if(a.length>=8&&b.length>=6) break; }
+      var rows=a.concat(b).slice(0,10);
+      if(!rows.length){ box.style.display="none"; return; }
+      box.innerHTML="";
+      rows.forEach(function(k){
+        var d=document.createElement("div");
+        d.textContent=s[k][2]+"  "+(s[k][0]/10).toFixed(1);
+        d.addEventListener("mousedown",function(ev){ ev.preventDefault(); inp.value=s[k][2]; inp.__id=Number(k); box.style.display="none"; });
+        box.appendChild(d);
+      });
+      var r=inp.getBoundingClientRect();
+      box.style.display="block"; box.style.left=r.left+"px"; box.style.minWidth=r.width+"px";
+      var below=window.innerHeight-r.bottom;
+      if(below<180&&r.top>below){ box.style.top=""; box.style.bottom=(window.innerHeight-r.top+4)+"px"; }
+      else{ box.style.bottom=""; box.style.top=(r.bottom+4)+"px"; }
+    });
+    inp.addEventListener("blur",function(){ setTimeout(function(){ var b=$("jr-sug"); if(b) b.style.display="none"; },170); });
+  }
+  function mount(){
+    var body=$("jm-body"); if(!body||$("jr-bar")) return;
+    var wrap=document.createElement("div");
+    wrap.innerHTML="<div class=jm-sec><h5>Plot a route</h5>"+
+      "<div id=jr-bar><label>From<input id=jr-from placeholder=\"e.g. Jita\" autocomplete=off spellcheck=false></label>"+
+      "<label>To<input id=jr-to placeholder=\"e.g. 1DQ1-A\" autocomplete=off spellcheck=false></label>"+
+      "<button id=jr-go class=tab style=\"padding:9px 18px\">Plot</button><span id=jr-msg></span></div>"+
+      "<div id=jr-out></div></div>";
+    body.parentElement.insertBefore(wrap,body.nextSibling);
+    attach($("jr-from")); attach($("jr-to"));
+    $("jr-go").addEventListener("click",run);
+  }
+  window.EVETICK.add(mount);
+  setTimeout(mount,3000);
+})();
+</script>
 </body>
 </html>
 
