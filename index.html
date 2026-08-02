@@ -9539,7 +9539,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   function solve(from,to,range,safe){
     var m=jmap(); if(!m) return null;
     var nodes=[];
-    function blocked(id){ if(id===from||id===to) return false; if(AVOID.s&&AVOID.s[id]) return true; if(AVOID.r&&AVOID.r[regionOf(id)]) return true; return false; }
+    function blocked(id){ if(id===from||id===to) return false; if(AVOID.s&&AVOID.s[id]) return true; if(AVOID.r&&AVOID.r[regionOf(id)]) return true; if(AVOID.a&&SOV&&SOV[id]&&AVOID.a[SOV[id]]) return true; return false; }
     for(var k in m){ var id=Number(k); if(blocked(id)) continue; if(m[k][3]<0.45||id===from||id===to) nodes.push(id); }
     var pos={}; nodes.forEach(function(i){ pos[i]=m[i]; });
     var dst={}, prev={}, done={};
@@ -9604,14 +9604,22 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         try{ var ft=await fetch("https://esi.evetech.net/latest/universe/types/"+fuelId+"/").then(function(r){ return r.json(); }); fuelName=ft.name; fuelVol=ft.volume||0; }catch(e){}
         try{ if(window.EVEMKT&&window.EVEMKT.best){ var hb=($("hub")||{}).value||"jita"; var STN={jita:60003760,amarr:60008494,dodixie:60011866,rens:60004588,hek:60005686}; var bp=await window.EVEMKT.best(String(STN[hb]||60003760),Number(fuelId)); if(bp&&bp.sell>0) fuelPrice=bp.sell; } }catch(e){}
       }
-      AVOID={s:{},r:{}};
-      var av=(($("jr-avoid")||{}).value||"").split(",").map(function(x){ return x.trim().toUpperCase(); }).filter(Boolean);
-      if(av.length){
-        var S=sys();
-        av.forEach(function(q){
-          for(var k2 in S){ if(String(S[k2][2]||"").toUpperCase()===q){ AVOID.s[k2]=1; } }
-          for(var rid in NAMES){ if(String(NAMES[rid]).toUpperCase()===q) AVOID.r[rid]=1; }
-        });
+      AVOID={s:{},r:{},c:{},a:{}};
+      var avNames=(($("jr-avoid")||{}).value||"").split(",").map(function(x){ return x.trim(); }).filter(Boolean);
+      var avHit=[], avMiss=[];
+      if(avNames.length){
+        try{
+          var ir=await fetch("https://esi.evetech.net/latest/universe/ids/",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(avNames)});
+          if(ir.ok){
+            var ij=await ir.json();
+            (ij.systems||[]).forEach(function(x){ AVOID.s[x.id]=1; avHit.push(x.name+" (system)"); });
+            (ij.regions||[]).forEach(function(x){ AVOID.r[x.id]=1; avHit.push(x.name+" (region)"); });
+            (ij.constellations||[]).forEach(function(x){ AVOID.c[x.id]=1; avHit.push(x.name+" (constellation)"); });
+            (ij.alliances||[]).forEach(function(x){ AVOID.a[x.id]=1; NAMES[x.id]=x.name; avHit.push(x.name+" (alliance space)"); });
+            var got=avHit.join("|").toUpperCase();
+            avNames.forEach(function(q){ if(got.indexOf(q.toUpperCase())<0) avMiss.push(q); });
+          }
+        }catch(e){}
       }
       var perLy=(at[868]||0)*(1-0.10*jfc);
       msg("Loading kills and sovereignty\u2026");
@@ -9641,7 +9649,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       out.innerHTML=card("Fewest jumps",short)+card("Lowest risk",safeR);
       var live=0, tot=0; if(KILLS){ for(var kk in KILLS){ tot++; if(KILLS[kk]>0) live++; } }
       var hh=(window.EVEKILLHIST?window.EVEKILLHIST.hours():0);
-      msg("Range "+num(range,2)+" ly per jump. History: "+hh+" of 24 hourly samples collected. Kill feed live: "+num(live,0)+" of "+num(tot,0)+" systems have ship kills this hour. Highsec is excluded as a waypoint \u2014 cynos cannot be lit there.");
+      msg("Range "+num(range,2)+" ly per jump. History: "+hh+" of 24 hourly samples collected. Kill feed live: "+num(live,0)+" of "+num(tot,0)+" systems have ship kills this hour. Highsec is excluded as a waypoint \u2014 cynos cannot be lit there."+(avHit.length?(" Avoiding: "+avHit.join(", ")+"."):"")+(avMiss.length?(" Not recognised: "+avMiss.join(", ")+"."):""));
     }catch(e){ msg("Could not plot that route.",1); }
     busy=false;
   }
@@ -9676,7 +9684,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     wrap.innerHTML="<div class=jm-sec><h5>Plot a route</h5>"+
       "<div id=jr-bar><label>From<input id=jr-from placeholder=\"e.g. Jita\" autocomplete=off spellcheck=false></label>"+
       "<label>To<input id=jr-to placeholder=\"e.g. 1DQ1-A\" autocomplete=off spellcheck=false></label>"+
-      "<label>Avoid<input id=jr-avoid placeholder=\"systems or regions, comma separated\" autocomplete=off spellcheck=false style=\"min-width:260px\"></label>"+
+      "<label>Avoid<input id=jr-avoid placeholder=\"system, region or alliance name\" autocomplete=off spellcheck=false style=\"min-width:260px\"></label>"+
       "<button id=jr-go class=tab style=\"padding:9px 18px\">Plot</button><span id=jr-msg></span></div>"+
       "<div id=jr-out></div></div>";
     body.parentElement.insertBefore(wrap,body.nextSibling);
