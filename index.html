@@ -9751,6 +9751,61 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   });
 })();
 </script>
+<script>/* Scan dismiss v1 */
+(function(){
+  var LIST="eveScanV1", DISM="eveScanDismissV1";
+  function read(k,d){ try{ var v=JSON.parse(localStorage.getItem(k)||"null"); return v==null?d:v; }catch(e){ return d; } }
+  function write(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
+  function keyOf(w){ return String(w.typeId||0)+"|"+String(w.locId||0); }
+  function isAuto(w){ return !!(w&&(w.auto||w.fromOrder||w.imported)); }
+  function dism(){ var d=read(DISM,[]); return Array.isArray(d)?d:[]; }
+  function addDism(keys){
+    if(!keys.length) return;
+    var d=dism(), ch=false;
+    keys.forEach(function(k){ if(d.indexOf(k)<0){ d.push(k); ch=true; } });
+    if(ch){ while(d.length>400) d.shift(); write(DISM,d); }
+  }
+  function dropDism(keys){
+    if(!keys.length) return;
+    var d=dism(), n=d.filter(function(k){ return keys.indexOf(k)<0; });
+    if(n.length!==d.length) write(DISM,n);
+  }
+  function autoKeys(){
+    var l=read(LIST,[]); if(!Array.isArray(l)) return [];
+    return l.filter(isAuto).map(keyOf);
+  }
+  var pending=null;
+  document.addEventListener("click",function(ev){
+    var t=ev.target;
+    if(!t||!t.closest) return;
+    if(!t.closest("#tab-scan")) return;
+    pending=autoKeys();
+    setTimeout(function(){
+      if(!pending) return;
+      var before=pending; pending=null;
+      var after=autoKeys();
+      var gone=before.filter(function(k){ return after.indexOf(k)<0; });
+      if(gone.length) addDism(gone);
+    },700);
+  },true);
+  function enforce(){
+    var d=dism(); if(!d.length) return;
+    var l=read(LIST,null);
+    if(!Array.isArray(l)||!l.length) return;
+    var manual=l.filter(function(w){ return !isAuto(w); }).map(keyOf);
+    var un=d.filter(function(k){ return manual.indexOf(k)>=0; });
+    if(un.length){ dropDism(un); d=dism(); }
+    var keep=l.filter(function(w){ return !(isAuto(w)&&d.indexOf(keyOf(w))>=0); });
+    if(keep.length!==l.length) write(LIST,keep);
+  }
+  window.EVESCANDISM={
+    list:function(){ return dism(); },
+    clear:function(){ write(DISM,[]); return true; }
+  };
+  window.EVETICK.add(enforce);
+  setTimeout(enforce,3000);
+})();
+</script>
 </body>
 </html>
 
