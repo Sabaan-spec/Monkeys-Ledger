@@ -9575,7 +9575,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       var reg=NAMES[regionOf(id)]||"";
       out.push("<div class=jr-hop><span class=jr-n>"+(i||"")+"</span><span>"+esc(nameOf(id))+
         " <span class=\""+cls+"\">"+s.toFixed(1)+"</span>"+
-        "<div class=jr-meta>"+esc(reg)+" \u00b7 "+esc(sov)+(k?(" \u00b7 <span class=jr-k>"+k+" kills/hr</span>"):"")+"</div></span>"+
+        "<div class=jr-meta>"+esc(reg)+" \u00b7 "+esc(sov)+" \u00b7 "+(k?("<span class=jr-k>"+k+" kills/hr</span>"):"0 kills/hr")+"</div></span>"+
         "<span class=jr-meta>"+(i?num(ly,2)+" ly":"start")+"</span></div>");
     }
     return {html:out.join(""), ly:totLy};
@@ -9637,7 +9637,8 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         return "<div class=jr-card><h5>"+title+"</h5><div class=jr-sum>"+jumps+" jumps \u00b7 "+num(h.ly,2)+" ly \u00b7 risk "+num(risk,0)+"</div>"+l2+h.html+"</div>";
       }
       out.innerHTML=card("Fewest jumps",short)+card("Lowest risk",safeR);
-      msg("Range "+num(range,2)+" ly per jump. Kills are ESI\u2019s last-hour figures. Highsec is excluded as a waypoint \u2014 cynos cannot be lit there.");
+      var live=0, tot=0; if(KILLS){ for(var kk in KILLS){ tot++; if(KILLS[kk]>0) live++; } }
+      msg("Range "+num(range,2)+" ly per jump. Kill feed live: "+num(live,0)+" of "+num(tot,0)+" systems have ship kills this hour. Highsec is excluded as a waypoint \u2014 cynos cannot be lit there.");
     }catch(e){ msg("Could not plot that route.",1); }
     busy=false;
   }
