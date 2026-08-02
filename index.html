@@ -9795,6 +9795,85 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   window.EVESCANDISM={ list:load, clear:function(){ save([]); return true; } };
 })();
 </script>
+<script>/* My losses v1 */
+(function(){
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s==null?"":s).replace(/[&<>]/g,function(c){ return c==="&"?"&amp;":(c==="<"?"&lt;":"&gt;"); }); }
+  function accounts(){
+    var found=[];
+    try{
+      var o=JSON.parse(localStorage.getItem("eveSsoAccounts")||"null");
+      (function walk(x){
+        if(!x||typeof x!=="object") return;
+        if(x.access_token&&x.character_id) found.push(x);
+        else if(x.access_token&&x.CharacterID) found.push({access_token:x.access_token,character_id:x.CharacterID,name:x.CharacterName});
+        for(var k in x) if(x[k]&&typeof x[k]==="object") walk(x[k]);
+      })(o);
+    }catch(e){}
+    return found;
+  }
+  var loaded=false, busy=false;
+  function host(){
+    var t=$("tab-kills"); if(!t) return null;
+    var p=$("ml-panel");
+    if(!p){
+      p=document.createElement("div"); p.id="ml-panel";
+      p.innerHTML="<section class=\"panel\"><div><h4>\u2620 Your losses</h4><div id=ml-note style=\"font-size:12px;color:var(--muted);margin:6px 0\"></div><div id=ml-out></div></div></section>";
+      t.appendChild(p);
+    }
+    return p;
+  }
+  async function run(){
+    if(busy||loaded) return;
+    var p=host(); if(!p||p.offsetParent===null) return;
+    busy=true;
+    var note=$("ml-note"), out=$("ml-out");
+    try{
+      var acc=accounts();
+      if(!acc.length){ note.textContent="Connect a character on the Account tab to see your recent losses."; busy=false; loaded=true; return; }
+      var a=acc[0];
+      note.textContent="Reading recent killmails\u2026";
+      var r=await fetch("https://esi.evetech.net/latest/characters/"+a.character_id+"/killmails/recent/?datasource=tranquility",{headers:{Authorization:"Bearer "+a.access_token}});
+      if(r.status===401||r.status===403){ note.innerHTML="Your login predates the killmail permission. <b>Log out and back in</b> on the Account tab to grant it."; busy=false; loaded=true; return; }
+      if(!r.ok){ note.textContent="ESI would not return killmails (status "+r.status+")."; busy=false; loaded=true; return; }
+      var list=await r.json();
+      if(!list.length){ note.textContent="No killmails on record for this character."; busy=false; loaded=true; return; }
+      var details=[];
+      for(var i=0;i<list.length&&details.length<25;i++){
+        try{
+          var d=await fetch("https://esi.evetech.net/latest/killmails/"+list[i].killmail_id+"/"+list[i].killmail_hash+"/").then(function(x){ return x.ok?x.json():null; });
+          if(d&&d.victim&&d.victim.character_id===a.character_id) details.push(d);
+        }catch(e){}
+      }
+      if(!details.length){ note.textContent="Recent killmails found, but none are losses \u2014 all kills. Fly safe."; busy=false; loaded=true; return; }
+      var ids={};
+      details.forEach(function(d){ ids[d.victim.ship_type_id]=1; ids[d.solar_system_id]=1; });
+      var nm={};
+      try{
+        var nr=await fetch("https://esi.evetech.net/latest/universe/names/",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(Object.keys(ids).map(Number))});
+        if(nr.ok) (await nr.json()).forEach(function(x){ nm[x.id]=x.name; });
+      }catch(e){}
+      var rows=details.map(function(d){
+        var when=new Date(d.killmail_time);
+        var days=Math.round((Date.now()-when.getTime())/86400000);
+        var lost=(d.victim.items||[]).length;
+        return "<tr><td>"+when.toLocaleDateString()+" <span style=\"color:var(--muted)\">("+days+"d ago)</span></td>"+
+          "<td>"+esc(nm[d.victim.ship_type_id]||("Type "+d.victim.ship_type_id))+"</td>"+
+          "<td>"+esc(nm[d.solar_system_id]||d.solar_system_id)+"</td>"+
+          "<td class=num>"+d.attackers.length+"</td>"+
+          "<td class=num>"+lost+"</td>"+
+          "<td><a href=\"https://zkillboard.com/kill/"+d.killmail_id+"/\" target=_blank rel=noopener>zkill</a></td></tr>";
+      }).join("");
+      out.innerHTML="<table><thead><tr><th>When</th><th>Ship</th><th>System</th><th>Attackers</th><th>Items lost</th><th></th></tr></thead><tbody>"+rows+"</tbody></table>";
+      note.textContent=details.length+" losses in your last "+list.length+" killmails. Ship and fit costs feed the Build Demand view \u2014 losing hulls you can build is the cheapest way to lose ships.";
+      loaded=true;
+    }catch(e){ if(note) note.textContent="Could not load losses."; }
+    busy=false;
+  }
+  window.EVETICK.add(function(){ host(); run(); });
+  setTimeout(function(){ host(); run(); },3500);
+})();
+</script>
 </body>
 </html>
 
