@@ -7467,13 +7467,18 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     return px;
   }
   function table(title,rows,px,bpOk){
+    var maxN=0,totV=0;
+    rows.forEach(function(q){ if(q.n>maxN) maxN=q.n; var u=px[q.id]; if(u) totV+=u*q.n; });
     var body=rows.map(function(r){
       var can=bpOk&&window.EVEBP&&window.EVEBP.byProduct&&window.EVEBP.byProduct[r.id];
       var unit=px[r.id]||null;
-      return "<tr><td>"+esc(r.name)+(can?" <span class=bp>\u2713 you can build</span>":"")+"</td>"+
-        "<td class=n>"+r.n+"</td><td class=n>"+isk(unit)+"</td><td class=n>"+(unit?isk(unit*r.n):"\u2014")+"</td></tr>";
+      var barW=maxN?Math.max(3,Math.round(r.n/maxN*100)):0;
+      var val=unit?unit*r.n:0;
+      var share=totV?Math.round(val/totV*100):0;
+      return "<tr><td>"+esc(r.name)+(can?" <span class=bp>\u2713 you can build</span>":"")+"<span class=kd-bar style=\"width:"+barW+"%\"></span></td>"+
+        "<td class=n>"+r.n+"</td><td class=n>"+isk(unit)+"</td><td class=n>"+(unit?isk(val):"\u2014")+"</td><td class=n style=\"color:var(--muted)\">"+(share?(share+"%"):"\u2014")+"</td></tr>";
     }).join("");
-    return "<div><h4>"+title+"</h4><table><thead><tr><th>Item</th><th class=n>Lost</th><th class=n>Unit @ hub</th><th class=n>Replacement value</th></tr></thead><tbody>"+body+"</tbody></table></div>";
+    return "<div><h4>"+title+"</h4><table><thead><tr><th>Item</th><th class=n>Lost</th><th class=n>Unit @ hub</th><th class=n>Replacement value</th><th class=n>Share</th></tr></thead><tbody>"+body+"</tbody></table></div>";
   }
   async function run(force){
     var p=panel(); if(!p) return;
