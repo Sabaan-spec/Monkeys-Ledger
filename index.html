@@ -7507,6 +7507,8 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         });
       });
       function top(o,n){ return Object.keys(o).map(function(k){ return {id:Number(k),n:o[k]}; }).sort(function(a,b){ return b.n-a.n; }).slice(0,n); }
+      var CAPSULES={670:1,33328:1};
+      Object.keys(CAPSULES).forEach(function(cid){ delete hulls[cid]; });
       var tH=top(hulls,12), tM=top(mods,12);
       var ids=tH.concat(tM).map(function(r){ return r.id; });
       var nm={};
