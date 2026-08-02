@@ -7177,6 +7177,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     var hub=HUBS.filter(function(h){ return h[0]===String(locId); })[0];
     if(hub) locName=hub[1];
     else if(window.EVESTRUCT){ try{ var rec=await window.EVESTRUCT.resolve(locId); if(rec&&rec.name) locName=rec.name; }catch(e){} }
+      __scanUndismiss(t.id,String(locId));
     watches.push({id:Date.now()+"-"+Math.random().toString(36).slice(2,7),typeId:t.id,name:t.name,locId:String(locId),locName:locName,rule:rule,target:(rule==="undercut"?null:target),last:null,firedAt:0});
     save(); render(); msg("Watching "+t.name+" at "+locName+"\u2026 checking for orders.");
     (async function(){ try{ var b=await window.EVEMKT.best(String(locId),t.id); if(!b||b.sell==null){ msg("Added, but no sell orders for "+t.name+" were found at "+locName+" \u2014 check the item name and location. Type ID "+t.id+"."); } else { msg("Watching "+t.name+" at "+locName+" \u2014 current sell "+isk(b.sell)+"."); } }catch(e){} })();
@@ -7217,7 +7218,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         missing.forEach(function(k){
           var o=want[k], loc=String(o.location_id);
           var ln=(window.EVESTRUCT&&window.EVESTRUCT.name(loc))||("location "+loc);
-          watches.push({id:"auto-"+k,typeId:o.type_id,name:nm[o.type_id]||("Type "+o.type_id),locId:loc,locName:ln,rule:"undercut",target:null,last:null,firedAt:0,auto:true});
+          (__scanDismissed(o.type_id,loc)?0:watches.push({id:"auto-"+k,typeId:o.type_id,name:nm[o.type_id]||("Type "+o.type_id),locId:loc,locName:ln,rule:"undercut",target:null,last:null,firedAt:0,auto:true}));
           changed=true;
         });
       }
@@ -7225,7 +7226,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     }catch(e){}
     syncing=false;
   }
-  function remove(id){ watches=watches.filter(function(w){ return w.id!==id; }); save(); render(); }
+  function remove(id){ watches=watches.filter(function(w){ return __scanDrop(w,id)||w.id!==id; }); save(); render(); }
   function ruleMeta(w){
     if(w.rule==="below") return {arrow:"\u25bc",label:"Drops below",cls:"sc-buy",dir:-1};
     if(w.rule==="above") return {arrow:"\u25b2",label:"Rises above",cls:"sc-sell",dir:1};
@@ -9749,6 +9750,24 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     lastTry=Date.now();
     sample(false);
   });
+})();
+</script>
+<script>/* Scan dismiss v2 */
+(function(){
+  var KEY="eveScanDismissV1";
+  function load(){ try{ var d=JSON.parse(localStorage.getItem(KEY)||"[]"); return Array.isArray(d)?d:[]; }catch(e){ return []; } }
+  function save(d){ try{ while(d.length>400) d.shift(); localStorage.setItem(KEY,JSON.stringify(d)); }catch(e){} }
+  window.__scanDrop=function(w,id){
+    try{ if(w&&w.auto&&w.id===id){ var k=String(w.typeId)+"|"+String(w.locId); var d=load(); if(d.indexOf(k)<0){ d.push(k); save(d); } } }catch(e){}
+    return false;
+  };
+  window.__scanDismissed=function(tid,lid){
+    try{ return load().indexOf(String(tid)+"|"+String(lid))>=0; }catch(e){ return false; }
+  };
+  window.__scanUndismiss=function(tid,lid){
+    try{ var k=String(tid)+"|"+String(lid); var d=load(); var n=d.filter(function(x){ return x!==k; }); if(n.length!==d.length) save(n); }catch(e){}
+  };
+  window.EVESCANDISM={ list:load, clear:function(){ save([]); return true; } };
 })();
 </script>
 </body>
