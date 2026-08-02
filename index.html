@@ -7445,7 +7445,16 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       p=document.createElement("div"); p.id="tab-"+ID; p.hidden=true; p.style.display="none";
       k.parentElement.insertBefore(p,k.nextSibling);
       p.innerHTML="<section class=\"panel\"><div>"+
-        "<style>#kd-panel table{width:100%;border-collapse:collapse}#kd-panel th,#kd-panel td{padding:5px 12px;white-space:nowrap}#kd-panel th:first-child,#kd-panel td:first-child{white-space:normal;width:58%;text-align:left}#kd-panel th.n,#kd-panel td.n{text-align:right}#kd-panel h4{margin:16px 0 6px}</style><div id=kd-panel><h4>\ud83d\udd28 What is dying here \u2014 and what you could build</h4>"+
+        "<style>#kd-grid{display:grid;grid-template-columns:1fr;gap:26px}
+@media (min-width:1100px){#kd-grid{grid-template-columns:1fr 1fr}}
+#kd-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:12px 0 4px}
+.kd-card{border:1px solid var(--border);border-radius:2px;padding:11px 13px;background:var(--bg)}
+.kd-card b{display:block;font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;margin-bottom:2px}
+.kd-card span{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.kd-card small{display:block;font-size:11px;color:var(--muted);margin-top:3px}
+.kd-bar{position:relative;display:block;height:4px;border-radius:2px;background:var(--accent-dim);margin-top:4px}
+#kd-panel tbody tr:hover{background:rgba(84,194,218,.06)}
+#kd-panel table{width:100%;border-collapse:collapse}#kd-panel th,#kd-panel td{padding:5px 12px;white-space:nowrap}#kd-panel th:first-child,#kd-panel td:first-child{white-space:normal;width:58%;text-align:left}#kd-panel th.n,#kd-panel td.n{text-align:right}#kd-panel h4{margin:16px 0 6px}</style><div id=kd-panel><h4>\ud83d\udd28 What is dying here \u2014 and what you could build</h4>"+
         "<div style=\"display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:10px\">"+
         "<label style=\"display:flex;flex-direction:column;gap:4px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)\">Region<select id=kd-region style=\"background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:9px 11px;font-family:inherit;font-size:14px;min-width:200px\"></select></label>"+
         "<button id=kd-go class=tab style=\"padding:9px 18px\">Refresh</button></div>"+
@@ -8546,7 +8555,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   .wrap{max-width:none;padding:0 clamp(30px,2.2vw,56px)}
   header .wrap{max-width:1360px}
   .controls .field.grow{max-width:640px}
-  #kd-panel table{max-width:1250px}
+  #kd-panel table{max-width:none}
 }
 @media (min-width:1900px){
   #tab-sso.acc-cols{column-count:4}
