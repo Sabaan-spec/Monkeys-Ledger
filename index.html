@@ -7120,7 +7120,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       p=document.createElement("div"); p.id="tab-"+ID; p.hidden=true; p.style.display="none";
       arb.parentElement.insertBefore(p,arb.nextSibling);
       p.innerHTML="<section class=\"panel\"><div>"+
-        "<div style=\"font-weight:600;margin-bottom:10px\">\ud83d\udce1 Market scanner</div>"+
+        "<div style=\"font-weight:600;margin-bottom:10px\">\ud83d\udce1 Order watcher</div>"+
         "<div class=sc-form>"+
         "<label>Item<input id=sc-item placeholder=\"e.g. Prototype Cloaking Device I\"></label>"+
         "<label>Location<select id=sc-loc></select></label>"+
@@ -7279,7 +7279,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     var host=document.getElementById("sc-toasts");
     if(!host){ host=document.createElement("div"); host.id="sc-toasts"; document.body.appendChild(host); }
     var d=document.createElement("div"); d.className="sc-toast";
-    d.innerHTML="<div class=t>\u23f1 Market scanner alert</div><div class=m></div><div class=row><button data-a=go>Open scanner</button><button data-a=x>Dismiss</button></div>";
+    d.innerHTML="<div class=t>\u23f1 Order watcher alert</div><div class=m></div><div class=row><button data-a=go>Open scanner</button><button data-a=x>Dismiss</button></div>";
     d.querySelector(".m").textContent=text;
     d.querySelector("[data-a=go]").addEventListener("click",function(){ try{ if(window.switchTab) window.switchTab(ID); }catch(e){} d.remove(); });
     d.querySelector("[data-a=x]").addEventListener("click",function(){ d.remove(); });
@@ -7294,7 +7294,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     log.unshift({t:new Date().toLocaleTimeString(),m:text});
     save();
     try{ toast(text); }catch(e){}
-    try{ if(typeof Notification!=="undefined"&&Notification.permission==="granted") new Notification("Market scanner",{body:text}); }catch(e){}
+    try{ if(typeof Notification!=="undefined"&&Notification.permission==="granted") new Notification("Order watcher",{body:text}); }catch(e){}
   }
   async function poll(force){
     if(busy) return;
@@ -7372,7 +7372,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     var nav=document.querySelector("nav.tabs"); if(!nav) return;
     if(nav.querySelector("button.tab[data-tab=scan]")) return;
     var b=document.createElement("button");
-    b.className="tab"; b.setAttribute("data-tab",ID); b.textContent="Market Scanner";
+    b.className="tab"; b.setAttribute("data-tab",ID); b.textContent="Order Watcher";
     b.addEventListener("click",function(e){ e.stopPropagation(); if(window.switchTab) window.switchTab(ID); });
     nav.appendChild(b);
   }
