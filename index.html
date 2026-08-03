@@ -9804,7 +9804,8 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
 })();
 </script>
 <style>/* Orders collapse v1 */
-#ab-myorders.uo-collapsed > *:nth-child(n+3){display:none}
+#ab-myorders.uo-collapsed table{display:none}
+#ab-myorders.uo-collapsed .sc-table,#ab-myorders.uo-collapsed [id$=-rows],#ab-myorders.uo-collapsed [class*=grid]{display:none}
 #uo-toggle{cursor:pointer;user-select:none;color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border:1px solid var(--border);border-radius:2px;margin-left:10px;white-space:nowrap}
 #uo-toggle:hover{color:var(--accent);border-color:var(--accent)}
 </style>
