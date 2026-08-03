@@ -9603,6 +9603,12 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
 #po-table th:first-child,#po-table td:first-child{text-align:left;white-space:normal}
 #po-table td{text-align:right;font-variant-numeric:tabular-nums;border-bottom:1px solid var(--border);font-size:13px}
 #po-table tr:hover td{background:rgba(84,194,218,.06)}
+.po-ed{width:100px;background:transparent;color:var(--text);border:1px solid transparent;border-radius:2px;padding:3px 6px;text-align:right;font-family:inherit;font-size:13px;font-variant-numeric:tabular-nums}
+.po-ed:hover{border-color:var(--border)}
+.po-ed:focus{outline:none;border-color:var(--accent);background:var(--bg)}
+.po-ed::placeholder{color:var(--muted);font-style:italic}
+.po-meth{cursor:pointer;border-bottom:1px dotted var(--muted)}
+.po-meth:hover{color:var(--accent);border-color:var(--accent)}
 .po-x{cursor:pointer;color:var(--muted)}.po-x:hover{color:var(--bad)}
 .po-sold{color:var(--good)}.po-open{color:var(--muted)}
 #po-note{font-size:12px;color:var(--muted);line-height:1.5;margin-top:10px;max-width:900px}
@@ -9652,14 +9658,34 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         var c=calc(r);
         var sellCell=r.sell?isk(r.sell):"<span class=po-open>not listed</span>";
         var netCell=r.sell?("<span class=\""+(c.net>=0?"po-sold":"")+"\" style=\""+(c.net<0?"color:var(--bad)":"")+"\">"+isk(c.net)+"</span>"):"\u2014";
-        return "<tr><td>"+esc(r.name)+"<div style=\"font-size:11px;color:var(--muted)\">"+(r.order?"buy order":"instant buy")+(r.sold?" \u00b7 sold":"")+"</div></td>"+
-          "<td>"+n2(c.qty)+"</td><td>"+isk(r.buy)+"</td><td>"+isk(c.cost)+"</td>"+
-          "<td>"+sellCell+"</td><td>"+isk(c.fees)+"</td><td>"+netCell+"</td>"+
+        return "<tr><td>"+esc(r.name)+"<div style=\"font-size:11px;color:var(--muted)\"><span class=po-meth data-i="+i+" title=\"click to switch\">"+(r.order?"buy order":"instant buy")+"</span>"+(r.sold?" \u00b7 sold":"")+"</div></td>"+
+          "<td><input class=po-ed data-f=qty data-i="+i+" value=\""+r.qty+"\"></td>"+
+          "<td><input class=po-ed data-f=buy data-i="+i+" value=\""+r.buy+"\"></td>"+
+          "<td>"+isk(c.cost)+"</td>"+
+          "<td><input class=po-ed data-f=sell data-i="+i+" value=\""+(r.sell||"")+"\" placeholder=\"not listed\"></td>"+
+          "<td>"+isk(c.fees)+"</td><td>"+netCell+"</td>"+
           "<td>"+(r.sell?n2(c.margin)+"%":"\u2014")+"</td>"+
           "<td><button class=\"tab\" style=\"padding:2px 9px;font-size:11px\" data-sold=\""+i+"\">"+(r.sold?"Undo":"Sold")+"</button></td>"+
           "<td><span class=po-x data-del=\""+i+"\">\u00d7</span></td></tr>";
       }).join("");
       [].forEach.call(body.querySelectorAll("[data-del]"),function(b){ b.addEventListener("click",function(){ rows.splice(Number(b.getAttribute("data-del")),1); save(); draw(); }); });
+      [].forEach.call(body.querySelectorAll(".po-ed"),function(inp){
+        function commit(){
+          var i=Number(inp.getAttribute("data-i")), f=inp.getAttribute("data-f");
+          var r=rows[i]; if(!r) return;
+          var raw=String(inp.value).replace(/[, ]/g,"").trim();
+          var v=raw===""?0:Number(raw);
+          if(!isFinite(v)||v<0){ inp.value=r[f]||""; return; }
+          if((f==="qty"||f==="buy")&&v<=0){ inp.value=r[f]||""; return; }
+          if(r[f]===v) return;
+          r[f]=v; save(); draw();
+        }
+        inp.addEventListener("change",commit);
+        inp.addEventListener("keydown",function(e){ if(e.key==="Enter"){ e.preventDefault(); inp.blur(); } });
+      });
+      [].forEach.call(body.querySelectorAll(".po-meth"),function(sp){
+        sp.addEventListener("click",function(){ var r=rows[Number(sp.getAttribute("data-i"))]; if(r){ r.order=!r.order; save(); draw(); } });
+      });
       [].forEach.call(body.querySelectorAll("[data-sold]"),function(b){ b.addEventListener("click",function(){ var r=rows[Number(b.getAttribute("data-sold"))]; if(!r.sell){ $("po-msg").textContent="Add a sell price for that row first."; return; } r.sold=!r.sold; save(); draw(); }); });
     }
     var realised=0, invested=0, openCost=0, expected=0, fees=0;
