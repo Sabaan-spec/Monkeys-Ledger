@@ -6340,7 +6340,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     {id:"ind",label:"Industry",tabs:["calc","cheapsys","tree","research","invent","react"]},
     {id:"mat",label:"Materials",tabs:["ore","repro","pi"]},
     {id:"acct",label:"Account",tabs:["sso"]},
-    {id:"trade",label:"Trade",tabs:["arb","top","plan","jump","scan","pricecheck"]},
+    {id:"trade",label:"Trade",tabs:["arb","top","pos","plan","jump","scan","pricecheck"]},
     {id:"intel",label:"Intel",tabs:["kills","demand","dscan","fits","reference"]}
   ];
   var KEY="eveTabGroupV1";
@@ -9583,6 +9583,200 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   #tabs-sub button{flex:0 0 auto;white-space:nowrap}
 }
 </style>
+<style>/* Positions v1 */
+#po-bar{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin:10px 0 6px}
+#po-bar label{display:flex;flex-direction:column;gap:4px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+#po-bar input,#po-bar select{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:9px 11px;font-family:inherit;font-size:14px}
+#po-item{min-width:230px}#po-qty,#po-buy,#po-sell{width:130px;text-align:right}
+#po-sug{position:fixed;z-index:9999;background:var(--panel);border:1px solid var(--border);border-radius:2px;max-height:240px;overflow:auto;display:none;box-shadow:var(--shadow)}
+#po-sug div{padding:6px 10px;cursor:pointer;font-size:13px;color:var(--text)}
+#po-sug div:hover{background:var(--accent-dim)}
+#po-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:14px 0 6px}
+.po-card{border:1px solid var(--border);border-radius:2px;padding:11px 13px;background:var(--bg)}
+.po-card b{display:block;font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+.po-card span{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.po-card small{display:block;font-size:11px;color:var(--muted);margin-top:3px}
+#po-table{overflow-x:auto}
+#po-table table{width:100%;border-collapse:collapse;min-width:940px}
+#po-table th,#po-table td{padding:6px 10px;white-space:nowrap}
+#po-table th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:right;border-bottom:1px solid var(--border)}
+#po-table th:first-child,#po-table td:first-child{text-align:left;white-space:normal}
+#po-table td{text-align:right;font-variant-numeric:tabular-nums;border-bottom:1px solid var(--border);font-size:13px}
+#po-table tr:hover td{background:rgba(84,194,218,.06)}
+.po-x{cursor:pointer;color:var(--muted)}.po-x:hover{color:var(--bad)}
+.po-sold{color:var(--good)}.po-open{color:var(--muted)}
+#po-note{font-size:12px;color:var(--muted);line-height:1.5;margin-top:10px;max-width:900px}
+</style>
+<script>/* Positions v1 */
+(function(){
+  var ID="pos", KEY="evePosV1";
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s==null?"":s).replace(/[&<>]/g,function(c){ return c==="&"?"&amp;":(c==="<"?"&lt;":"&gt;"); }); }
+  function n2(v){ v=Number(v)||0; return v.toLocaleString(undefined,{maximumFractionDigits:2}); }
+  function isk(v){ try{ return window.eveISK?window.eveISK(v):n2(v); }catch(e){ return n2(v); } }
+  function feeSales(){ var e=$("f-sales"); return e?(Number(e.value)||0)/100:0.0337; }
+  function feeBroker(){ var e=$("f-broker"); return e?(Number(e.value)||0)/100:0.015; }
+  var rows=[];
+  try{ var s=JSON.parse(localStorage.getItem(KEY)||"[]"); if(Array.isArray(s)) rows=s; }catch(e){}
+  function save(){ try{ localStorage.setItem(KEY,JSON.stringify(rows)); }catch(e){} }
+  function calc(r){
+    var qty=Number(r.qty)||0, buy=Number(r.buy)||0, sell=Number(r.sell)||0;
+    var br=feeBroker(), tx=feeSales();
+    var buyGross=buy*qty;
+    var buyFee=r.order?buyGross*br:0;
+    var cost=buyGross+buyFee;
+    var sellGross=sell*qty;
+    var sellBroker=sell?sellGross*br:0;
+    var salesTax=sell?sellGross*tx:0;
+    var net=sell?(sellGross-sellBroker-salesTax-cost):0;
+    return {qty:qty,buyGross:buyGross,buyFee:buyFee,cost:cost,sellGross:sellGross,sellBroker:sellBroker,salesTax:salesTax,fees:buyFee+sellBroker+salesTax,net:net,margin:cost&&sell?(net/cost*100):0};
+  }
+  var live={};
+  async function priceFor(tid){
+    if(live[tid]!=null) return live[tid];
+    try{
+      var hub=($("hub")||{}).value||"jita";
+      var STN={jita:60003760,amarr:60008494,dodixie:60011866,rens:60004588,hek:60005686};
+      if(window.EVEMKT&&window.EVEMKT.best){
+        var b=await window.EVEMKT.best(String(STN[hub]||60003760),Number(tid));
+        if(b&&b.sell>0){ live[tid]=b.sell; return b.sell; }
+      }
+    }catch(e){}
+    live[tid]=0; return 0;
+  }
+  function draw(){
+    var body=$("po-body"); if(!body) return;
+    if(!rows.length){ body.innerHTML="<tr><td colspan=10 style=\"color:var(--muted);text-align:left\">Nothing tracked yet. Add an item above with what you paid and how many.</td></tr>"; }
+    else{
+      body.innerHTML=rows.map(function(r,i){
+        var c=calc(r);
+        var sellCell=r.sell?isk(r.sell):"<span class=po-open>not listed</span>";
+        var netCell=r.sell?("<span class=\""+(c.net>=0?"po-sold":"")+"\" style=\""+(c.net<0?"color:var(--bad)":"")+"\">"+isk(c.net)+"</span>"):"\u2014";
+        return "<tr><td>"+esc(r.name)+"<div style=\"font-size:11px;color:var(--muted)\">"+(r.order?"buy order":"instant buy")+(r.sold?" \u00b7 sold":"")+"</div></td>"+
+          "<td>"+n2(c.qty)+"</td><td>"+isk(r.buy)+"</td><td>"+isk(c.cost)+"</td>"+
+          "<td>"+sellCell+"</td><td>"+isk(c.fees)+"</td><td>"+netCell+"</td>"+
+          "<td>"+(r.sell?n2(c.margin)+"%":"\u2014")+"</td>"+
+          "<td><button class=\"tab\" style=\"padding:2px 9px;font-size:11px\" data-sold=\""+i+"\">"+(r.sold?"Undo":"Sold")+"</button></td>"+
+          "<td><span class=po-x data-del=\""+i+"\">\u00d7</span></td></tr>";
+      }).join("");
+      [].forEach.call(body.querySelectorAll("[data-del]"),function(b){ b.addEventListener("click",function(){ rows.splice(Number(b.getAttribute("data-del")),1); save(); draw(); }); });
+      [].forEach.call(body.querySelectorAll("[data-sold]"),function(b){ b.addEventListener("click",function(){ var r=rows[Number(b.getAttribute("data-sold"))]; if(!r.sell){ $("po-msg").textContent="Add a sell price for that row first."; return; } r.sold=!r.sold; save(); draw(); }); });
+    }
+    var realised=0, invested=0, openCost=0, expected=0, fees=0;
+    rows.forEach(function(r){ var c=calc(r); fees+=c.fees; if(r.sold){ realised+=c.net; } else { invested+=c.cost; openCost+=c.cost; if(r.sell) expected+=c.net; } });
+    $("po-cards").innerHTML=
+      "<div class=po-card><b class=\""+(realised>=0?"po-sold":"")+"\" style=\""+(realised<0?"color:var(--bad)":"")+"\">"+isk(realised)+"</b><span>Realised profit</span><small>rows marked sold</small></div>"+
+      "<div class=po-card><b>"+isk(openCost)+"</b><span>Capital at risk</span><small>still held or listed</small></div>"+
+      "<div class=po-card><b>"+isk(expected)+"</b><span>Unrealised</span><small>if open listings all sell</small></div>"+
+      "<div class=po-card><b>"+isk(fees)+"</b><span>Fees and tax</span><small>broker "+n2(feeBroker()*100)+"% \u00b7 tax "+n2(feeSales()*100)+"%</small></div>";
+  }
+  function sugBox(){ var b=$("po-sug"); if(!b){ b=document.createElement("div"); b.id="po-sug"; document.body.appendChild(b); } return b; }
+  var NAMES=null;
+  function names(){ if(NAMES) return NAMES; try{ NAMES=JSON.parse(localStorage.getItem("eveTypeNamesV1")||"{}"); }catch(e){ NAMES={}; } return NAMES; }
+  function suggest(){
+    var inp=$("po-item"); if(!inp) return;
+    var box=sugBox(), q=inp.value.trim().toUpperCase();
+    inp.__tid=inp.__tid||0;
+    if(q.length<3){ box.style.display="none"; return; }
+    var nm=names(), a=[], b=[];
+    for(var k in nm){ var u=String(nm[k]).toUpperCase(); if(u.indexOf(q)===0){ if(a.length<8) a.push(k); } else if(u.indexOf(q)>0){ if(b.length<6) b.push(k); } if(a.length>=8&&b.length>=6) break; }
+    var list=a.concat(b).slice(0,10);
+    if(!list.length){ box.style.display="none"; return; }
+    box.innerHTML="";
+    list.forEach(function(k){
+      var d=document.createElement("div"); d.textContent=nm[k];
+      d.addEventListener("mousedown",function(ev){ ev.preventDefault(); inp.value=nm[k]; inp.__tid=Number(k); box.style.display="none"; });
+      box.appendChild(d);
+    });
+    var r=inp.getBoundingClientRect();
+    box.style.display="block"; box.style.left=r.left+"px"; box.style.minWidth=r.width+"px";
+    var below=window.innerHeight-r.bottom;
+    if(below<180&&r.top>below){ box.style.top=""; box.style.bottom=(window.innerHeight-r.top+4)+"px"; }
+    else{ box.style.bottom=""; box.style.top=(r.bottom+4)+"px"; }
+  }
+  function add(){
+    var inp=$("po-item");
+    var name=(inp.value||"").trim();
+    if(!name){ $("po-msg").textContent="Type an item name."; return; }
+    var qty=Number($("po-qty").value)||0, buy=Number($("po-buy").value)||0;
+    if(qty<=0||buy<=0){ $("po-msg").textContent="Quantity and buy price both need a value."; return; }
+    rows.push({name:name,tid:inp.__tid||0,qty:qty,buy:buy,sell:Number($("po-sell").value)||0,order:$("po-method").value==="order",sold:false,t:Date.now()});
+    save();
+    inp.value=""; inp.__tid=0; $("po-qty").value=""; $("po-buy").value=""; $("po-sell").value="";
+    $("po-msg").textContent="";
+    draw();
+  }
+  function panel(){
+    var k=$("tab-arb"); if(!k) return null;
+    var p=$("tab-"+ID);
+    if(!p){
+      p=document.createElement("div"); p.id="tab-"+ID; p.hidden=true; p.style.display="none";
+      k.parentElement.insertBefore(p,k.nextSibling);
+      p.innerHTML="<section class=\"panel\"><div><h4>\ud83d\udcd2 Positions</h4>"+
+        "<div id=po-bar>"+
+        "<label>Item<input id=po-item placeholder=\"e.g. Tritanium\" autocomplete=off spellcheck=false></label>"+
+        "<label>Quantity<input id=po-qty type=number min=0 step=any></label>"+
+        "<label>Bought at (each)<input id=po-buy type=number min=0 step=any></label>"+
+        "<label>How<select id=po-method><option value=order>Buy order</option><option value=instant>Instant buy</option></select></label>"+
+        "<label>Listed at (each)<input id=po-sell type=number min=0 step=any placeholder=optional></label>"+
+        "<button id=po-add class=tab style=\"padding:9px 18px\">Add</button><span id=po-msg style=\"font-size:12px;color:var(--muted);align-self:center\"></span></div>"+
+        "<div id=po-cards></div>"+
+        "<div id=po-table><table><thead><tr><th>Item</th><th>Qty</th><th>Buy each</th><th>Cost incl. fee</th><th>Listed each</th><th>Fees &amp; tax</th><th>Net profit</th><th>Margin</th><th></th><th></th></tr></thead><tbody id=po-body></tbody></table></div>"+
+        "<div id=po-note>Buy orders pay the broker fee on purchase; instant buys off existing sell orders pay nothing. Listing to sell pays the broker fee again, and the sale pays sales tax. Rates come from the Manufacturing tab, which derives them from your Broker Relations and Accounting skills, so they match the rest of the site. Mark a row <b>Sold</b> to move it from unrealised into realised profit.</div>"+
+        "</div></section>";
+      var inp=p.querySelector("#po-item");
+      inp.addEventListener("input",suggest);
+      inp.addEventListener("blur",function(){ setTimeout(function(){ var b=$("po-sug"); if(b) b.style.display="none"; },170); });
+      p.querySelector("#po-add").addEventListener("click",add);
+      draw();
+    }
+    return p;
+  }
+  function activeOrigTab(){
+    var nav=document.querySelector("nav.tabs"); if(!nav) return null;
+    var r=null;
+    [].forEach.call(nav.querySelectorAll("button.tab[data-tab]"),function(b){ if(/\bactive\b/.test(b.className)) r=b.getAttribute("data-tab"); });
+    return r;
+  }
+  function hideOthers(){ [].forEach.call(document.querySelectorAll("[id^=tab-]"),function(e){ if(e.id!=="tab-"+ID){ e.hidden=true; e.style.display="none"; } }); }
+  function restoreOthers(){ [].forEach.call(document.querySelectorAll("[id^=tab-]"),function(e){ if(e.id!=="tab-"+ID) e.style.display=""; }); }
+  function enforce(){
+    var p=$("tab-"+ID); if(!p) return;
+    if(activeOrigTab()===ID){ p.hidden=false; p.style.display=""; hideOthers(); }
+    else if(p.style.display!=="none"){ p.hidden=true; p.style.display="none"; restoreOthers(); }
+  }
+  function ensureBtn(){
+    var nav=document.querySelector("nav.tabs"); if(!nav) return;
+    if(nav.querySelector("button.tab[data-tab="+ID+"]")) return;
+    var b=document.createElement("button");
+    b.className="tab"; b.setAttribute("data-tab",ID); b.textContent="Positions";
+    b.addEventListener("click",function(e){ e.stopPropagation(); if(window.switchTab) window.switchTab(ID); });
+    nav.appendChild(b);
+  }
+  function wrap(){
+    if(typeof window.switchTab!=="function"||window.__poWrapped) return;
+    var prev=window.switchTab;
+    window.switchTab=function(id){
+      var p=panel();
+      if(id===ID){
+        prev("arb");
+        if(p){ p.hidden=false; p.style.display=""; }
+        hideOthers();
+        var nav=document.querySelector("nav.tabs");
+        if(nav) [].forEach.call(nav.querySelectorAll("button.tab[data-tab]"),function(b){ if(b.getAttribute("data-tab")===ID) b.classList.add("active"); else b.classList.remove("active"); });
+        draw();
+        return;
+      }
+      if(p){ p.hidden=true; p.style.display="none"; }
+      restoreOthers();
+      return prev.apply(this,arguments);
+    };
+    window.__poWrapped=1;
+  }
+  window.EVETICK.add(function(){ panel(); ensureBtn(); wrap(); enforce(); });
+  setTimeout(function(){ panel(); ensureBtn(); wrap(); },2800);
+})();
+</script>
 </body>
 </html>
 
