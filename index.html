@@ -6340,8 +6340,8 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     {id:"ind",label:"Industry",tabs:["calc","cheapsys","tree","research","invent","react"]},
     {id:"mat",label:"Materials",tabs:["ore","repro","pi"]},
     {id:"acct",label:"Account",tabs:["sso"]},
-    {id:"trade",label:"Trade",tabs:["arb","top","pos","plan","jump","scan","pricecheck"]},
-    {id:"intel",label:"Intel",tabs:["kills","demand","dscan","fits","reference"]}
+    {id:"trade",label:"Trade",tabs:["arb","top","pos","plan","scan","pricecheck"]},
+    {id:"intel",label:"Intel",tabs:["kills","demand","jump","dscan","fits","reference"]}
   ];
   var KEY="eveTabGroupV1";
   function origNav(){ return document.querySelector("nav.tabs"); }
@@ -9041,7 +9041,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       "</div><div class=jm-sec><h5>Jump map</h5>"+mapRow+"</div>";
   }
   function panel(){
-    var k=$("tab-arb"); if(!k) return null;
+    var k=$("tab-kills"); if(!k) return null;
     var p=$("tab-"+ID);
     if(!p){
       p=document.createElement("div"); p.id="tab-"+ID; p.hidden=true; p.style.display="none";
@@ -9088,7 +9088,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     window.switchTab=function(id){
       var p=panel();
       if(id===ID){
-        prev("arb");
+        prev("kills");
         if(p){ p.hidden=false; p.style.display=""; }
         hideOthers();
         var nav=document.querySelector("nav.tabs");
