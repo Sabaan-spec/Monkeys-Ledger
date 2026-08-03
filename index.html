@@ -9573,6 +9573,16 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   setTimeout(mount,3000);
 })();
 </script>
+<style>/* Mobile tabs v1 */
+@media (max-width:760px){
+  #tabs-groups{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  #tabs-groups button{flex:none!important;width:100%;padding:10px 6px;font-size:11px;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #tabs-groups button:nth-child(3){grid-column:1 / -1;order:-1;font-size:12px;padding:12px 6px}
+  #tabs-sub{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  #tabs-sub::-webkit-scrollbar{display:none}
+  #tabs-sub button{flex:0 0 auto;white-space:nowrap}
+}
+</style>
 </body>
 </html>
 
