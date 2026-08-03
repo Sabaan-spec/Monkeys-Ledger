@@ -9803,6 +9803,38 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   setTimeout(function(){ panel(); ensureBtn(); wrap(); },2800);
 })();
 </script>
+<style>/* Orders collapse v1 */
+#ab-myorders.uo-collapsed > *:nth-child(n+3){display:none}
+#uo-toggle{cursor:pointer;user-select:none;color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border:1px solid var(--border);border-radius:2px;margin-left:10px;white-space:nowrap}
+#uo-toggle:hover{color:var(--accent);border-color:var(--accent)}
+</style>
+<script>/* Orders collapse v1 */
+(function(){
+  var KEY="eveOrdersCollapsedV1";
+  function on(){ try{ return localStorage.getItem(KEY)==="1"; }catch(e){ return false; } }
+  function set(v){ try{ localStorage.setItem(KEY,v?"1":"0"); }catch(e){} }
+  function apply(){
+    var s=document.getElementById("ab-myorders"); if(!s) return;
+    var c=on();
+    if(c) s.classList.add("uo-collapsed"); else s.classList.remove("uo-collapsed");
+    var b=document.getElementById("uo-toggle");
+    if(b) b.textContent=c?"\u25b8 show":"\u25be hide";
+  }
+  function mount(){
+    var s=document.getElementById("ab-myorders"); if(!s) return;
+    if(!document.getElementById("uo-toggle")){
+      var head=s.children[0]; if(!head) return;
+      var b=document.createElement("span");
+      b.id="uo-toggle";
+      b.addEventListener("click",function(e){ e.stopPropagation(); set(!on()); apply(); });
+      head.appendChild(b);
+    }
+    apply();
+  }
+  window.EVETICK.add(mount);
+  setTimeout(mount,2500);
+})();
+</script>
 </body>
 </html>
 
