@@ -4595,7 +4595,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   function aggHost(){var t=$('tab-sso');if(!t)return null;var h=$('acc-agg');if(h)return h;var sb=$('sso-body');h=document.createElement('div');h.id='acc-agg';if(sb&&sb.parentNode){sb.parentNode.insertBefore(h,sb.nextSibling);}else{t.appendChild(h);}return h;}
   async function runAgg(force){var a=accounts();if(a.length<2){var hh=$('acc-agg');if(hh)hh.innerHTML='';return;}if(aggRunning)return;if(!force&&Date.now()-aggLast<180000&&$('acc-agg')&&$('acc-agg').innerHTML&&$('acc-agg').innerHTML.indexOf('mc-agg-status')<0)return;aggRunning=true;aggLast=Date.now();var h=aggHost();if(h&&(!h.innerHTML||force))h.innerHTML='<section class="panel" style="padding:14px;margin-bottom:12px"><div style="font-weight:700">\ud83d\udc65 All characters</div><div class="muted small" id="mc-agg-status">Totaling across '+a.length+' characters\u2026</div></section>';var pr={};try{var pp=await fetch(ESI+'/markets/prices/');var pj=await pp.json();(pj||[]).forEach(function(e){pr[e.type_id]=e.average_price||e.adjusted_price||0;});}catch(e){}var rows=[],tot=0;for(var i=0;i<a.length;i++){var one=await aggOne(a[i],pr);if(one){rows.push(one);tot+=one.total;}}renderAgg(rows,tot);aggRunning=false;}
   function renderAgg(rows,tot){var h=aggHost();if(!h)return;rows.sort(function(a,b){return b.total-a.total;});var inner='<div style="font-weight:800;font-size:1.4rem;color:#54c28a">'+isk(tot)+' ISK</div><div class="muted small" style="margin:4px 0">combined net worth across '+rows.length+' characters</div>';rows.forEach(function(r){inner+='<div style="display:flex;justify-content:space-between;font-size:.83rem;padding:2px 0"><span>'+r.name+'</span><span><b>'+isk(r.total)+'</b></span></div>';});inner+='<div class="muted small" style="margin-top:4px"><a href="#" id="mc-agg-refresh" style="color:#7fb0c8">refresh</a></div>';h.innerHTML='<section class="panel" style="padding:14px;margin-bottom:12px"><div style="font-weight:700;margin-bottom:8px">\ud83d\udc65 All characters</div>'+inner+'</section>';var rf=$('mc-agg-refresh');if(rf)rf.addEventListener('click',function(ev){ev.preventDefault();runAgg(true);});}
-  document.addEventListener('click',function(ev){if(!ev.target.closest)return;var rm=ev.target.closest('.mc-rm');if(rm){ev.stopPropagation();var id=rm.getAttribute('data-id');var a=accounts().filter(function(x){return String(x.id)!==String(id);});saveAccounts(a);renderSwitcher();return;}var chip=ev.target.closest('.mc-chip');if(chip){var id=chip.getAttribute('data-id');var acc=null;accounts().forEach(function(x){if(String(x.id)===String(id))acc=x;});if(acc){var cur=activeChar();if(cur&&String(cur.id)===String(id))return;localStorage.setItem('eveSsoRefresh',acc.refresh);localStorage.setItem('eveSsoChar',JSON.stringify({id:acc.id,name:acc.name}));try{localStorage.setItem('eveReturnTab','sso');}catch(e){}(function(){try{sessionStorage.setItem('eveFastSwitch','1')}catch(e){}location.reload()})();}return;}var add=ev.target.closest('#mc-add');if(add){localStorage.removeItem('eveSsoRefresh');localStorage.removeItem('eveSsoChar');try{localStorage.setItem('eveReturnTab','sso');}catch(e){}(function(){try{sessionStorage.setItem('eveFastSwitch','1')}catch(e){}location.reload()})();return;}});
+  document.addEventListener('click',function(ev){if(!ev.target.closest)return;var rm=ev.target.closest('.mc-rm');if(rm){ev.stopPropagation();var id=rm.getAttribute('data-id');var a=window.__ssoSave(accounts().filter(function(x){return String(x.id)!==String(id);}));saveAccounts(a);renderSwitcher();return;}var chip=ev.target.closest('.mc-chip');if(chip){var id=chip.getAttribute('data-id');var acc=null;accounts().forEach(function(x){if(String(x.id)===String(id))acc=x;});if(acc){var cur=activeChar();if(cur&&String(cur.id)===String(id))return;localStorage.setItem('eveSsoRefresh',acc.refresh);localStorage.setItem('eveSsoChar',JSON.stringify({id:acc.id,name:acc.name}));try{localStorage.setItem('eveReturnTab','sso');}catch(e){}(function(){try{sessionStorage.setItem('eveFastSwitch','1')}catch(e){}location.reload()})();}return;}var add=ev.target.closest('#mc-add');if(add){localStorage.removeItem('eveSsoRefresh');localStorage.removeItem('eveSsoChar');try{localStorage.setItem('eveReturnTab','sso');}catch(e){}(function(){try{sessionStorage.setItem('eveFastSwitch','1')}catch(e){}location.reload()})();return;}});
   setInterval(function(){syncActive();var t=$('tab-sso');if(t&&!t.hidden&&t.offsetParent!==null){renderSwitcher();runAgg(false);}},2500);
 })();
 </script>
@@ -9979,6 +9979,21 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   }
   window.EVETICK.add(mount);
   setTimeout(mount,2800);
+})();
+</script>
+<script>/* SSO remove persist v1 */
+(function(){
+  var KEY="eveSsoAccounts";
+  window.__ssoSave=function(list){
+    try{
+      if(!Array.isArray(list)) return list;
+      var cur=null;
+      try{ cur=JSON.parse(localStorage.getItem(KEY)||"null"); }catch(e){}
+      if(cur!==null&&!Array.isArray(cur)) return list;
+      localStorage.setItem(KEY,JSON.stringify(list));
+    }catch(e){}
+    return list;
+  };
 })();
 </script>
 </body>
