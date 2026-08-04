@@ -9836,6 +9836,151 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   setTimeout(mount,2500);
 })();
 </script>
+<style>/* Multibuy v1 */
+#mb-wrap2{border-top:1px solid var(--border);margin-top:16px;padding-top:14px}
+#mb-paste{width:100%;box-sizing:border-box;min-height:120px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:10px 12px;font-family:var(--mono),monospace;font-size:13px;resize:vertical}
+#mb-paste:focus{outline:none;border-color:var(--accent)}
+#mb-bar2{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:10px 0}
+#mb-bar2 label{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center}
+#mb-msg{font-size:12px;color:var(--muted)}
+#mb-msg.bad{color:var(--warn)}
+#mb-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:12px 0}
+.mb-card{border:1px solid var(--border);border-radius:2px;padding:11px 13px;background:var(--bg)}
+.mb-card b{display:block;font-size:19px;font-weight:600;font-variant-numeric:tabular-nums}
+.mb-card span{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.mb-card small{display:block;font-size:11px;color:var(--muted);margin-top:3px}
+#mb-res{overflow-x:auto}
+#mb-res table{width:100%;border-collapse:collapse;min-width:900px}
+#mb-res th,#mb-res td{padding:6px 10px;white-space:nowrap;font-size:13px;border-bottom:1px solid var(--border)}
+#mb-res th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:right}
+#mb-res th:first-child,#mb-res td:first-child{text-align:left;white-space:normal}
+#mb-res td{text-align:right;font-variant-numeric:tabular-nums}
+#mb-res tfoot td{border-top:1px solid var(--accent-dim);font-weight:600}
+#mb-res .best{color:var(--good)}
+#mb-res tr:hover td{background:rgba(84,194,218,.06)}
+#mb-bad{font-size:12px;color:var(--warn);margin-top:8px}
+</style>
+<script>/* Multibuy v1 */
+(function(){
+  var HUBS=[["Jita",60003760],["Amarr",60008494],["Dodixie",60011866],["Rens",60004588],["Hek",60005686]];
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s==null?"":s).replace(/[&<>]/g,function(c){ return c==="&"?"&amp;":(c==="<"?"&lt;":"&gt;"); }); }
+  function isk(v){ try{ return window.eveISK?window.eveISK(v):Math.round(v).toLocaleString(); }catch(e){ return Math.round(v).toLocaleString(); } }
+  function n0(v){ return (Number(v)||0).toLocaleString(); }
+  var NAMES=null, REV=null;
+  function names(){ if(NAMES) return NAMES; try{ NAMES=JSON.parse(localStorage.getItem("eveTypeNamesV1")||"{}"); }catch(e){ NAMES={}; } return NAMES; }
+  function rev(){ if(REV) return REV; REV={}; var n=names(); for(var k in n) REV[String(n[k]).trim().toUpperCase()]=Number(k); return REV; }
+  function parse(txt){
+    var out=[], bad=[], seen={};
+    String(txt||"").split(/\r?\n/).forEach(function(raw){
+      var line=raw.trim();
+      if(!line) return;
+      var name=line, qty=1;
+      if(line.indexOf("\t")>=0){
+        var parts=line.split("\t");
+        name=parts[0].trim();
+        for(var i=1;i<parts.length;i++){ var c=parts[i].replace(/[ ,\.]/g,"").trim(); if(/^\d+$/.test(c)){ qty=Number(c); break; } }
+      } else {
+        var m=line.match(/^(\d[\d,\. ]*)\s*x\s+(.+)$/i);
+        if(m){ qty=Number(m[1].replace(/[,\. ]/g,""))||1; name=m[2].trim(); }
+        else{
+          m=line.match(/^(.+?)\s+x\s*(\d[\d,\. ]*)$/i);
+          if(m){ name=m[1].trim(); qty=Number(m[2].replace(/[,\. ]/g,""))||1; }
+          else{
+            m=line.match(/^(.+?)\s+(\d[\d,\. ]*)$/);
+            if(m&&/[a-z]/i.test(m[1])){ name=m[1].trim(); qty=Number(m[2].replace(/[,\. ]/g,""))||1; }
+          }
+        }
+      }
+      name=name.replace(/\s*\*$/,"").trim();
+      var id=rev()[name.toUpperCase()];
+      if(!id){ bad.push(name); return; }
+      if(seen[id]!=null){ out[seen[id]].qty+=qty; return; }
+      seen[id]=out.length;
+      out.push({id:id,name:names()[id],qty:qty});
+    });
+    return {rows:out, bad:bad};
+  }
+  var busy=false;
+  async function run(){
+    if(busy) return; busy=true;
+    var msg=$("mb-msg");
+    try{
+      var p=parse(($("mb-paste")||{}).value);
+      if(!p.rows.length){ msg.textContent="Nothing recognised \u2014 paste a multibuy list, an inventory copy, or one item per line."; msg.className="bad"; $("mb-res").innerHTML=""; $("mb-sum").innerHTML=""; busy=false; return; }
+      msg.className="";
+      var side=$("mb-side").value;
+      msg.textContent="Pricing "+p.rows.length+" item types across 5 hubs\u2026";
+      var totals={};
+      HUBS.forEach(function(hh){ totals[hh[0]]=0; });
+      for(var i=0;i<p.rows.length;i++){
+        var r=p.rows[i]; r.px={};
+        for(var k=0;k<HUBS.length;k++){
+          var val=0;
+          try{
+            if(window.EVEMKT&&window.EVEMKT.best){
+              var b=await window.EVEMKT.best(String(HUBS[k][1]),Number(r.id));
+              if(b) val=(side==="buy")?(b.buy||0):(b.sell||0);
+            }
+          }catch(e){}
+          r.px[HUBS[k][0]]=val;
+          totals[HUBS[k][0]]+=val*r.qty;
+        }
+        if(i%4===0) msg.textContent="Pricing \u2014 "+(i+1)+" / "+p.rows.length;
+      }
+      var names2=HUBS.map(function(hh){ return hh[0]; });
+      var best=null, worst=null;
+      names2.forEach(function(nm){
+        if(!totals[nm]) return;
+        if(best===null||(side==="buy"?totals[nm]>totals[best]:totals[nm]<totals[best])) best=nm;
+        if(worst===null||(side==="buy"?totals[nm]<totals[worst]:totals[nm]>totals[worst])) worst=nm;
+      });
+      var head="<tr><th>Item</th><th>Qty</th>"+names2.map(function(nm){ return "<th>"+nm+"</th>"; }).join("")+"</tr>";
+      var body=p.rows.map(function(r){
+        var cells=names2.map(function(nm){
+          var v=r.px[nm]*r.qty;
+          var isBest=false;
+          var vals=names2.map(function(x){ return r.px[x]*r.qty; }).filter(function(x){ return x>0; });
+          if(v>0&&vals.length){ isBest=(side==="buy")?(v===Math.max.apply(null,vals)):(v===Math.min.apply(null,vals)); }
+          return "<td class=\""+(isBest?"best":"")+"\">"+(v?isk(v):"\u2014")+"</td>";
+        }).join("");
+        return "<tr><td>"+esc(r.name)+"</td><td>"+n0(r.qty)+"</td>"+cells+"</tr>";
+      }).join("");
+      var foot="<tr><td>Total</td><td>"+n0(p.rows.reduce(function(s,r){ return s+r.qty; },0))+"</td>"+
+        names2.map(function(nm){ return "<td class=\""+(nm===best?"best":"")+"\">"+(totals[nm]?isk(totals[nm]):"\u2014")+"</td>"; }).join("")+"</tr>";
+      $("mb-res").innerHTML="<table><thead>"+head+"</thead><tbody>"+body+"</tbody><tfoot>"+foot+"</tfoot></table>";
+      var spread=(best&&worst&&totals[worst])?Math.abs(totals[best]-totals[worst]):0;
+      $("mb-sum").innerHTML=
+        "<div class=mb-card><b>"+p.rows.length+"</b><span>Item types</span><small>"+n0(p.rows.reduce(function(s,r){ return s+r.qty; },0))+" units</small></div>"+
+        "<div class=mb-card><b class=best>"+esc(best||"\u2014")+"</b><span>"+(side==="buy"?"Best to sell into":"Cheapest to buy")+"</span><small>"+(best?isk(totals[best]):"")+"</small></div>"+
+        "<div class=mb-card><b>"+esc(worst||"\u2014")+"</b><span>"+(side==="buy"?"Worst buyer":"Most expensive")+"</span><small>"+(worst?isk(totals[worst]):"")+"</small></div>"+
+        "<div class=mb-card><b>"+isk(spread)+"</b><span>Hub spread</span><small>difference across hubs</small></div>";
+      $("mb-bad").innerHTML=p.bad.length?("Not recognised ("+p.bad.length+"): "+esc(p.bad.slice(0,12).join(", "))+(p.bad.length>12?"\u2026":"")):"";
+      msg.textContent=(side==="buy"?"Hub buy orders \u2014 what you would be paid selling instantly.":"Hub sell orders \u2014 what it costs to buy instantly.")+" Green marks the best hub per row.";
+    }catch(e){ if(msg){ msg.textContent="Could not price that list."; msg.className="bad"; } }
+    busy=false;
+  }
+  function mount(){
+    var host=$("pc-note")||$("pc-out"); if(!host||$("mb-wrap2")) return;
+    var d=document.createElement("div");
+    d.id="mb-wrap2";
+    d.innerHTML="<h4 style=\"margin:0 0 4px\">\ud83d\udccb Multibuy \u2014 price a whole list</h4>"+
+      "<div style=\"font-size:12px;color:var(--muted);margin-bottom:8px\">Paste an EVE multibuy list, an inventory copy, or a fit \u2014 one item per line. Quantities are read from <b>1000 Tritanium</b>, <b>Tritanium 1000</b>, <b>3x Warrior II</b> or a tab-separated inventory paste. Repeated lines are added together.</div>"+
+      "<textarea id=mb-paste placeholder=\"Tritanium 1000&#10;3x 150mm Light AutoCannon II&#10;Pyerite\t500\"></textarea>"+
+      "<div id=mb-bar2><button id=mb-run class=tab style=\"padding:8px 18px\">Price list</button>"+
+      "<label>Prices <select id=mb-side style=\"background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:6px 9px;font-family:inherit;font-size:13px\">"+
+      "<option value=buy>Buy orders (what you get paid)</option><option value=sell>Sell orders (cost to buy)</option></select></label>"+
+      "<button id=mb-clear class=tab style=\"padding:8px 14px\">Clear</button><span id=mb-msg></span></div>"+
+      "<div id=mb-sum></div><div id=mb-res></div><div id=mb-bad></div>";
+    host.parentElement.insertBefore(d,host);
+    $("mb-run").addEventListener("click",run);
+    $("mb-side").addEventListener("change",function(){ if(($("mb-paste").value||"").trim()) run(); });
+    $("mb-clear").addEventListener("click",function(){ $("mb-paste").value=""; $("mb-res").innerHTML=""; $("mb-sum").innerHTML=""; $("mb-bad").innerHTML=""; $("mb-msg").textContent=""; });
+  }
+  window.EVETICK.add(mount);
+  setTimeout(mount,2800);
+})();
+</script>
 </body>
 </html>
 
