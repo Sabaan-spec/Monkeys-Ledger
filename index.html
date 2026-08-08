@@ -9565,7 +9565,23 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   function esc(s){ return String(s==null?"":s).replace(/[&<>]/g,function(c){ return c==="&"?"&amp;":(c==="<"?"&lt;":"&gt;"); }); }
   function isk(v){ try{ return window.eveISK?window.eveISK(v):Math.round(v).toLocaleString(); }catch(e){ return Math.round(v).toLocaleString(); } }
   function n0(v){ return (Number(v)||0).toLocaleString(); }
-  var NAMES=null, REV=null;
+  var NAMES=null, REV=null, EXTRA={};
+  async function resolveMissing(rows){
+    var want=[], seen={};
+    rows.forEach(function(r){ if(!r.id){ var u=r.name.toUpperCase(); if(!seen[u]){ seen[u]=1; want.push(r.name); } } });
+    if(!want.length) return [];
+    var found={};
+    for(var s=0;s<want.length;s+=900){
+      try{
+        var res=await fetch("https://esi.evetech.net/latest/universe/ids/",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(want.slice(s,s+900))});
+        if(res.ok){ var jj=await res.json(); (jj.inventory_types||[]).forEach(function(x){ found[String(x.name).toUpperCase()]=x.id; EXTRA[String(x.name).toUpperCase()]=x.id; }); }
+      }catch(e){}
+    }
+    var still=[];
+    rows.forEach(function(r){ if(!r.id){ var id2=found[r.name.toUpperCase()]; if(id2){ r.id=id2; } } });
+    rows.forEach(function(r){ if(!r.id&&still.indexOf(r.name)<0) still.push(r.name); });
+    return still;
+  }
   function names(){ if(NAMES) return NAMES; try{ NAMES=JSON.parse(localStorage.getItem("eveTypeNamesV1")||"{}"); }catch(e){ NAMES={}; } return NAMES; }
   function rev(){ if(REV) return REV; REV={}; var n=names(); for(var k in n) REV[String(n[k]).trim().toUpperCase()]=Number(k); return REV; }
   function parse(txt){
@@ -9591,9 +9607,9 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         }
       }
       name=name.replace(/\s*\*$/,"").trim();
-      var id=rev()[name.toUpperCase()];
-      if(!id){ bad.push(name); return; }
-      if(seen[id]!=null){ out[seen[id]].qty+=qty; return; }
+      var id=rev()[name.toUpperCase()]||EXTRA[name.toUpperCase()]||0;
+      if(!id){ out.push({id:0,name:name,qty:qty}); return; }
+      if(id&&seen[id]!=null){ out[seen[id]].qty+=qty; return; }
       seen[id]=out.length;
       out.push({id:id,name:names()[id],qty:qty});
     });
@@ -9605,6 +9621,12 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     var msg=$("mb-msg");
     try{
       var p=parse(($("mb-paste")||{}).value);
+      if(p.rows.some(function(r){ return !r.id; })){
+        msg.textContent="Looking up item names\u2026"; msg.className="";
+        var still=await resolveMissing(p.rows);
+        p.bad=p.bad.concat(still);
+        p.rows=p.rows.filter(function(r){ return !!r.id; });
+      }
       if(!p.rows.length){ msg.textContent="Nothing recognised \u2014 paste a multibuy list, an inventory copy, or one item per line."; msg.className="bad"; $("mb-res").innerHTML=""; $("mb-sum").innerHTML=""; busy=false; return; }
       msg.className="";
       var side=$("mb-side").value;
