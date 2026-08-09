@@ -4470,6 +4470,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   function renderAgg(rows,tot){var h=aggHost();if(!h)return;rows.sort(function(a,b){return b.total-a.total;});var inner='<div style="font-weight:800;font-size:1.4rem;color:#54c28a">'+isk(tot)+' ISK</div><div class="muted small" style="margin:4px 0">combined net worth across '+rows.length+' characters</div>';rows.forEach(function(r){inner+='<div style="display:flex;justify-content:space-between;font-size:.83rem;padding:2px 0"><span>'+r.name+'</span><span><b>'+isk(r.total)+'</b></span></div>';});inner+='<div class="muted small" style="margin-top:4px"><a href="#" id="mc-agg-refresh" style="color:#7fb0c8">refresh</a></div>';h.innerHTML='<section class="panel" style="padding:14px;margin-bottom:12px"><div style="font-weight:700;margin-bottom:8px">\ud83d\udc65 All characters</div>'+inner+'</section>';var rf=$('mc-agg-refresh');if(rf)rf.addEventListener('click',function(ev){ev.preventDefault();runAgg(true);});}
   document.addEventListener('click',function(ev){if(!ev.target.closest)return;var rm=ev.target.closest('.mc-rm');if(rm){ev.stopPropagation();var id=rm.getAttribute('data-id');var a=window.__ssoSave(accounts().filter(function(x){return String(x.id)!==String(id);}));saveAccounts(a);renderSwitcher();return;}var chip=ev.target.closest('.mc-chip');if(chip){var id=chip.getAttribute('data-id');var acc=null;accounts().forEach(function(x){if(String(x.id)===String(id))acc=x;});if(acc){var cur=activeChar();if(cur&&String(cur.id)===String(id))return;localStorage.setItem('eveSsoRefresh',acc.refresh);localStorage.setItem('eveSsoChar',JSON.stringify({id:acc.id,name:acc.name}));try{localStorage.setItem('eveReturnTab','sso');}catch(e){}(function(){try{sessionStorage.setItem('eveFastSwitch','1')}catch(e){}location.reload()})();}return;}var add=ev.target.closest('#mc-add');if(add){localStorage.removeItem('eveSsoRefresh');localStorage.removeItem('eveSsoChar');try{localStorage.setItem('eveReturnTab','sso');}catch(e){}(function(){try{sessionStorage.setItem('eveFastSwitch','1')}catch(e){}location.reload()})();return;}});
   setInterval(function(){syncActive();var t=$('tab-sso');if(t&&!t.hidden&&t.offsetParent!==null){renderSwitcher();runAgg(false);}},2500);
+  window.EVEMULTI={ accounts:accounts, mint:mint };
 })();
 </script>
 <script>
@@ -9714,6 +9715,111 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     }catch(e){}
     return list;
   };
+})();
+</script>
+<style>/* Assets all chars v1 */
+#aa-bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:8px 0}
+#aa-find{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:8px 11px;font-family:inherit;font-size:14px;min-width:230px}
+#aa-msg{font-size:12px;color:var(--muted)}#aa-msg.bad{color:var(--warn)}
+#aa-chars{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:10px 0}
+.aa-c{border:1px solid var(--border);border-radius:2px;padding:9px 12px;background:var(--bg)}
+.aa-c b{display:block;font-size:17px;font-variant-numeric:tabular-nums}
+.aa-c span{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+#aa-out{overflow-x:auto;max-height:420px;overflow-y:auto}
+#aa-out table{width:100%;border-collapse:collapse;min-width:520px}
+#aa-out th,#aa-out td{padding:5px 10px;font-size:13px;border-bottom:1px solid var(--border);white-space:nowrap}
+#aa-out th{position:sticky;top:0;background:var(--panel);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:right}
+#aa-out th:first-child,#aa-out td:first-child{text-align:left;white-space:normal}
+#aa-out td{text-align:right;font-variant-numeric:tabular-nums}
+</style>
+<script>/* Assets all chars v1 */
+(function(){
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s==null?"":s).replace(/[&<>]/g,function(c){ return c==="&"?"&amp;":(c==="<"?"&lt;":"&gt;"); }); }
+  function n0(v){ return (Number(v)||0).toLocaleString(); }
+  var DATA=null, busy=false;
+  function msg(s,bad){ var e=$("aa-msg"); if(e){ e.textContent=s; e.className=bad?"bad":""; } }
+  async function pageAssets(cid,token){
+    var out=[], page=1, pages=1;
+    while(page<=pages&&page<=60){
+      var r=await fetch("https://esi.evetech.net/latest/characters/"+cid+"/assets/?page="+page,{headers:{Authorization:"Bearer "+token}});
+      if(!r.ok) break;
+      pages=Number(r.headers.get("x-pages")||1);
+      var a=await r.json();
+      if(!a||!a.length) break;
+      out=out.concat(a);
+      page++;
+    }
+    return out;
+  }
+  async function scan(){
+    if(busy) return; busy=true;
+    try{
+      if(!window.EVEMULTI||!window.EVEMULTI.accounts){ msg("Character list unavailable.",1); busy=false; return; }
+      var accs=window.EVEMULTI.accounts()||[];
+      if(!accs.length){ msg("Connect a character on the Account tab first.",1); busy=false; return; }
+      var byType={}, perChar=[], failed=[];
+      for(var i=0;i<accs.length;i++){
+        var acc=accs[i];
+        var nm=acc.name||("Character "+(i+1));
+        msg("Reading "+nm+" \u2014 "+(i+1)+" of "+accs.length+"\u2026");
+        var tok=null;
+        try{ tok=await window.EVEMULTI.mint(acc); }catch(e){}
+        if(tok&&typeof tok==="object") tok=tok.access_token||tok.token||null;
+        if(!tok){ failed.push(nm); continue; }
+        var cid=acc.character_id||acc.CharacterID;
+        var items=[];
+        try{ items=await pageAssets(cid,tok); }catch(e){}
+        if(!items.length){ failed.push(nm); continue; }
+        perChar.push({name:nm,count:items.length});
+        items.forEach(function(it){
+          var k=it.type_id;
+          if(!byType[k]) byType[k]={qty:0,who:{}};
+          byType[k].qty+=(it.quantity||1);
+          byType[k].who[nm]=(byType[k].who[nm]||0)+(it.quantity||1);
+        });
+      }
+      var ids=Object.keys(byType).map(Number);
+      if(!ids.length){ msg("No assets returned.",1); busy=false; return; }
+      msg("Naming "+n0(ids.length)+" item types\u2026");
+      var names={};
+      try{ names=await EVEAPI.names(ids)||{}; }catch(e){}
+      DATA={byType:byType,names:names,perChar:perChar,failed:failed};
+      render();
+      msg(perChar.length+" characters scanned"+(failed.length?(" \u2014 "+failed.length+" could not be read: "+esc(failed.join(", "))):"")+". Totals are combined across every connected character.",failed.length>0);
+    }catch(e){ msg("Scan failed.",1); }
+    busy=false;
+  }
+  function render(){
+    if(!DATA) return;
+    var q=(($("aa-find")||{}).value||"").trim().toUpperCase();
+    var rows=Object.keys(DATA.byType).map(function(k){
+      return {id:k, name:DATA.names[k]||("Type "+k), qty:DATA.byType[k].qty, who:DATA.byType[k].who};
+    });
+    if(q) rows=rows.filter(function(r){ return r.name.toUpperCase().indexOf(q)>=0; });
+    rows.sort(function(a,b){ return b.qty-a.qty; });
+    var top=rows.slice(0,300);
+    $("aa-chars").innerHTML=DATA.perChar.map(function(c){ return "<div class=aa-c><b>"+n0(c.count)+"</b><span>"+esc(c.name)+"</span></div>"; }).join("");
+    $("aa-out").innerHTML="<table><thead><tr><th>Item</th><th>Total</th><th>Held by</th></tr></thead><tbody>"+
+      top.map(function(r){
+        var who=Object.keys(r.who).map(function(n){ return esc(n)+" "+n0(r.who[n]); }).join(", ");
+        return "<tr><td>"+esc(r.name)+"</td><td>"+n0(r.qty)+"</td><td style=\"text-align:left;color:var(--muted);font-size:12px\">"+who+"</td></tr>";
+      }).join("")+"</tbody></table>"+(rows.length>300?("<div style=\"font-size:12px;color:var(--muted);padding:6px 2px\">Showing 300 of "+n0(rows.length)+" \u2014 use the filter.</div>"):"");
+  }
+  function mount(){
+    var host=$("acc-loc"); if(!host||$("aa-panel")) return;
+    var d=document.createElement("div"); d.id="aa-panel";
+    d.innerHTML="<section class=\"panel\"><div><h4>\ud83d\udce6 Assets across all characters</h4>"+
+      "<div style=\"font-size:12px;color:var(--muted);margin-bottom:6px\">Reads every connected character with its own token and sums the results, so counts include alts. Location breakdown for the active character is in the card above.</div>"+
+      "<div id=aa-bar><button id=aa-run class=tab style=\"padding:8px 16px\">Scan all characters</button>"+
+      "<input id=aa-find placeholder=\"filter, e.g. Obelisk\" autocomplete=off><span id=aa-msg></span></div>"+
+      "<div id=aa-chars></div><div id=aa-out></div></div></section>";
+    host.parentElement.insertBefore(d,host.nextSibling);
+    $("aa-run").addEventListener("click",scan);
+    $("aa-find").addEventListener("input",render);
+  }
+  window.EVETICK.add(mount);
+  setTimeout(mount,3000);
 })();
 </script>
 </body>
