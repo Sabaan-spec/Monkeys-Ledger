@@ -9827,9 +9827,10 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         for(var bi=0;bi<bpoIds.length;bi++){
           var bid=bpoIds[bi], v=0, src="";
           try{
-            if(window.EVEMKT&&window.EVEMKT.best){
-              var bb=await window.EVEMKT.best("60003760",bid);
-              if(bb&&bb.sell>0){ v=bb.sell; src="Jita sell"; }
+            var mr=await fetch("https://esi.evetech.net/latest/markets/10000002/orders/?order_type=sell&type_id="+bid);
+            if(mr.ok){
+              var ma=await mr.json();
+              if(ma&&ma.length){ v=Math.min.apply(null,ma.map(function(x){ return x.price; })); src="lowest sell, The Forge"; }
             }
           }catch(e){}
           if(!v&&avg[bid]){ v=avg[bid]; src="CCP average"; }
