@@ -9719,6 +9719,9 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
 </script>
 <style>/* Assets all chars v1 */
 #aa-panel{column-span:all;-webkit-column-span:all;break-inside:avoid;display:block;width:100%}
+#aa-panel section.panel>div{display:block!important}
+#aa-out table{min-width:0}
+#aa-out th:last-child,#aa-out td:last-child{white-space:normal}
 #aa-panel h4{margin:0 0 4px}
 #aa-bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:8px 0}
 #aa-find{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:8px 11px;font-family:inherit;font-size:14px;min-width:230px}
@@ -9816,7 +9819,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     var host=$("acc-loc"); if(!host||$("aa-panel")) return;
     var d=document.createElement("div"); d.id="aa-panel";
     d.innerHTML="<section class=\"panel\"><div><h4>\ud83d\udce6 Assets across all characters</h4>"+
-      "<div style=\"font-size:12px;color:var(--muted);margin-bottom:6px\">Reads every connected character with its own token and sums the results, so counts include alts. Location breakdown for the active character is in the card above.</div>"+
+      
       "<div id=aa-bar><button id=aa-run class=tab style=\"padding:8px 16px\">Scan all characters</button>"+
       "<input id=aa-find placeholder=\"filter, e.g. Obelisk\" autocomplete=off><span id=aa-msg></span></div>"+
       "<div id=aa-chars></div><div id=aa-out></div></div></section>";
