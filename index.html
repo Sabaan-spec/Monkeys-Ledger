@@ -9766,11 +9766,11 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         var tok=null;
         try{ tok=await window.EVEMULTI.mint(acc); }catch(e){}
         if(tok&&typeof tok==="object") tok=tok.access_token||tok.token||null;
-        if(!tok){ failed.push(nm); continue; }
-        var cid=acc.character_id||acc.CharacterID;
+        if(!tok){ failed.push(nm+" (token refused)"); continue; }
+        var cid=acc.id||acc.character_id||acc.CharacterID;
         var items=[];
         try{ items=await pageAssets(cid,tok); }catch(e){}
-        if(!items.length){ failed.push(nm); continue; }
+        if(!items.length){ failed.push(nm+" (no items / cid "+cid+")"); continue; }
         perChar.push({name:nm,count:items.length});
         items.forEach(function(it){
           var k=it.type_id;
@@ -9780,7 +9780,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         });
       }
       var ids=Object.keys(byType).map(Number);
-      if(!ids.length){ msg("No assets returned.",1); busy=false; return; }
+      if(!ids.length){ msg("No assets returned. "+(failed.length?("Failures: "+esc(failed.join("; "))):(accs.length+" characters, none produced items.")),1); busy=false; return; }
       msg("Naming "+n0(ids.length)+" item types\u2026");
       var names={};
       try{ names=await EVEAPI.names(ids)||{}; }catch(e){}
