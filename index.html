@@ -9765,7 +9765,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       if(!window.EVEMULTI||!window.EVEMULTI.accounts){ msg("Character list unavailable.",1); busy=false; return; }
       var accs=window.EVEMULTI.accounts()||[];
       if(!accs.length){ msg("Connect a character on the Account tab first.",1); busy=false; return; }
-      var byType={}, perChar=[], failed=[];
+      var byType={}, perChar=[], failed=[], BP={O:{},C:{}};
       for(var i=0;i<accs.length;i++){
         var acc=accs[i];
         var nm=acc.name||("Character "+(i+1));
@@ -9779,6 +9779,28 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         try{ items=await pageAssets(cid,tok); }catch(e){}
         if(!items.length){ failed.push(nm+" (no items / cid "+cid+")"); continue; }
         perChar.push({name:nm,count:items.length});
+        try{
+          var bp=[], bpage=1, bpages=1;
+          while(bpage<=bpages&&bpage<=20){
+            var br=await fetch("https://esi.evetech.net/latest/characters/"+cid+"/blueprints/?page="+bpage,{headers:{Authorization:"Bearer "+tok}});
+            if(!br.ok) break;
+            bpages=Number(br.headers.get("x-pages")||1);
+            var ba=await br.json();
+            if(!ba||!ba.length) break;
+            bp=bp.concat(ba); bpage++;
+          }
+          bp.forEach(function(b){
+            var isBPO=(b.quantity===-1)||(b.runs===-1);
+            var key=isBPO?"O":"C";
+            if(!BP[key]) BP[key]={};
+            var t2=b.type_id;
+            if(!BP[key][t2]) BP[key][t2]={n:0,who:{},me:0,te:0};
+            BP[key][t2].n+=1;
+            BP[key][t2].who[nm]=(BP[key][t2].who[nm]||0)+1;
+            if((b.material_efficiency||0)>BP[key][t2].me) BP[key][t2].me=b.material_efficiency||0;
+            if((b.time_efficiency||0)>BP[key][t2].te) BP[key][t2].te=b.time_efficiency||0;
+          });
+        }catch(e){}
         items.forEach(function(it){
           var k=it.type_id;
           if(!byType[k]) byType[k]={qty:0,who:{}};
@@ -9791,7 +9813,17 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       msg("Naming "+n0(ids.length)+" item types\u2026");
       var names={};
       try{ names=await EVEAPI.names(ids)||{}; }catch(e){}
-      DATA={byType:byType,names:names,perChar:perChar,failed:failed};
+      var avg={};
+      try{
+        var pr=await fetch("https://esi.evetech.net/latest/markets/prices/").then(function(r){ return r.json(); });
+        pr.forEach(function(p){ if(p.average_price) avg[p.type_id]=p.average_price; });
+      }catch(e){}
+      var bpoIds=Object.keys(BP.O).map(Number);
+      if(bpoIds.length){
+        var missing=bpoIds.filter(function(x){ return !names[x]; });
+        if(missing.length){ try{ var mn=await EVEAPI.names(missing)||{}; for(var q in mn) names[q]=mn[q]; }catch(e){} }
+      }
+      DATA={byType:byType,names:names,perChar:perChar,failed:failed,BP:BP,avg:avg};
       render();
       msg(perChar.length+" characters scanned"+(failed.length?(" \u2014 "+failed.length+" could not be read: "+esc(failed.join(", "))):"")+". Totals are combined across every connected character.",failed.length>0);
     }catch(e){ msg("Scan failed.",1); }
@@ -9807,8 +9839,14 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     rows.sort(function(a,b){ return b.qty-a.qty; });
     var top=rows.slice(0,300);
     var totEntries=0; DATA.perChar.forEach(function(c){ totEntries+=c.count; });
+    var bpoN=0, bpoVal=0, bpcN=0;
+    if(DATA.BP){
+      Object.keys(DATA.BP.O||{}).forEach(function(k){ var e2=DATA.BP.O[k]; bpoN+=e2.n; bpoVal+=(DATA.avg[k]||0)*e2.n; });
+      Object.keys(DATA.BP.C||{}).forEach(function(k){ bpcN+=DATA.BP.C[k].n; });
+    }
     var matchQty=0; rows.forEach(function(r){ matchQty+=r.qty; });
-    $("aa-chars").innerHTML="<div class=aa-sum>"+DATA.perChar.length+" characters \u00b7 "+n0(totEntries)+" asset entries"+(q?(" \u00b7 <b>"+n0(rows.length)+"</b> matching \u201c"+esc(q.toLowerCase())+"\u201d, <b>"+n0(matchQty)+"</b> units"):"")+"</div>";
+    $("aa-chars").innerHTML="<div class=aa-sum>"+DATA.perChar.length+" characters \u00b7 "+n0(totEntries)+" asset entries"+(q?(" \u00b7 <b>"+n0(rows.length)+"</b> matching \u201c"+esc(q.toLowerCase())+"\u201d, <b>"+n0(matchQty)+"</b> units"):"")+"</div>"+
+      (bpoN?("<div class=aa-sum><b>"+n0(bpoN)+"</b> blueprint originals \u00b7 est. <b>"+n0(Math.round(bpoVal))+" ISK</b>"+(bpcN?(" \u00b7 "+n0(bpcN)+" copies (not valued)"):"")+" \u00b7 <span style=\"color:var(--muted)\">CCP average price; BPOs are not market-traded and research level is not counted</span></div>"):"");
     $("aa-out").innerHTML="<table><thead><tr><th>Item</th><th>Total</th><th>Held by</th></tr></thead><tbody>"+
       top.map(function(r){
         var who=Object.keys(r.who).map(function(n){ return esc(n)+" "+n0(r.who[n]); }).join(", ");
