@@ -9718,6 +9718,8 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
 })();
 </script>
 <style>/* Assets all chars v1 */
+#aa-panel{column-span:all;-webkit-column-span:all;break-inside:avoid;display:block;width:100%}
+#aa-panel h4{margin:0 0 4px}
 #aa-bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:8px 0}
 #aa-find{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:8px 11px;font-family:inherit;font-size:14px;min-width:230px}
 #aa-msg{font-size:12px;color:var(--muted)}#aa-msg.bad{color:var(--warn)}
@@ -9799,7 +9801,13 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     if(q) rows=rows.filter(function(r){ return r.name.toUpperCase().indexOf(q)>=0; });
     rows.sort(function(a,b){ return b.qty-a.qty; });
     var top=rows.slice(0,300);
-    $("aa-chars").innerHTML=DATA.perChar.map(function(c){ return "<div class=aa-c><b>"+n0(c.count)+"</b><span>"+esc(c.name)+"</span></div>"; }).join("");
+    var per={};
+    if(q){ rows.forEach(function(r){ for(var w in r.who){ per[w]=(per[w]||0)+r.who[w]; } }); }
+    $("aa-chars").innerHTML=DATA.perChar.map(function(c){
+      var v=q?(per[c.name]||0):c.count;
+      var lab=q?(esc(c.name)+' \u00b7 matching'):(esc(c.name)+' \u00b7 total entries');
+      return "<div class=aa-c><b>"+n0(v)+"</b><span>"+lab+"</span></div>";
+    }).join("");
     $("aa-out").innerHTML="<table><thead><tr><th>Item</th><th>Total</th><th>Held by</th></tr></thead><tbody>"+
       top.map(function(r){
         var who=Object.keys(r.who).map(function(n){ return esc(n)+" "+n0(r.who[n]); }).join(", ");
