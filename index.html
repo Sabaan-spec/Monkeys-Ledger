@@ -9821,11 +9821,26 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         pr.forEach(function(p){ if(p.average_price) avg[p.type_id]=p.average_price; });
       }catch(e){}
       var bpoIds=Object.keys(BP.O).map(Number);
+      var bpPrice={};
+      if(bpoIds.length){
+        msg("Pricing "+bpoIds.length+" blueprint types\u2026");
+        for(var bi=0;bi<bpoIds.length;bi++){
+          var bid=bpoIds[bi], v=0, src="";
+          try{
+            if(window.EVEMKT&&window.EVEMKT.best){
+              var bb=await window.EVEMKT.best("60003760",bid);
+              if(bb&&bb.sell>0){ v=bb.sell; src="Jita sell"; }
+            }
+          }catch(e){}
+          if(!v&&avg[bid]){ v=avg[bid]; src="CCP average"; }
+          bpPrice[bid]={v:v,src:src||"no price"};
+        }
+      }
       if(bpoIds.length){
         var missing=bpoIds.filter(function(x){ return !names[x]; });
         if(missing.length){ try{ var mn=await EVEAPI.names(missing)||{}; for(var q in mn) names[q]=mn[q]; }catch(e){} }
       }
-      DATA={byType:byType,names:names,perChar:perChar,failed:failed,BP:BP,avg:avg};
+      DATA={byType:byType,names:names,perChar:perChar,failed:failed,BP:BP,avg:avg,bpPrice:bpPrice};
       render();
       msg(perChar.length+" characters scanned"+(failed.length?(" \u2014 "+failed.length+" could not be read: "+esc(failed.join(", "))):"")+". Totals are combined across every connected character.",failed.length>0);
     }catch(e){ msg("Scan failed.",1); }
@@ -9843,7 +9858,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     var totEntries=0; DATA.perChar.forEach(function(c){ totEntries+=c.count; });
     var bpoN=0, bpoVal=0, bpcN=0;
     if(DATA.BP){
-      Object.keys(DATA.BP.O||{}).forEach(function(k){ var e2=DATA.BP.O[k]; bpoN+=e2.n; bpoVal+=(DATA.avg[k]||0)*e2.n; });
+      Object.keys(DATA.BP.O||{}).forEach(function(k){ var e2=DATA.BP.O[k]; bpoN+=e2.n; var pv=(DATA.bpPrice&&DATA.bpPrice[k])?DATA.bpPrice[k].v:(DATA.avg[k]||0); bpoVal+=pv*e2.n; });
       Object.keys(DATA.BP.C||{}).forEach(function(k){ bpcN+=DATA.BP.C[k].n; });
     }
     var matchQty=0; rows.forEach(function(r){ matchQty+=r.qty; });
@@ -9853,7 +9868,8 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     if(DATA.BP&&DATA.BP.O){
       bpoRows=Object.keys(DATA.BP.O).map(function(k){
         var e2=DATA.BP.O[k];
-        return {id:k, name:(DATA.names[k]||("Type "+k)), n:e2.n, me:e2.me, te:e2.te, who:e2.who, val:(DATA.avg[k]||0)*e2.n};
+        var pinfo=(DATA.bpPrice&&DATA.bpPrice[k])||{v:(DATA.avg[k]||0),src:(DATA.avg[k]?"CCP average":"no price")};
+        return {id:k, name:(DATA.names[k]||("Type "+k)), n:e2.n, me:e2.me, te:e2.te, who:e2.who, val:pinfo.v*e2.n, src:pinfo.src};
       });
       if(q) bpoRows=bpoRows.filter(function(r){ return r.name.toUpperCase().indexOf(q)>=0; });
       bpoRows.sort(function(a,b){ return b.val-a.val; });
@@ -9862,7 +9878,8 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       bpoRows.slice(0,200).map(function(r){
         var who=Object.keys(r.who).map(function(nn){ return esc(nn)+" "+n0(r.who[nn]); }).join(", ");
         var res=(r.me||r.te)?("<span class=aa-res>"+n0(r.me)+" / "+n0(r.te)+"</span>"):"<span style=\"color:var(--muted)\">unresearched</span>";
-        return "<tr><td>"+esc(r.name)+"</td><td>"+n0(r.n)+"</td><td>"+res+"</td><td>"+n0(Math.round(r.val))+"</td><td style=\"text-align:left;color:var(--muted);font-size:12px\">"+who+"</td></tr>";
+        var vcell=r.val?(n0(Math.round(r.val))+"<div style=\"font-size:10px;color:var(--muted)\">"+esc(r.src)+"</div>"):("<span style=\"color:var(--muted)\">no price</span>");
+        return "<tr><td>"+esc(r.name)+"</td><td>"+n0(r.n)+"</td><td>"+res+"</td><td>"+vcell+"</td><td style=\"text-align:left;color:var(--muted);font-size:12px\">"+who+"</td></tr>";
       }).join("")+"</tbody></table>"):"";
     $("aa-out").innerHTML=bpoHtml+(bpoRows.length?"<div class=aa-sub>All assets</div>":"")+"<table><thead><tr><th>Item</th><th>Total</th><th>Held by</th></tr></thead><tbody>"+
       top.map(function(r){
