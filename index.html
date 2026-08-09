@@ -9723,7 +9723,9 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
 #aa-bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:8px 0}
 #aa-find{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:8px 11px;font-family:inherit;font-size:14px;min-width:230px}
 #aa-msg{font-size:12px;color:var(--muted)}#aa-msg.bad{color:var(--warn)}
-#aa-chars{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:10px 0}
+#aa-chars{margin:8px 0}
+.aa-sum{font-size:13px;color:var(--muted)}
+.aa-sum b{color:var(--text);font-weight:600}
 .aa-c{border:1px solid var(--border);border-radius:2px;padding:9px 12px;background:var(--bg)}
 .aa-c b{display:block;font-size:17px;font-variant-numeric:tabular-nums}
 .aa-c span{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
@@ -9801,13 +9803,9 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     if(q) rows=rows.filter(function(r){ return r.name.toUpperCase().indexOf(q)>=0; });
     rows.sort(function(a,b){ return b.qty-a.qty; });
     var top=rows.slice(0,300);
-    var per={};
-    if(q){ rows.forEach(function(r){ for(var w in r.who){ per[w]=(per[w]||0)+r.who[w]; } }); }
-    $("aa-chars").innerHTML=DATA.perChar.map(function(c){
-      var v=q?(per[c.name]||0):c.count;
-      var lab=q?(esc(c.name)+' \u00b7 matching'):(esc(c.name)+' \u00b7 total entries');
-      return "<div class=aa-c><b>"+n0(v)+"</b><span>"+lab+"</span></div>";
-    }).join("");
+    var totEntries=0; DATA.perChar.forEach(function(c){ totEntries+=c.count; });
+    var matchQty=0; rows.forEach(function(r){ matchQty+=r.qty; });
+    $("aa-chars").innerHTML="<div class=aa-sum>"+DATA.perChar.length+" characters \u00b7 "+n0(totEntries)+" asset entries"+(q?(" \u00b7 <b>"+n0(rows.length)+"</b> matching \u201c"+esc(q.toLowerCase())+"\u201d, <b>"+n0(matchQty)+"</b> units"):"")+"</div>";
     $("aa-out").innerHTML="<table><thead><tr><th>Item</th><th>Total</th><th>Held by</th></tr></thead><tbody>"+
       top.map(function(r){
         var who=Object.keys(r.who).map(function(n){ return esc(n)+" "+n0(r.who[n]); }).join(", ");
