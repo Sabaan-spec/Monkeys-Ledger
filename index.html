@@ -9722,6 +9722,8 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
 #aa-panel section.panel>div{display:block!important}
 #aa-out table{min-width:0}
 #aa-out th:last-child,#aa-out td:last-child{white-space:normal}
+.aa-sub{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--accent);margin:12px 0 4px;font-weight:600}
+.aa-res{color:var(--good);font-variant-numeric:tabular-nums}
 #aa-panel h4{margin:0 0 4px}
 #aa-bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:8px 0}
 #aa-find{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:8px 11px;font-family:inherit;font-size:14px;min-width:230px}
@@ -9847,7 +9849,22 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     var matchQty=0; rows.forEach(function(r){ matchQty+=r.qty; });
     $("aa-chars").innerHTML="<div class=aa-sum>"+DATA.perChar.length+" characters \u00b7 "+n0(totEntries)+" asset entries"+(q?(" \u00b7 <b>"+n0(rows.length)+"</b> matching \u201c"+esc(q.toLowerCase())+"\u201d, <b>"+n0(matchQty)+"</b> units"):"")+"</div>"+
       (bpoN?("<div class=aa-sum><b>"+n0(bpoN)+"</b> blueprint originals \u00b7 est. <b>"+n0(Math.round(bpoVal))+" ISK</b>"+(bpcN?(" \u00b7 "+n0(bpcN)+" copies (not valued)"):"")+" \u00b7 <span style=\"color:var(--muted)\">CCP average price; BPOs are not market-traded and research level is not counted</span></div>"):"");
-    $("aa-out").innerHTML="<table><thead><tr><th>Item</th><th>Total</th><th>Held by</th></tr></thead><tbody>"+
+    var bpoRows=[];
+    if(DATA.BP&&DATA.BP.O){
+      bpoRows=Object.keys(DATA.BP.O).map(function(k){
+        var e2=DATA.BP.O[k];
+        return {id:k, name:(DATA.names[k]||("Type "+k)), n:e2.n, me:e2.me, te:e2.te, who:e2.who, val:(DATA.avg[k]||0)*e2.n};
+      });
+      if(q) bpoRows=bpoRows.filter(function(r){ return r.name.toUpperCase().indexOf(q)>=0; });
+      bpoRows.sort(function(a,b){ return b.val-a.val; });
+    }
+    var bpoHtml=bpoRows.length?("<div class=aa-sub>Blueprint originals</div><table><thead><tr><th>Blueprint</th><th>Qty</th><th>Best ME / TE</th><th>Est. value</th><th>Held by</th></tr></thead><tbody>"+
+      bpoRows.slice(0,200).map(function(r){
+        var who=Object.keys(r.who).map(function(nn){ return esc(nn)+" "+n0(r.who[nn]); }).join(", ");
+        var res=(r.me||r.te)?("<span class=aa-res>"+n0(r.me)+" / "+n0(r.te)+"</span>"):"<span style=\"color:var(--muted)\">unresearched</span>";
+        return "<tr><td>"+esc(r.name)+"</td><td>"+n0(r.n)+"</td><td>"+res+"</td><td>"+n0(Math.round(r.val))+"</td><td style=\"text-align:left;color:var(--muted);font-size:12px\">"+who+"</td></tr>";
+      }).join("")+"</tbody></table>"):"";
+    $("aa-out").innerHTML=bpoHtml+(bpoRows.length?"<div class=aa-sub>All assets</div>":"")+"<table><thead><tr><th>Item</th><th>Total</th><th>Held by</th></tr></thead><tbody>"+
       top.map(function(r){
         var who=Object.keys(r.who).map(function(n){ return esc(n)+" "+n0(r.who[n]); }).join(", ");
         return "<tr><td>"+esc(r.name)+"</td><td>"+n0(r.qty)+"</td><td style=\"text-align:left;color:var(--muted);font-size:12px\">"+who+"</td></tr>";
