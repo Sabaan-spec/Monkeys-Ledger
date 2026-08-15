@@ -9927,7 +9927,8 @@ section.panel::after{bottom:0;left:0;border-bottom:1px solid var(--accent);borde
 </style>
 <style>/* Manufacturing grid v1 */
 @media (min-width:1180px){
-  #tab-calc{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);column-gap:16px;row-gap:14px;align-items:start}
+  #tab-calc:not([hidden]){display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);column-gap:16px;row-gap:14px;align-items:start}
+  #tab-calc[hidden]{display:none!important}
   #tab-calc>*{grid-column:1 / -1;min-width:0}
   #tab-calc>section.controls:not(.costs){grid-column:1 / 2;grid-row:1}
   #tab-calc>section.controls.costs{grid-column:2 / 3;grid-row:1}
