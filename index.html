@@ -9951,6 +9951,16 @@ section.panel::after{bottom:0;left:0;border-bottom:1px solid var(--accent);borde
 #tabs-sub button{padding:9px 14px;line-height:1}
 @media (max-width:760px){#tabs-groups button{height:auto;padding:10px 6px}}
 </style>
+<style>/* Merge control panels v1 */
+@media (min-width:1180px){
+  #tab-calc{column-gap:0}
+  #tab-calc>section.controls:not(.costs),#tab-calc>section.controls.costs{align-self:stretch}
+  #tab-calc>section.controls:not(.costs){border-right:0;clip-path:polygon(11px 0,100% 0,100% 100%,0 100%,0 11px)}
+  #tab-calc>section.controls.costs{border-left:1px solid var(--border);clip-path:polygon(0 0,100% 0,100% calc(100% - 11px),calc(100% - 11px) 100%,0 100%)}
+  #tab-calc>section.controls:not(.costs)::before{display:none}
+  #tab-calc>section.controls.costs::after{display:none}
+}
+</style>
 </body>
 </html>
 
