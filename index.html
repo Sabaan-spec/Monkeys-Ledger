@@ -9336,6 +9336,29 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     return {qty:qty,buyGross:buyGross,buyFee:buyFee,cost:cost,sellGross:sellGross,sellBroker:sellBroker,salesTax:salesTax,fees:buyFee+sellBroker+salesTax,net:net,margin:cost&&sell?(net/cost*100):0};
   }
   var live={};
+  var mktBusy=false;
+  async function fillLive(){
+    if(mktBusy) return; mktBusy=true;
+    try{
+      var need=rows.filter(function(r){ return !r.sold&&!r.sell&&r.tid&&live[r.tid]==null; });
+      for(var i=0;i<need.length;i++){
+        var tid=need[i].tid;
+        if(live[tid]!=null) continue;
+        var v=0;
+        try{
+          var hub=($("hub")||{}).value||"jita";
+          var STN={jita:60003760,amarr:60008494,dodixie:60011866,rens:60004588,hek:60005686};
+          if(window.EVEMKT&&window.EVEMKT.best){
+            var b=await window.EVEMKT.best(String(STN[hub]||60003760),Number(tid));
+            if(b&&b.buy>0) v=b.buy;
+          }
+        }catch(e){}
+        live[tid]=v;
+      }
+      if(need.length) draw();
+    }catch(e){}
+    mktBusy=false;
+  }
   async function priceFor(tid){
     if(live[tid]!=null) return live[tid];
     try{
@@ -9386,12 +9409,27 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       });
       [].forEach.call(body.querySelectorAll("[data-sold]"),function(b){ b.addEventListener("click",function(){ var r=rows[Number(b.getAttribute("data-sold"))]; if(!r.sell){ $("po-msg").textContent="Add a sell price for that row first."; return; } r.sold=!r.sold; save(); draw(); }); });
     }
-    var realised=0, invested=0, openCost=0, expected=0, fees=0;
-    rows.forEach(function(r){ var c=calc(r); fees+=c.fees; if(r.sold){ realised+=c.net; } else { invested+=c.cost; openCost+=c.cost; if(r.sell) expected+=c.net; } });
+    var realised=0, invested=0, openCost=0, expected=0, fees=0, mktNet=0, mktRows=0, unpriced=0;
+    var br2=feeBroker(), tx2=feeSales();
+    rows.forEach(function(r){
+      var c=calc(r);
+      fees+=c.fees;
+      if(r.sold){ realised+=c.net; return; }
+      invested+=c.cost; openCost+=c.cost;
+      if(r.sell){ expected+=c.net; return; }
+      var lp=r.tid?live[r.tid]:null;
+      if(lp>0){
+        var g=lp*(Number(r.qty)||0);
+        mktNet+=(g-g*br2-g*tx2-c.cost);
+        mktRows++;
+      } else if(lp===0){ unpriced++; }
+    });
+    fillLive();
     $("po-cards").innerHTML=
       "<div class=po-card><b class=\""+(realised>=0?"po-sold":"")+"\" style=\""+(realised<0?"color:var(--bad)":"")+"\">"+isk(realised)+"</b><span>Realised profit</span><small>rows marked sold</small></div>"+
       "<div class=po-card><b>"+isk(openCost)+"</b><span>Capital at risk</span><small>still held or listed</small></div>"+
       "<div class=po-card><b>"+isk(expected)+"</b><span>Unrealised</span><small>if open listings all sell</small></div>"+
+      "<div class=po-card><b class=\""+(mktNet>=0?"po-sold":"")+"\" style=\""+(mktNet<0?"color:var(--bad)":"")+"\">"+isk(mktNet)+"</b><span>At market</span><small>"+(mktRows?(mktRows+" held, unlisted \u2014 net of fees"):"nothing unlisted")+(unpriced?(" \u00b7 "+unpriced+" no price"):"")+"</small></div>"+
       "<div class=po-card><b>"+isk(fees)+"</b><span>Fees and tax</span><small>broker "+n2(feeBroker()*100)+"% \u00b7 tax "+n2(feeSales()*100)+"%</small></div>";
   }
   function sugBox(){ var b=$("po-sug"); if(!b){ b=document.createElement("div"); b.id="po-sug"; document.body.appendChild(b); } return b; }
