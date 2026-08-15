@@ -9766,7 +9766,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       if(!window.EVEMULTI||!window.EVEMULTI.accounts){ msg("Character list unavailable.",1); busy=false; return; }
       var accs=window.EVEMULTI.accounts()||[];
       if(!accs.length){ msg("Connect a character on the Account tab first.",1); busy=false; return; }
-      var byType={}, perChar=[], failed=[], BP={O:{},C:{}};
+      var byType={}, perChar=[], failed=[], BP={O:{},C:{}}, LOC={};
       for(var i=0;i<accs.length;i++){
         var acc=accs[i];
         var nm=acc.name||("Character "+(i+1));
@@ -9802,6 +9802,19 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
             if((b.time_efficiency||0)>BP[key][t2].te) BP[key][t2].te=b.time_efficiency||0;
           });
         }catch(e){}
+        var byId={};
+        items.forEach(function(it){ byId[it.item_id]=it; });
+        function rootOf(it){ var cur=it, hops=0; while(cur&&byId[cur.location_id]&&hops<40){ cur=byId[cur.location_id]; hops++; } return cur?cur.location_id:0; }
+        items.forEach(function(it){
+          var rl=rootOf(it);
+          if(rl){
+            if(!LOC[rl]) LOC[rl]={n:0,who:{},types:{}};
+            var q2=(it.quantity||1);
+            LOC[rl].n+=q2;
+            LOC[rl].who[nm]=(LOC[rl].who[nm]||0)+q2;
+            LOC[rl].types[it.type_id]=(LOC[rl].types[it.type_id]||0)+q2;
+          }
+        });
         items.forEach(function(it){
           var k=it.type_id;
           if(!byType[k]) byType[k]={qty:0,who:{}};
@@ -9840,7 +9853,26 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         var missing=bpoIds.filter(function(x){ return !names[x]; });
         if(missing.length){ try{ var mn=await EVEAPI.names(missing)||{}; for(var q in mn) names[q]=mn[q]; }catch(e){} }
       }
-      DATA={byType:byType,names:names,perChar:perChar,failed:failed,BP:BP,avg:avg,bpPrice:bpPrice};
+      var locIds=Object.keys(LOC).map(Number);
+      var locNames={};
+      if(locIds.length){
+        msg("Naming "+locIds.length+" locations\u2026");
+        var stationIds=locIds.filter(function(x){ return x<1000000000; });
+        var structIds=locIds.filter(function(x){ return x>=1000000000; });
+        if(stationIds.length){ try{ var sn=await EVEAPI.names(stationIds)||{}; for(var sk in sn) locNames[sk]=sn[sk]; }catch(e){} }
+        for(var si=0;si<structIds.length;si++){
+          var sid=structIds[si];
+          try{
+            if(window.EVESTRUCT){
+              if(typeof window.EVESTRUCT.resolve==="function"){ try{ await window.EVESTRUCT.resolve(sid); }catch(e){} }
+              var gv=(typeof window.EVESTRUCT.get==="function")?window.EVESTRUCT.get(sid):null;
+              if(gv) locNames[sid]=(typeof gv==="string")?gv:(gv.name||gv.n||null);
+            }
+          }catch(e){}
+          if(!locNames[sid]) locNames[sid]="Structure "+sid;
+        }
+      }
+      DATA={byType:byType,names:names,perChar:perChar,failed:failed,BP:BP,avg:avg,bpPrice:bpPrice,LOC:LOC,locNames:locNames};
       render();
       msg(perChar.length+" characters scanned"+(failed.length?(" \u2014 "+failed.length+" could not be read: "+esc(failed.join(", "))):"")+". Totals are combined across every connected character.",failed.length>0);
     }catch(e){ msg("Scan failed.",1); }
@@ -9881,7 +9913,22 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         var vcell=r.val?(n0(Math.round(r.val))+"<div style=\"font-size:10px;color:var(--muted)\">"+esc(r.src)+"</div>"):("<span style=\"color:var(--muted)\">no price</span>");
         return "<tr><td>"+esc(r.name)+"</td><td>"+n0(r.n)+"</td><td>"+res+"</td><td>"+vcell+"</td><td style=\"text-align:left;color:var(--muted);font-size:12px\">"+who+"</td></tr>";
       }).join("")+"</tbody></table>"):"";
-    $("aa-out").innerHTML=bpoHtml+(bpoRows.length?"<div class=aa-sub>All assets</div>":"")+"<table><thead><tr><th>Item</th><th>Total</th><th>Held by</th></tr></thead><tbody>"+
+    var locRows=[];
+    if(DATA.LOC){
+      var wantIds=q?rows.map(function(r){ return String(r.id); }):null;
+      locRows=Object.keys(DATA.LOC).map(function(lid){
+        var L=DATA.LOC[lid], qty=L.n;
+        if(wantIds){ qty=0; wantIds.forEach(function(tid){ qty+=(L.types[tid]||0); }); }
+        return {id:lid, name:(DATA.locNames[lid]||("Location "+lid)), qty:qty, who:L.who};
+      }).filter(function(r){ return r.qty>0; });
+      locRows.sort(function(a,b){ return b.qty-a.qty; });
+    }
+    var locHtml=locRows.length?("<div class=aa-sub>By location"+(q?" \u2014 matching only":"")+"</div><table><thead><tr><th>Location</th><th>"+(q?"Matching":"Items")+"</th><th>Characters</th></tr></thead><tbody>"+
+      locRows.slice(0,200).map(function(r){
+        var who=Object.keys(r.who).join(", ");
+        return "<tr><td>"+esc(r.name)+"</td><td>"+n0(r.qty)+"</td><td style=\"text-align:left;color:var(--muted);font-size:12px\">"+esc(who)+"</td></tr>";
+      }).join("")+"</tbody></table>"):"";
+    $("aa-out").innerHTML=bpoHtml+locHtml+"<div class=aa-sub>All assets</div><table><thead><tr><th>Item</th><th>Total</th><th>Held by</th></tr></thead><tbody>"+
       top.map(function(r){
         var who=Object.keys(r.who).map(function(n){ return esc(n)+" "+n0(r.who[n]); }).join(", ");
         return "<tr><td>"+esc(r.name)+"</td><td>"+n0(r.qty)+"</td><td style=\"text-align:left;color:var(--muted);font-size:12px\">"+who+"</td></tr>";
