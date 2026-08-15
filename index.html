@@ -9904,6 +9904,19 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   setTimeout(mount,3000);
 })();
 </script>
+<style>/* Caldari polish v1 */
+h1,h2,h3,h4,h5{font-family:var(--display);letter-spacing:.02em}
+h4{font-size:15px;font-weight:600}
+section.panel{background:linear-gradient(180deg,rgba(84,194,218,.04),rgba(84,194,218,0) 110px),rgba(15,26,36,.5);border-radius:0;clip-path:polygon(11px 0,100% 0,100% calc(100% - 11px),calc(100% - 11px) 100%,0 100%,0 11px)}
+section.panel>div>h4:first-child{display:flex;align-items:center;gap:9px;padding-bottom:7px;border-bottom:1px solid var(--border);margin-bottom:11px}
+section.panel>div>h4:first-child::before{content:"";width:7px;height:7px;flex:0 0 7px;background:var(--accent);transform:rotate(45deg);box-shadow:0 0 7px rgba(84,194,218,.75)}
+table td,table th{font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)!important;box-shadow:0 0 0 1px rgba(84,194,218,.22),0 0 10px rgba(84,194,218,.10)}
+button.tab{transition:background .12s ease,border-color .12s ease,color .12s ease}
+#tabs-groups button{position:relative}
+#tabs-groups button.active::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--accent);box-shadow:0 0 8px rgba(84,194,218,.75)}
+@media (max-width:760px){section.panel{clip-path:none}}
+</style>
 </body>
 </html>
 
