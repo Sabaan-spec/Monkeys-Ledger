@@ -9671,21 +9671,24 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       msg.textContent="Pricing "+p.rows.length+" item types across 5 hubs\u2026";
       var totals={};
       HUBS.forEach(function(hh){ totals[hh[0]]=0; });
-      for(var i=0;i<p.rows.length;i++){
-        var r=p.rows[i]; r.px={};
-        for(var k=0;k<HUBS.length;k++){
-          var val=0;
-          try{
-            if(window.EVEMKT&&window.EVEMKT.best){
-              var b=await window.EVEMKT.best(String(HUBS[k][1]),Number(r.id));
-              if(b) val=(side==="buy")?(b.buy||0):(b.sell||0);
-            }
-          }catch(e){}
-          r.px[HUBS[k][0]]=val;
-          totals[HUBS[k][0]]+=val*r.qty;
-        }
-        if(i%4===0) msg.textContent="Pricing \u2014 "+(i+1)+" / "+p.rows.length;
+            var done2=0, next2=0;
+      async function priceOne(r){
+        r.px={};
+        var vals=await Promise.all(HUBS.map(function(hh){
+          if(!(window.EVEMKT&&window.EVEMKT.best)) return 0;
+          return window.EVEMKT.best(String(hh[1]),Number(r.id)).then(function(b){
+            return b?((side==="buy")?(b.buy||0):(b.sell||0)):0;
+          }).catch(function(){ return 0; });
+        }));
+        HUBS.forEach(function(hh,k){ r.px[hh[0]]=vals[k]; totals[hh[0]]+=vals[k]*r.qty; });
+        done2++;
+        if(done2%3===0||done2===p.rows.length) msg("Pricing \u2014 "+done2+" / "+p.rows.length);
       }
+      async function worker2(){
+        while(next2<p.rows.length){ var idx=next2++; await priceOne(p.rows[idx]); }
+      }
+      var pool=[]; for(var w=0;w<5;w++) pool.push(worker2());
+      await Promise.all(pool);
       var names2=HUBS.map(function(hh){ return hh[0]; });
       var best=null, worst=null;
       names2.forEach(function(nm){
