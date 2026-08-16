@@ -9682,7 +9682,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         }));
         HUBS.forEach(function(hh,k){ r.px[hh[0]]=vals[k]; totals[hh[0]]+=vals[k]*r.qty; });
         done2++;
-        if(done2%3===0||done2===p.rows.length) msg("Pricing \u2014 "+done2+" / "+p.rows.length);
+        if(done2%3===0||done2===p.rows.length) msg.textContent="Pricing \u2014 "+done2+" / "+p.rows.length;
       }
       async function worker2(){
         while(next2<p.rows.length){ var idx=next2++; await priceOne(p.rows[idx]); }
