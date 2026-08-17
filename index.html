@@ -9603,7 +9603,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
   function esc(s){ return String(s==null?"":s).replace(/[&<>]/g,function(c){ return c==="&"?"&amp;":(c==="<"?"&lt;":"&gt;"); }); }
   function isk(v){ try{ return window.eveISK?window.eveISK(v):Math.round(v).toLocaleString(); }catch(e){ return Math.round(v).toLocaleString(); } }
   function n0(v){ return (Number(v)||0).toLocaleString(); }
-  var NAMES=null, REV=null, EXTRA={};
+  var NAMES=null, REV=null, EXTRA={}, VOL={};
   async function resolveMissing(rows){
     var want=[], seen={};
     rows.forEach(function(r){ if(!r.id){ var u=r.name.toUpperCase(); if(!seen[u]){ seen[u]=1; want.push(r.name); } } });
@@ -9673,6 +9673,14 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       HUBS.forEach(function(hh){ totals[hh[0]]=0; });
             var done2=0, next2=0;
       async function priceOne(r){
+        if(VOL[r.id]==null){
+          try{
+            var tr=await fetch("https://esi.evetech.net/latest/universe/types/"+r.id+"/");
+            if(tr.ok){ var tj=await tr.json(); VOL[r.id]=(tj.packaged_volume!=null?tj.packaged_volume:(tj.volume||0)); }
+            else VOL[r.id]=0;
+          }catch(e){ VOL[r.id]=0; }
+        }
+        r.m3=(VOL[r.id]||0)*r.qty;
         r.px={};
         var vals=await Promise.all(HUBS.map(function(hh){
           if(!(window.EVEMKT&&window.EVEMKT.best)) return 0;
@@ -9696,7 +9704,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         if(best===null||(side==="buy"?totals[nm]>totals[best]:totals[nm]<totals[best])) best=nm;
         if(worst===null||(side==="buy"?totals[nm]<totals[worst]:totals[nm]>totals[worst])) worst=nm;
       });
-      var head="<tr><th>Item</th><th>Qty</th>"+names2.map(function(nm){ return "<th>"+nm+"</th>"; }).join("")+"</tr>";
+      var head="<tr><th>Item</th><th>Qty</th><th>m3</th>"+names2.map(function(nm){ return "<th>"+nm+"</th>"; }).join("")+"</tr>";
       var body=p.rows.map(function(r){
         var cells=names2.map(function(nm){
           var v=r.px[nm]*r.qty;
@@ -9705,14 +9713,16 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
           if(v>0&&vals.length){ isBest=(side==="buy")?(v===Math.max.apply(null,vals)):(v===Math.min.apply(null,vals)); }
           return "<td class=\""+(isBest?"best":"")+"\">"+(v?isk(v):"\u2014")+"</td>";
         }).join("");
-        return "<tr><td>"+esc(r.name)+"</td><td>"+n0(r.qty)+"</td>"+cells+"</tr>";
+        return "<tr><td>"+esc(r.name)+"</td><td>"+n0(r.qty)+"</td><td>"+(r.m3?n0(Math.round(r.m3*100)/100):"\u2014")+"</td>"+cells+"</tr>";
       }).join("");
-      var foot="<tr><td>Total</td><td>"+n0(p.rows.reduce(function(s,r){ return s+r.qty; },0))+"</td>"+
+      var totM3=p.rows.reduce(function(s,r){ return s+(r.m3||0); },0);
+      var foot="<tr><td>Total</td><td>"+n0(p.rows.reduce(function(s,r){ return s+r.qty; },0))+"</td><td>"+n0(Math.round(totM3))+"</td>"+
         names2.map(function(nm){ return "<td class=\""+(nm===best?"best":"")+"\">"+(totals[nm]?isk(totals[nm]):"\u2014")+"</td>"; }).join("")+"</tr>";
       $("mb-res").innerHTML="<table><thead>"+head+"</thead><tbody>"+body+"</tbody><tfoot>"+foot+"</tfoot></table>";
       var spread=(best&&worst&&totals[worst])?Math.abs(totals[best]-totals[worst]):0;
       $("mb-sum").innerHTML=
         "<div class=mb-card><b>"+p.rows.length+"</b><span>Item types</span><small>"+n0(p.rows.reduce(function(s,r){ return s+r.qty; },0))+" units</small></div>"+
+        "<div class=mb-card><b>"+n0(Math.round(totM3))+" m3</b><span>Total volume</span><small>packaged</small></div>"+
         "<div class=mb-card><b class=best>"+esc(best||"\u2014")+"</b><span>"+(side==="buy"?"Best to sell into":"Cheapest to buy")+"</span><small>"+(best?isk(totals[best]):"")+"</small></div>"+
         "<div class=mb-card><b>"+esc(worst||"\u2014")+"</b><span>"+(side==="buy"?"Worst buyer":"Most expensive")+"</span><small>"+(worst?isk(totals[worst]):"")+"</small></div>"+
         "<div class=mb-card><b>"+isk(spread)+"</b><span>Hub spread</span><small>difference across hubs</small></div>";
