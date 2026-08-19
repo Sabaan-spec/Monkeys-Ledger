@@ -5312,7 +5312,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       var pg=Math.min(r.pages||1,5);
       for(var p=2;p<=pg;p++){var rp=await EVEAPI.esi('/characters/'+cid+'/mining/?page='+p);if(rp)rows=rows.concat(rp.data||[]);}
       if(!rows.length){card('<div class="muted small">No mining recorded in the last 30 days.</div>');doneAt=Date.now();running=false;return;}
-      var mk={};try{var pj=await (await fetch(ESI+'/markets/prices/')).json();(pj||[]).forEach(function(e){var v=e.average_price||e.adjusted_price||0;if(v>0)mk[e.type_id]=v;});}catch(e){}
+      var mk={};try{var pj=await (await fetch(ESI+'/markets/prices/')).json();(pj||[]).forEach(function(e){var v=e.average_price||e.average_price||0;if(v>0)mk[e.type_id]=v;});}catch(e){}
       var ids=[];rows.forEach(function(x){if(ids.indexOf(x.type_id)<0)ids.push(x.type_id);});
       await pool(ids.map(function(id){return function(){return priceFor(id,mk[id]||0);};}),6);
       var NM=await EVEAPI.names(ids.slice(0,900));
