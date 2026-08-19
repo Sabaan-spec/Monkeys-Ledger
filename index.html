@@ -10173,12 +10173,12 @@ section.panel::after{bottom:0;left:0;border-bottom:1px solid var(--accent);borde
     if(s.textContent!==txt) s.textContent=txt;
     var c=(cls||"stat-val")+" so-ovv";
     if(s.className!==c) s.className=c;
-    if(String(el.className).indexOf("so-hidden")<0) el.className=el.className+" so-hidden";
+    if(el.style.display!=="none") el.style.display="none";
   }
   function clearOv(el){
     var n=el.nextElementSibling;
     if(n && n.className && String(n.className).indexOf("so-ovv")>=0) n.parentNode.removeChild(n);
-    el.className=String(el.className).replace(/\s*so-hidden/,"");
+    if(el.style.display==="none") el.style.display="";
   }
   function apply(){
     var rev=$("s-revenue"), pf=$("s-profit"), mg=$("s-margin"), mc=$("s-matcost");
