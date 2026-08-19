@@ -10128,7 +10128,7 @@ section.panel::after{bottom:0;left:0;border-bottom:1px solid var(--accent);borde
   function save(o){ try{ localStorage.setItem(KEY,JSON.stringify(o)); }catch(e){} }
   var mkt=null, writing=false, curKey="", wrote={rev:null,pf:null,mg:null,cost:null};
   function head(){ return document.querySelector("#tab-calc .product-head"); }
-  function prodName(){ var h=head(); if(!h) return ""; var t=h.querySelector("div"); return t?(t.textContent||"").split("\n")[0].trim().slice(0,60):""; }
+  function prodName(){ var p=document.getElementById("product-name"); if(p){ var v=(p.textContent||"").trim(); if(v && v!=="\u2014") return v.slice(0,60); } var h=head(); if(!h) return ""; var t=h.querySelector("div"); return t?(t.textContent||"").split("\n")[0].trim().slice(0,60):""; }
   function outUnits(){ var h=head(); if(!h) return 1; var m=(h.textContent||"").match(/([\d,]+)\s*unit\(s\)\s*output/i); return m?Math.max(1,num(m[1])):1; }
   function feeRate(){ var b=parseFloat(($("f-broker")||{}).value)||0, s=parseFloat(($("f-sales")||{}).value)||0; return (b+s)/100; }
   function mktFeeRate(){ var br=parseFloat(($("f-broker")||{}).value)||0, s=parseFloat(($("f-sales")||{}).value)||0; var ss=(document.getElementById("sellstrat")||{}).value; return (s+(ss==="sell"?br:0))/100; }
