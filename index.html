@@ -10117,6 +10117,8 @@ section.panel::after{bottom:0;left:0;border-bottom:1px solid var(--accent);borde
 #so-out .good{color:var(--good)}#so-out .bad{color:var(--bad)}
 .so-flag{color:var(--accent);font-size:10px;letter-spacing:.05em;margin-left:6px;font-family:var(--display)}
 .so-hidden{display:none!important}
+.so-sub{display:block;font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:3px;font-variant-numeric:tabular-nums}
+.so-sub b{color:var(--text);font-weight:400}
 @media (max-width:1080px){.product-head{grid-template-columns:minmax(0,1fr)}#so-box{grid-column:1;grid-row:2;border-left:0;border-top:1px solid var(--border);padding-left:0;padding-top:12px}.product-head>.hd-btns{justify-self:end}}
 </style>
 <script>
@@ -10181,6 +10183,12 @@ section.panel::after{bottom:0;left:0;border-bottom:1px solid var(--accent);borde
     if(el.style.display==="none") el.style.display="";
   }
   function flag(el,html){ var l=el.parentElement.querySelector(".stat-label"); if(l && l.innerHTML!==html) l.innerHTML=html; }
+  function subLine(el,html){
+    var card=el.parentElement; if(!card) return;
+    var s=card.querySelector(".so-sub");
+    if(!s){ s=document.createElement("span"); s.className="so-sub"; var ds=card.querySelector(".dual-sub"); if(ds) card.insertBefore(s,ds); else card.appendChild(s); }
+    if(s.innerHTML!==html) s.innerHTML=html;
+  }
   function apply(){
     var rev=$("s-revenue"), pf=$("s-profit"), mg=$("s-margin"), mc=$("s-matcost");
     if(!rev||!pf||!mg||!mc||!$("so-px")) return;
@@ -10195,6 +10203,7 @@ section.panel::after{bottom:0;left:0;border-bottom:1px solid var(--accent);borde
     if(!active){
       [rev,pf,mg,mc].forEach(clearOv);
       flag(rev,"Product value"); flag(mc,"Total cost");
+      subLine(mc,'Build cost <b>'+isk(cost)+' ISK</b> \u00b7 materials + install fee');
       var mu=mktRev/Math.max(1,outUnits());
       $("so-px").placeholder=mu?mu.toLocaleString(undefined,{maximumFractionDigits:2}):"market";
       var be0=cost/Math.max(1,outUnits())/(1-feeRate());
@@ -10220,6 +10229,7 @@ section.panel::after{bottom:0;left:0;border-bottom:1px solid var(--accent);borde
     if(own){ setOv(rev,gross.toLocaleString(undefined,{maximumFractionDigits:2})+" ISK"); flag(rev,'Product value<span class="so-flag">YOUR PRICE</span>'); }
     else { clearOv(rev); flag(rev,"Product value"); }
     flag(mc, (mdel!==0||sdel!==0) ? 'Total cost<span class="so-flag2">YOUR COSTS</span>' : "Total cost");
+    subLine(mc,'Build cost <b>'+isk(cost)+' ISK</b> \u00b7 materials + install fee');
     var h1='<div><div class="so-k">After fees</div><div class="so-v">'+isk(net)+'</div></div>'+
       '<div><div class="so-k">Profit</div><div class="so-v '+(profit>=0?"good":"bad")+'">'+isk(profit)+'</div></div>'+
       '<div><div class="so-k">Margin</div><div class="so-v '+(profit>=0?"good":"bad")+'">'+margin.toFixed(1)+'%</div></div>'+
