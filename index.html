@@ -10296,6 +10296,7 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
       var qty=num(qc.textContent); if(!isFinite(qty)) qty=0;
       var mktSub=num(sc.getAttribute("data-mkt"));
       var px=ov[name];
+      if(uc.querySelector("input")){ if(px>0) d+=qty*px-(isFinite(mktSub)?mktSub:0); return; }
       if(px>0){
         var mine=qty*px;
         d += mine-(isFinite(mktSub)?mktSub:0);
@@ -10355,7 +10356,8 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
       if(e.key==="Enter"){ e.preventDefault(); done(true); }
       else if(e.key==="Escape"){ e.preventDefault(); done(false); }
     });
-    inp.addEventListener("blur",function(){ done(true); });
+    inp.addEventListener("input",function(){ inp.setAttribute("data-t","1"); });
+    inp.addEventListener("blur",function(){ done(inp.getAttribute("data-t")==="1"); });
   }
   function boot(){
     var tb=$("mat-body");
