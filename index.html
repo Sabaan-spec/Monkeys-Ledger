@@ -9683,12 +9683,20 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         r.m3=(VOL[r.id]||0)*r.qty;
         r.px={};
         var vals=await Promise.all(HUBS.map(function(hh){
-          if(!(window.EVEMKT&&window.EVEMKT.best)) return 0;
+          if(!(window.EVEMKT&&window.EVEMKT.best)) return {buy:0,sell:0};
           return window.EVEMKT.best(String(hh[1]),Number(r.id)).then(function(b){
-            return b?((side==="buy")?(b.buy||0):(b.sell||0)):0;
-          }).catch(function(){ return 0; });
+            return {buy:(b&&b.buy)||0, sell:(b&&b.sell)||0};
+          }).catch(function(){ return {buy:0,sell:0}; });
         }));
-        HUBS.forEach(function(hh,k){ r.px[hh[0]]=vals[k]; totals[hh[0]]+=vals[k]*r.qty; });
+        r.pxBuy={}; r.pxSell={}; r.pxSplit={};
+        HUBS.forEach(function(hh,k){
+          var bv=vals[k].buy, sv=vals[k].sell;
+          r.pxBuy[hh[0]]=bv; r.pxSell[hh[0]]=sv;
+          r.pxSplit[hh[0]]=(bv>0&&sv>0)?((bv+sv)/2):(bv>0?bv:sv);
+          var use=(side==="buy")?bv:((side==="sell")?sv:r.pxSplit[hh[0]]);
+          r.px[hh[0]]=use;
+          totals[hh[0]]+=use*r.qty;
+        });
         done2++;
         if(done2%3===0||done2===p.rows.length) msg.textContent="Pricing \u2014 "+done2+" / "+p.rows.length;
       }
@@ -9709,9 +9717,10 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         var cells=names2.map(function(nm){
           var v=r.px[nm]*r.qty;
           var isBest=false;
-          var vals=names2.map(function(x){ return r.px[x]*r.qty; }).filter(function(x){ return x>0; });
-          if(v>0&&vals.length){ isBest=(side==="buy")?(v===Math.max.apply(null,vals)):(v===Math.min.apply(null,vals)); }
-          return "<td class=\""+(isBest?"best":"")+"\">"+(v?isk(v):"\u2014")+"</td>";
+          var vals2=names2.map(function(x){ return r.px[x]*r.qty; }).filter(function(x){ return x>0; });
+          if(v>0&&vals2.length){ isBest=(side==="buy")?(v===Math.max.apply(null,vals2)):(v===Math.min.apply(null,vals2)); }
+          var pair=(r.pxBuy&&r.pxSell)?("<div style=\"font-size:10px;color:var(--muted)\">b "+(r.pxBuy[nm]?isk(r.pxBuy[nm]):"\u2014")+" / s "+(r.pxSell[nm]?isk(r.pxSell[nm]):"\u2014")+"</div>"):"";
+          return "<td class=\""+(isBest?"best":"")+"\">"+(v?isk(v):"\u2014")+pair+"</td>";
         }).join("");
         return "<tr><td>"+esc(r.name)+"</td><td>"+n0(r.qty)+"</td><td>"+(r.m3?n0(Math.round(r.m3*100)/100):"\u2014")+"</td>"+cells+"</tr>";
       }).join("");
@@ -9723,11 +9732,11 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       $("mb-sum").innerHTML=
         "<div class=mb-card><b>"+p.rows.length+"</b><span>Item types</span><small>"+n0(p.rows.reduce(function(s,r){ return s+r.qty; },0))+" units</small></div>"+
         "<div class=mb-card><b>"+n0(Math.round(totM3))+" m3</b><span>Total volume</span><small>packaged</small></div>"+
-        "<div class=mb-card><b class=best>"+esc(best||"\u2014")+"</b><span>"+(side==="buy"?"Best to sell into":"Cheapest to buy")+"</span><small>"+(best?isk(totals[best]):"")+"</small></div>"+
+        "<div class=mb-card><b class=best>"+esc(best||"\u2014")+"</b><span>"+(side==="buy"?"Best to sell into":(side==="split"?"Highest split value":"Cheapest to buy"))+"</span><small>"+(best?isk(totals[best]):"")+"</small></div>"+
         "<div class=mb-card><b>"+esc(worst||"\u2014")+"</b><span>"+(side==="buy"?"Worst buyer":"Most expensive")+"</span><small>"+(worst?isk(totals[worst]):"")+"</small></div>"+
         "<div class=mb-card><b>"+isk(spread)+"</b><span>Hub spread</span><small>difference across hubs</small></div>";
       $("mb-bad").innerHTML=p.bad.length?("Not recognised ("+p.bad.length+"): "+esc(p.bad.slice(0,12).join(", "))+(p.bad.length>12?"\u2026":"")):"";
-      msg.textContent=(side==="buy"?"Hub buy orders \u2014 what you would be paid selling instantly.":"Hub sell orders \u2014 what it costs to buy instantly.")+" Green marks the best hub per row.";
+      msg.textContent=(side==="buy"?"Hub buy orders \u2014 what you would be paid selling instantly.":(side==="split"?"Split price \u2014 midpoint between best buy and best sell.":"Hub sell orders \u2014 what it costs to buy instantly."))+" Each cell shows b = buy, s = sell per unit. Green marks the best hub per row.";
     }catch(e){ if(msg){ msg.textContent="Could not price that list."; msg.className="bad"; } }
     busy=false;
   }
@@ -9740,7 +9749,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       "<textarea id=mb-paste placeholder=\"Tritanium 1000&#10;3x 150mm Light AutoCannon II&#10;Pyerite\t500\"></textarea>"+
       "<div id=mb-bar2><button id=mb-run class=tab style=\"padding:8px 18px\">Price list</button>"+
       "<label>Prices <select id=mb-side style=\"background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:6px 9px;font-family:inherit;font-size:13px\">"+
-      "<option value=buy>Buy orders (what you get paid)</option><option value=sell>Sell orders (cost to buy)</option></select></label>"+
+      "<option value=buy>Buy orders (what you get paid)</option><option value=split>Split (midpoint)</option><option value=sell>Sell orders (cost to buy)</option></select></label>"+
       "<button id=mb-clear class=tab style=\"padding:8px 14px\">Clear</button><span id=mb-msg></span></div>"+
       "<div id=mb-sum></div><div id=mb-res></div><div id=mb-bad></div>";
     host.parentElement.insertBefore(d,host);
