@@ -10125,7 +10125,7 @@ section.panel::after{bottom:0;left:0;border-bottom:1px solid var(--accent);borde
   function isk(v){ return (v<0?"-":"")+Math.abs(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
   function store(){ try{ return JSON.parse(localStorage.getItem(KEY)||"{}"); }catch(e){ return {}; } }
   function save(o){ try{ localStorage.setItem(KEY,JSON.stringify(o)); }catch(e){} }
-  var mkt=null, writing=false, curKey="";
+  var mkt=null, writing=false, curKey="", wrote={rev:null,pf:null,mg:null};
   function head(){ return document.querySelector("#tab-calc .product-head"); }
   function prodName(){ var h=head(); if(!h) return ""; var t=h.querySelector("div"); return t?(t.textContent||"").split("\n")[0].trim().slice(0,60):""; }
   function outUnits(){ var h=head(); if(!h) return 1; var m=(h.textContent||"").match(/([\d,]+)\s*unit\(s\)\s*output/i); return m?Math.max(1,num(m[1])):1; }
@@ -10159,7 +10159,7 @@ section.panel::after{bottom:0;left:0;border-bottom:1px solid var(--accent);borde
   function apply(){
     var rev=$("s-revenue"), pf=$("s-profit"), mg=$("s-margin"), mc=$("s-matcost");
     if(!rev||!pf||!mg||!mc||!$("so-px")) return;
-    if(mkt===null) mkt={rev:rev.textContent, pf:pf.textContent, pfc:pf.className, mg:mg.textContent, mgc:mg.className};
+    if(mkt===null || rev.textContent!==wrote.rev || pf.textContent!==wrote.pf || mg.textContent!==wrote.mg){ mkt={rev:rev.textContent, pf:pf.textContent, pfc:pf.className, mg:mg.textContent, mgc:mg.className}; }
     var px=parseFloat($("so-px").value)||0;
     var qty=parseFloat($("so-qty").value)||outUnits();
     var cost=num(mc.textContent);
@@ -10168,6 +10168,7 @@ section.panel::after{bottom:0;left:0;border-bottom:1px solid var(--accent);borde
     if(!(px>0)){
       writing=true;
       rev.textContent=mkt.rev; pf.textContent=mkt.pf; pf.className=mkt.pfc; mg.textContent=mkt.mg; mg.className=mkt.mgc;
+      wrote={rev:rev.textContent,pf:pf.textContent,mg:mg.textContent};
       writing=false;
       if(lbl) lbl.innerHTML="Product value";
       var mu=num(mkt.rev)/Math.max(1,outUnits());
@@ -10188,6 +10189,7 @@ section.panel::after{bottom:0;left:0;border-bottom:1px solid var(--accent);borde
     rev.textContent=gross.toLocaleString(undefined,{maximumFractionDigits:2})+" ISK";
     pf.textContent=isk(profit)+" ISK"; pf.className="stat-val "+(profit>=0?"good":"bad");
     mg.textContent=margin.toFixed(1)+"%"; mg.className="stat-val "+(profit>=0?"good":"bad");
+    wrote={rev:rev.textContent,pf:pf.textContent,mg:mg.textContent};
     writing=false;
     if(lbl) lbl.innerHTML='Product value<span class="so-flag">YOUR PRICE</span>';
     out.innerHTML='<div><div class="so-k">After fees</div><div class="so-v">'+isk(net)+'</div></div>'+
@@ -10199,8 +10201,6 @@ section.panel::after{bottom:0;left:0;border-bottom:1px solid var(--accent);borde
   }
   var t=null;
   function onMut(){
-    if(writing) return;
-    mkt=null;
     clearTimeout(t); t=setTimeout(function(){
       mount();
       var k=prodName();
@@ -10210,7 +10210,7 @@ section.panel::after{bottom:0;left:0;border-bottom:1px solid var(--accent);borde
   }
   var mo=new MutationObserver(onMut);
   function boot(){
-    var root=document.getElementById("result")||document.getElementById("tab-calc");
+    var root=document.getElementById("tab-calc")||document.getElementById("result");
     if(!root){ setTimeout(boot,500); return; }
     mo.observe(root,{childList:true,subtree:true,characterData:true});
     ["f-broker","f-sales"].forEach(function(i){ var e=document.getElementById(i); if(e) e.addEventListener("input",function(){ setTimeout(apply,80); }); });
