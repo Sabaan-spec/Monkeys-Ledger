@@ -10117,6 +10117,13 @@ section.panel::after{bottom:0;left:0;border-bottom:1px solid var(--accent);borde
 #so-out .good{color:var(--good)}#so-out .bad{color:var(--bad)}
 .so-flag{color:var(--accent);font-size:10px;letter-spacing:.05em;margin-left:6px;font-family:var(--display)}
 .so-hidden{display:none!important}
+@media (min-width:1180px){
+.product-head{grid-template-columns:minmax(0,auto) max-content minmax(400px,1fr)!important;column-gap:22px!important}
+.product-head>.hd-btns{grid-column:2!important;grid-row:1!important;justify-self:start!important}
+#so-box{grid-column:3!important;grid-row:1!important}
+#so-out{grid-template-columns:repeat(auto-fit,minmax(132px,1fr))!important;gap:6px 14px!important}
+#so-px-w{max-width:380px}
+}
 .so-sub{display:block;font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:3px;font-variant-numeric:tabular-nums}
 .so-sub b{color:var(--text);font-weight:400}
 @media (max-width:1080px){.product-head{grid-template-columns:minmax(0,1fr)}#so-box{grid-column:1;grid-row:2;border-left:0;border-top:1px solid var(--border);padding-left:0;padding-top:12px}.product-head>.hd-btns{justify-self:end}}
