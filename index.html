@@ -9667,8 +9667,9 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       }
       if(!p.rows.length){ msg.textContent="Nothing recognised \u2014 paste a multibuy list, an inventory copy, or one item per line."; msg.className="bad"; $("mb-res").innerHTML=""; $("mb-sum").innerHTML=""; busy=false; return; }
       msg.className="";
-      var side=$("mb-side").value;
-      msg.textContent="Pricing "+p.rows.length+" item types across 5 hubs\u2026";
+      var side="split";
+      var totBuy={}, totSell={}, totSplit={};
+      HUBS.forEach(function(hh){ totBuy[hh[0]]=0; totSell[hh[0]]=0; totSplit[hh[0]]=0; });      msg.textContent="Pricing "+p.rows.length+" item types across 5 hubs\u2026";
       var totals={};
       HUBS.forEach(function(hh){ totals[hh[0]]=0; });
             var done2=0, next2=0;
@@ -9693,9 +9694,11 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
           var bv=vals[k].buy, sv=vals[k].sell;
           r.pxBuy[hh[0]]=bv; r.pxSell[hh[0]]=sv;
           r.pxSplit[hh[0]]=(bv>0&&sv>0)?((bv+sv)/2):(bv>0?bv:sv);
-          var use=(side==="buy")?bv:((side==="sell")?sv:r.pxSplit[hh[0]]);
-          r.px[hh[0]]=use;
-          totals[hh[0]]+=use*r.qty;
+          r.px[hh[0]]=r.pxSplit[hh[0]];
+          totals[hh[0]]+=r.pxSplit[hh[0]]*r.qty;
+          totBuy[hh[0]]+=bv*r.qty;
+          totSell[hh[0]]+=sv*r.qty;
+          totSplit[hh[0]]+=r.pxSplit[hh[0]]*r.qty;
         });
         done2++;
         if(done2%3===0||done2===p.rows.length) msg.textContent="Pricing \u2014 "+done2+" / "+p.rows.length;
@@ -9718,16 +9721,26 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
           var v=r.px[nm]*r.qty;
           var isBest=false;
           var vals2=names2.map(function(x){ return r.px[x]*r.qty; }).filter(function(x){ return x>0; });
-          if(v>0&&vals2.length){ isBest=(side==="buy")?(v===Math.max.apply(null,vals2)):(v===Math.min.apply(null,vals2)); }
+          if(v>0&&vals2.length){ isBest=(v>0&&vals2.length&&v===Math.max.apply(null,vals2)); }
           var pair=(r.pxBuy&&r.pxSell)?("<div style=\"font-size:10px;color:var(--muted)\">b "+(r.pxBuy[nm]?isk(r.pxBuy[nm]):"\u2014")+" / s "+(r.pxSell[nm]?isk(r.pxSell[nm]):"\u2014")+"</div>"):"";
           return "<td class=\""+(isBest?"best":"")+"\">"+(v?isk(v):"\u2014")+pair+"</td>";
         }).join("");
         return "<tr><td>"+esc(r.name)+"</td><td>"+n0(r.qty)+"</td><td>"+(r.m3?n0(Math.round(r.m3*100)/100):"\u2014")+"</td>"+cells+"</tr>";
       }).join("");
       var totM3=p.rows.reduce(function(s,r){ return s+(r.m3||0); },0);
-      var foot="<tr><td>Total</td><td>"+n0(p.rows.reduce(function(s,r){ return s+r.qty; },0))+"</td><td>"+n0(Math.round(totM3))+"</td>"+
-        names2.map(function(nm){ return "<td class=\""+(nm===best?"best":"")+"\">"+(totals[nm]?isk(totals[nm]):"\u2014")+"</td>"; }).join("")+"</tr>";
-      $("mb-res").innerHTML="<table><thead>"+head+"</thead><tbody>"+body+"</tbody><tfoot>"+foot+"</tfoot></table>";
+      function totRow(label,map,pickMax){
+        var vals=names2.map(function(nm){ return map[nm]; }).filter(function(v){ return v>0; });
+        var mark=vals.length?(pickMax?Math.max.apply(null,vals):Math.min.apply(null,vals)):null;
+        return "<tr><td>"+label+"</td><td></td><td></td>"+names2.map(function(nm){
+          var v=map[nm];
+          return "<td class=\""+((mark!==null&&v===mark)?"best":"")+"\">"+(v?isk(v):"\u2014")+"</td>";
+        }).join("")+"</tr>";
+      }
+      var foot=totRow("Total \u2014 buy orders",totBuy,true)+
+               totRow("Total \u2014 split",totSplit,true)+
+               totRow("Total \u2014 sell orders",totSell,false)+
+               "<tr><td>Units / volume</td><td>"+n0(p.rows.reduce(function(s,r){ return s+r.qty; },0))+"</td><td>"+n0(Math.round(totM3))+"</td>"+names2.map(function(){ return "<td></td>"; }).join("")+"</tr>";
+            $("mb-res").innerHTML="<table><thead>"+head+"</thead><tbody>"+body+"</tbody><tfoot>"+foot+"</tfoot></table>";
       var spread=(best&&worst&&totals[worst])?Math.abs(totals[best]-totals[worst]):0;
       $("mb-sum").innerHTML=
         "<div class=mb-card><b>"+p.rows.length+"</b><span>Item types</span><small>"+n0(p.rows.reduce(function(s,r){ return s+r.qty; },0))+" units</small></div>"+
@@ -9736,7 +9749,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
         "<div class=mb-card><b>"+esc(worst||"\u2014")+"</b><span>"+(side==="buy"?"Worst buyer":"Most expensive")+"</span><small>"+(worst?isk(totals[worst]):"")+"</small></div>"+
         "<div class=mb-card><b>"+isk(spread)+"</b><span>Hub spread</span><small>difference across hubs</small></div>";
       $("mb-bad").innerHTML=p.bad.length?("Not recognised ("+p.bad.length+"): "+esc(p.bad.slice(0,12).join(", "))+(p.bad.length>12?"\u2026":"")):"";
-      msg.textContent=(side==="buy"?"Hub buy orders \u2014 what you would be paid selling instantly.":(side==="split"?"Split price \u2014 midpoint between best buy and best sell.":"Hub sell orders \u2014 what it costs to buy instantly."))+" Each cell shows b = buy, s = sell per unit. Green marks the best hub per row.";
+      msg.textContent="Each row shows the split (midpoint) value per hub, with b = best buy and s = best sell per unit underneath. The three total lines value the whole list at buy, split and sell prices.";
     }catch(e){ if(msg){ msg.textContent="Could not price that list."; msg.className="bad"; } }
     busy=false;
   }
@@ -9748,13 +9761,10 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       "<div style=\"font-size:12px;color:var(--muted);margin-bottom:8px\">Paste an EVE multibuy list, an inventory copy, or a fit \u2014 one item per line. Quantities are read from <b>1000 Tritanium</b>, <b>Tritanium 1000</b>, <b>3x Warrior II</b> or a tab-separated inventory paste. Repeated lines are added together.</div>"+
       "<textarea id=mb-paste placeholder=\"Tritanium 1000&#10;3x 150mm Light AutoCannon II&#10;Pyerite\t500\"></textarea>"+
       "<div id=mb-bar2><button id=mb-run class=tab style=\"padding:8px 18px\">Price list</button>"+
-      "<label>Prices <select id=mb-side style=\"background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:6px 9px;font-family:inherit;font-size:13px\">"+
-      "<option value=buy>Buy orders (what you get paid)</option><option value=split>Split (midpoint)</option><option value=sell>Sell orders (cost to buy)</option></select></label>"+
       "<button id=mb-clear class=tab style=\"padding:8px 14px\">Clear</button><span id=mb-msg></span></div>"+
       "<div id=mb-sum></div><div id=mb-res></div><div id=mb-bad></div>";
     host.parentElement.insertBefore(d,host);
     $("mb-run").addEventListener("click",run);
-    $("mb-side").addEventListener("change",function(){ if(($("mb-paste").value||"").trim()) run(); });
     $("mb-clear").addEventListener("click",function(){ $("mb-paste").value=""; $("mb-res").innerHTML=""; $("mb-sum").innerHTML=""; $("mb-bad").innerHTML=""; $("mb-msg").textContent=""; });
   }
   window.EVETICK.add(mount);
