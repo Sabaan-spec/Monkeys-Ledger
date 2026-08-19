@@ -3535,7 +3535,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     var sellstrat=($('sellstrat')||{}).value||'sell';
     loadAdj();
     var eiv=0,eivOk=false;if(rec&&ADJ&&rec.materials){eivOk=true;rec.materials.forEach(function(m){eiv+=m.qty*runs*(ADJ[m.id]||0);});}
-    var jobCost=eivOk?eiv*(sci+fac+scc)/100:NaN;if(!isFinite(jobCost)||jobCost<=0){var _fb=document.getElementById("fee-breakdown");var _m=_fb&&(_fb.textContent||"").match(/job install fee\s+([\d,\.]+)/i);jobCost=_m?num(_m[1]):NaN;}if(!isFinite(jobCost))return;
+    var _fb=document.getElementById("fee-breakdown");var _m=_fb&&(_fb.textContent||"").match(/job install fee\s+([\d,\.]+)/i);var jobCost=_m?num(_m[1]):NaN;if(!isFinite(jobCost)&&eivOk)jobCost=eiv*(sci+fac+scc)/100;if(!isFinite(jobCost))return;
     var outQty=(rec?(rec.productQty||1):1)*runs;
     var pPrice=firstOrderPrice(res,sellstrat==='buy'?'buy':'sell');
     var gross=isFinite(pPrice)?pPrice*outQty:NaN;
