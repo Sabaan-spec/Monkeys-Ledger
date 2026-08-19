@@ -10158,27 +10158,35 @@ section.panel::after{bottom:0;left:0;border-bottom:1px solid var(--accent);borde
       save(o); }
     apply();
   }
+  var didOv=false, lastMut=0;
+  function fmtISK(v){ return v.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+" ISK"; }
   function apply(){
     var rev=$("s-revenue"), pf=$("s-profit"), mg=$("s-margin"), mc=$("s-matcost");
     if(!rev||!pf||!mg||!mc||!$("so-px")) return;
-    if(mkt===null || rev.textContent!==wrote.rev || pf.textContent!==wrote.pf || mg.textContent!==wrote.mg || mc.textContent!==wrote.cost){ mkt={rev:rev.textContent, pf:pf.textContent, pfc:pf.className, mg:mg.textContent, mgc:mg.className, cost:mc.textContent}; }
+    if(mkt===null || rev.textContent!==wrote.rev || pf.textContent!==wrote.pf || mg.textContent!==wrote.mg || mc.textContent!==wrote.cost){
+      mkt={rev:rev.textContent, pf:pf.textContent, pfc:pf.className, mg:mg.textContent, mgc:mg.className, cost:mc.textContent};
+    }
     var px=parseFloat($("so-px").value)||0;
     var qty=parseFloat($("so-qty").value)||outUnits();
-    var cost=num(mkt.cost)-num(mkt.rev)*mktFeeRate();
     var out=$("so-out");
     var lbl=rev.parentElement.querySelector(".stat-label");
+    var cost=num(mkt.cost)-num(mkt.rev)*mktFeeRate();
     if(!(px>0)){
-      writing=true;
-      rev.textContent=mkt.rev; pf.textContent=mkt.pf; pf.className=mkt.pfc; mg.textContent=mkt.mg; mg.className=mkt.mgc; mc.textContent=mkt.cost;
-      wrote={rev:rev.textContent,pf:pf.textContent,mg:mg.textContent,cost:mc.textContent};
-      writing=false;
-      if(lbl) lbl.innerHTML="Product value";
+      if(didOv){
+        writing=true;
+        rev.textContent=mkt.rev; pf.textContent=mkt.pf; pf.className=mkt.pfc; mg.textContent=mkt.mg; mg.className=mkt.mgc; mc.textContent=mkt.cost;
+        writing=false;
+        wrote={rev:rev.textContent,pf:pf.textContent,mg:mg.textContent,cost:mc.textContent};
+        didOv=false;
+      }
+      if(lbl && lbl.innerHTML!=="Product value") lbl.innerHTML="Product value";
       var mu=num(mkt.rev)/Math.max(1,outUnits());
       $("so-px").placeholder=mu?mu.toLocaleString(undefined,{maximumFractionDigits:2}):"market";
       var be0=cost/Math.max(1,outUnits())/(1-feeRate());
-      out.innerHTML='<div><div class="so-k">Break-even / unit</div><div class="so-v">'+isk(be0)+'</div></div>'+
+      var h0='<div><div class="so-k">Break-even / unit</div><div class="so-v">'+isk(be0)+'</div></div>'+
         '<div><div class="so-k">Fees</div><div class="so-v">'+((feeRate()*100).toFixed(2))+'%</div></div>'+
         '<div><div class="so-k">Status</div><div class="so-v" style="color:var(--muted)">market price</div></div>';
+      if(out.innerHTML!==h0) out.innerHTML=h0;
       return;
     }
     var gross=px*qty;
@@ -10187,20 +10195,30 @@ section.panel::after{bottom:0;left:0;border-bottom:1px solid var(--accent);borde
     var profit=net-cost;
     var margin=gross>0?(profit/gross*100):0;
     var be=cost/Math.max(1,qty)/(1-feeRate());
-    writing=true;
-    mc.textContent=(cost+fees).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+" ISK";
-    rev.textContent=gross.toLocaleString(undefined,{maximumFractionDigits:2})+" ISK";
-    pf.textContent=isk(profit)+" ISK"; pf.className="stat-val "+(profit>=0?"good":"bad");
-    mg.textContent=margin.toFixed(1)+"%"; mg.className="stat-val "+(profit>=0?"good":"bad");
-    wrote={rev:rev.textContent,pf:pf.textContent,mg:mg.textContent,cost:mc.textContent};
-    writing=false;
-    if(lbl) lbl.innerHTML='Product value<span class="so-flag">YOUR PRICE</span>';
-    out.innerHTML='<div><div class="so-k">After fees</div><div class="so-v">'+isk(net)+'</div></div>'+
+    var sRev=gross.toLocaleString(undefined,{maximumFractionDigits:2})+" ISK";
+    var sCost=fmtISK(cost+fees);
+    var sPf=isk(profit)+" ISK";
+    var sMg=margin.toFixed(1)+"%";
+    var cls="stat-val "+(profit>=0?"good":"bad");
+    if(rev.textContent!==sRev || pf.textContent!==sPf || mg.textContent!==sMg || mc.textContent!==sCost || pf.className!==cls){
+      writing=true;
+      mc.textContent=sCost;
+      rev.textContent=sRev;
+      pf.textContent=sPf; pf.className=cls;
+      mg.textContent=sMg; mg.className=cls;
+      wrote={rev:rev.textContent,pf:pf.textContent,mg:mg.textContent,cost:mc.textContent};
+      writing=false;
+    }
+    didOv=true;
+    var want='Product value<span class="so-flag">YOUR PRICE</span>';
+    if(lbl && lbl.innerHTML!==want) lbl.innerHTML=want;
+    var h1='<div><div class="so-k">After fees</div><div class="so-v">'+isk(net)+'</div></div>'+
       '<div><div class="so-k">Profit</div><div class="so-v '+(profit>=0?"good":"bad")+'">'+isk(profit)+'</div></div>'+
       '<div><div class="so-k">Margin</div><div class="so-v '+(profit>=0?"good":"bad")+'">'+margin.toFixed(1)+'%</div></div>'+
       '<div><div class="so-k">Break-even / unit</div><div class="so-v">'+isk(be)+'</div></div>'+
       '<div><div class="so-k">Fees</div><div class="so-v">'+isk(fees)+'</div></div>'+
       '<div><div class="so-k">Build cost</div><div class="so-v">'+isk(cost)+'</div></div>';
+    if(out.innerHTML!==h1) out.innerHTML=h1;
   }
   var t=null, lastRun=0;
   function run(){
@@ -10211,10 +10229,10 @@ section.panel::after{bottom:0;left:0;border-bottom:1px solid var(--accent);borde
     apply();
   }
   function onMut(){
-    if(Date.now()-lastRun>200){ run(); return; }
-    clearTimeout(t); t=setTimeout(run,60);
+    lastMut=Date.now();
+    clearTimeout(t); t=setTimeout(run,260);
   }
-  setInterval(function(){ var tc=document.getElementById("tab-calc"); if(tc && !tc.hidden && tc.offsetParent!==null) run(); },1000);
+  setInterval(function(){ var tc=document.getElementById("tab-calc"); if(tc && !tc.hidden && tc.offsetParent!==null && Date.now()-lastMut>400) run(); },1200);
   var mo=new MutationObserver(onMut);
   function boot(){
     var root=document.getElementById("tab-calc")||document.getElementById("result");
