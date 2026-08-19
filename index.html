@@ -9546,14 +9546,19 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
 #uo-toggle:hover{color:var(--accent);border-color:var(--accent)}
 </style>
 <style>/* Multibuy layout v1 */
-#mb-wrap2{max-width:1080px}
-#mb-sum{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))!important;gap:8px}
-#mb-res table{table-layout:fixed;width:100%}
-#mb-res th,#mb-res td{padding:5px 10px;white-space:nowrap}
-#mb-res th:nth-child(1),#mb-res td:nth-child(1){width:auto;overflow:hidden;text-overflow:ellipsis}
-#mb-res th:nth-child(2),#mb-res td:nth-child(2){width:92px}
-#mb-res th:nth-child(3),#mb-res td:nth-child(3){width:76px}
-#mb-res th:nth-child(n+4),#mb-res td:nth-child(n+4){width:112px}
+#mb-sum{grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:10px}
+#mb-res table{table-layout:fixed;width:100%;border-collapse:collapse}
+#mb-res th,#mb-res td{padding:0 14px;white-space:nowrap;vertical-align:middle;height:46px;box-sizing:border-box}
+#mb-res thead th{height:38px}
+#mb-res tbody tr,#mb-res tfoot tr{height:46px}
+#mb-res th:nth-child(1),#mb-res td:nth-child(1){width:22%;overflow:hidden;text-overflow:ellipsis}
+#mb-res th:nth-child(2),#mb-res td:nth-child(2){width:9%}
+#mb-res th:nth-child(3),#mb-res td:nth-child(3){width:7%}
+#mb-res th:nth-child(n+4),#mb-res td:nth-child(n+4){width:12.4%}
+#mb-res tbody tr:nth-child(even){background:rgba(84,194,218,.035)}
+#mb-res tfoot tr{background:rgba(84,194,218,.06)}
+#mb-res tfoot tr:first-child td{border-top:1px solid var(--border)}
+#mb-res tfoot td:first-child{color:var(--text)}
 @media (max-width:900px){#mb-res{overflow-x:auto}#mb-res table{min-width:720px}}
 </style>
 <script>/* Orders collapse v1 */
