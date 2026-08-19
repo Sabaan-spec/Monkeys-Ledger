@@ -10095,6 +10095,131 @@ section.panel::after{bottom:0;left:0;border-bottom:1px solid var(--accent);borde
   #tab-calc>section.controls.costs::after{display:none}
 }
 </style>
+<style>
+/* Sell order profit v1 */
+.product-head{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(300px,430px);gap:12px 22px;align-items:center}
+.product-head>div:first-child{grid-column:1;grid-row:1;min-width:0}
+.product-head>.hd-btns{grid-column:1;grid-row:1;justify-self:end}
+#so-box{grid-column:2;grid-row:1;border-left:1px solid var(--border);padding-left:18px}
+#so-box .so-t span{color:var(--muted);opacity:.7;letter-spacing:.04em}
+#so-box .so-t{font-family:var(--display);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:7px}
+#so-box .so-in{display:flex;gap:8px;align-items:center}
+#so-box .so-in label{font-size:11px;color:var(--muted);display:block;margin-bottom:3px}
+#so-box input{width:100%;background:#0a141c;border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:13px;padding:6px 8px;border-radius:2px;font-variant-numeric:tabular-nums}
+#so-box input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px rgba(84,194,218,.15)}
+#so-px-w{flex:1 1 auto;min-width:0}#so-qty-w{width:82px;flex:0 0 auto}
+#so-clr{flex:0 0 auto;align-self:flex-end;background:transparent;border:1px solid var(--border);color:var(--muted);font-size:11px;padding:6px 9px;border-radius:2px;cursor:pointer}
+#so-clr:hover{color:var(--text);border-color:var(--accent-dim)}
+#so-out{margin-top:8px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 10px;font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums}
+#so-out .so-k{color:var(--muted);font-size:10px;letter-spacing:.05em;text-transform:uppercase;font-family:var(--display)}
+#so-out .so-v{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#so-out .good{color:var(--good)}#so-out .bad{color:var(--bad)}
+.so-flag{color:var(--accent);font-size:10px;letter-spacing:.05em;margin-left:6px;font-family:var(--display)}
+@media (max-width:1080px){.product-head{grid-template-columns:minmax(0,1fr)}#so-box{grid-column:1;grid-row:2;border-left:0;border-top:1px solid var(--border);padding-left:0;padding-top:12px}.product-head>.hd-btns{justify-self:end}}
+</style>
+<script>
+(function(){
+  var KEY="eveSellPxV1";
+  function $(i){ return document.getElementById(i); }
+  function num(t){ var v=parseFloat(String(t||"").replace(/[^0-9.\-]/g,"")); return isFinite(v)?v:0; }
+  function isk(v){ return (v<0?"-":"")+Math.abs(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function store(){ try{ return JSON.parse(localStorage.getItem(KEY)||"{}"); }catch(e){ return {}; } }
+  function save(o){ try{ localStorage.setItem(KEY,JSON.stringify(o)); }catch(e){} }
+  var mkt=null, writing=false, curKey="";
+  function head(){ return document.querySelector("#tab-calc .product-head"); }
+  function prodName(){ var h=head(); if(!h) return ""; var t=h.querySelector("div"); return t?(t.textContent||"").split("\n")[0].trim().slice(0,60):""; }
+  function outUnits(){ var h=head(); if(!h) return 1; var m=(h.textContent||"").match(/([\d,]+)\s*unit\(s\)\s*output/i); return m?Math.max(1,num(m[1])):1; }
+  function feeRate(){ var b=parseFloat(($("f-broker")||{}).value)||0, s=parseFloat(($("f-sales")||{}).value)||0; return (b+s)/100; }
+  function mount(){
+    var h=head(); if(!h || $("so-box")) return;
+    var d=document.createElement("div"); d.id="so-box";
+    d.innerHTML='<div class="so-t">Your sell order <span>&middot; ISK</span></div>'+
+      '<div class="so-in"><div id="so-px-w"><label>Sell price / unit</label><input id="so-px" type="number" step="0.01" min="0" placeholder="market"></div>'+
+      '<div id="so-qty-w"><label>Units</label><input id="so-qty" type="number" step="1" min="1"></div>'+
+      '<button id="so-clr" type="button">Clear</button></div>'+
+      '<div id="so-out"></div>';
+    h.appendChild(d);
+    $("so-px").addEventListener("input",onEdit);
+    $("so-qty").addEventListener("input",onEdit);
+    $("so-clr").addEventListener("click",function(){ $("so-px").value=""; onEdit(); });
+    restore();
+  }
+  function restore(){
+    var k=prodName(); if(!k) return; curKey=k;
+    var s=store()[k];
+    if($("so-qty") && !$("so-qty").value) $("so-qty").value=outUnits();
+    if(s && $("so-px") && !$("so-px").value){ $("so-px").value=s.px; if(s.qty) $("so-qty").value=s.qty; }
+  }
+  function onEdit(){
+    var k=prodName(); if(k){ var o=store(); var px=parseFloat($("so-px").value);
+      if(px>0){ o[k]={px:px,qty:parseFloat($("so-qty").value)||outUnits()}; } else { delete o[k]; }
+      save(o); }
+    apply();
+  }
+  function apply(){
+    var rev=$("s-revenue"), pf=$("s-profit"), mg=$("s-margin"), mc=$("s-matcost");
+    if(!rev||!pf||!mg||!mc||!$("so-px")) return;
+    if(mkt===null) mkt={rev:rev.textContent, pf:pf.textContent, pfc:pf.className, mg:mg.textContent, mgc:mg.className};
+    var px=parseFloat($("so-px").value)||0;
+    var qty=parseFloat($("so-qty").value)||outUnits();
+    var cost=num(mc.textContent);
+    var out=$("so-out");
+    var lbl=rev.parentElement.querySelector(".stat-label");
+    if(!(px>0)){
+      writing=true;
+      rev.textContent=mkt.rev; pf.textContent=mkt.pf; pf.className=mkt.pfc; mg.textContent=mkt.mg; mg.className=mkt.mgc;
+      writing=false;
+      if(lbl) lbl.innerHTML="Product value";
+      var mu=num(mkt.rev)/Math.max(1,outUnits());
+      $("so-px").placeholder=mu?mu.toLocaleString(undefined,{maximumFractionDigits:2}):"market";
+      var be0=cost/Math.max(1,outUnits())/(1-feeRate());
+      out.innerHTML='<div><div class="so-k">Break-even / unit</div><div class="so-v">'+isk(be0)+'</div></div>'+
+        '<div><div class="so-k">Fees</div><div class="so-v">'+((feeRate()*100).toFixed(2))+'%</div></div>'+
+        '<div><div class="so-k">Status</div><div class="so-v" style="color:var(--muted)">market price</div></div>';
+      return;
+    }
+    var gross=px*qty;
+    var fees=gross*feeRate();
+    var net=gross-fees;
+    var profit=net-cost;
+    var margin=gross>0?(profit/gross*100):0;
+    var be=cost/Math.max(1,qty)/(1-feeRate());
+    writing=true;
+    rev.textContent=gross.toLocaleString(undefined,{maximumFractionDigits:2})+" ISK";
+    pf.textContent=isk(profit)+" ISK"; pf.className="stat-val "+(profit>=0?"good":"bad");
+    mg.textContent=margin.toFixed(1)+"%"; mg.className="stat-val "+(profit>=0?"good":"bad");
+    writing=false;
+    if(lbl) lbl.innerHTML='Product value<span class="so-flag">YOUR PRICE</span>';
+    out.innerHTML='<div><div class="so-k">After fees</div><div class="so-v">'+isk(net)+'</div></div>'+
+      '<div><div class="so-k">Profit</div><div class="so-v '+(profit>=0?"good":"bad")+'">'+isk(profit)+'</div></div>'+
+      '<div><div class="so-k">Margin</div><div class="so-v '+(profit>=0?"good":"bad")+'">'+margin.toFixed(1)+'%</div></div>'+
+      '<div><div class="so-k">Break-even / unit</div><div class="so-v">'+isk(be)+'</div></div>'+
+      '<div><div class="so-k">Fees</div><div class="so-v">'+isk(fees)+'</div></div>'+
+      '<div><div class="so-k">Build cost</div><div class="so-v">'+isk(cost)+'</div></div>';
+  }
+  var t=null;
+  function onMut(){
+    if(writing) return;
+    mkt=null;
+    clearTimeout(t); t=setTimeout(function(){
+      mount();
+      var k=prodName();
+      if(k && k!==curKey){ curKey=k; if($("so-px")){ $("so-px").value=""; $("so-qty").value=outUnits(); } restore(); }
+      apply();
+    },60);
+  }
+  var mo=new MutationObserver(onMut);
+  function boot(){
+    var root=document.getElementById("result")||document.getElementById("tab-calc");
+    if(!root){ setTimeout(boot,500); return; }
+    mo.observe(root,{childList:true,subtree:true,characterData:true});
+    ["f-broker","f-sales"].forEach(function(i){ var e=document.getElementById(i); if(e) e.addEventListener("input",function(){ setTimeout(apply,80); }); });
+    mount(); apply();
+  }
+  setTimeout(boot,400);
+  window.__SO={apply:apply,mount:mount};
+})();
+</script>
 </body>
 </html>
 
