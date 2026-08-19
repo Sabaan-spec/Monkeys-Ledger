@@ -9545,6 +9545,17 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
 #uo-toggle{cursor:pointer;user-select:none;color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border:1px solid var(--border);border-radius:2px;margin-left:10px;white-space:nowrap}
 #uo-toggle:hover{color:var(--accent);border-color:var(--accent)}
 </style>
+<style>/* Multibuy layout v1 */
+#mb-wrap2{max-width:1080px}
+#mb-sum{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))!important;gap:8px}
+#mb-res table{table-layout:fixed;width:100%}
+#mb-res th,#mb-res td{padding:5px 10px;white-space:nowrap}
+#mb-res th:nth-child(1),#mb-res td:nth-child(1){width:auto;overflow:hidden;text-overflow:ellipsis}
+#mb-res th:nth-child(2),#mb-res td:nth-child(2){width:92px}
+#mb-res th:nth-child(3),#mb-res td:nth-child(3){width:76px}
+#mb-res th:nth-child(n+4),#mb-res td:nth-child(n+4){width:112px}
+@media (max-width:900px){#mb-res{overflow-x:auto}#mb-res table{min-width:720px}}
+</style>
 <script>/* Orders collapse v1 */
 (function(){
   var KEY="eveOrdersCollapsedV1";
