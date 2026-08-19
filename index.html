@@ -10201,15 +10201,19 @@ section.panel::after{bottom:0;left:0;border-bottom:1px solid var(--accent);borde
       '<div><div class="so-k">Fees</div><div class="so-v">'+isk(fees)+'</div></div>'+
       '<div><div class="so-k">Build cost</div><div class="so-v">'+isk(cost)+'</div></div>';
   }
-  var t=null;
-  function onMut(){
-    clearTimeout(t); t=setTimeout(function(){
-      mount();
-      var k=prodName();
-      if(k && k!==curKey){ curKey=k; if($("so-px")){ $("so-px").value=""; $("so-qty").value=outUnits(); } restore(); }
-      apply();
-    },60);
+  var t=null, lastRun=0;
+  function run(){
+    lastRun=Date.now();
+    mount();
+    var k=prodName();
+    if(k && k!==curKey){ curKey=k; if($("so-px")){ $("so-px").value=""; $("so-qty").value=outUnits(); } restore(); }
+    apply();
   }
+  function onMut(){
+    if(Date.now()-lastRun>200){ run(); return; }
+    clearTimeout(t); t=setTimeout(run,60);
+  }
+  setInterval(function(){ var tc=document.getElementById("tab-calc"); if(tc && !tc.hidden && tc.offsetParent!==null) run(); },1000);
   var mo=new MutationObserver(onMut);
   function boot(){
     var root=document.getElementById("tab-calc")||document.getElementById("result");
