@@ -3536,13 +3536,14 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     loadAdj();
     var eiv=0,eivOk=false;if(rec&&ADJ&&rec.materials){eivOk=true;rec.materials.forEach(function(m){eiv+=m.qty*runs*(ADJ[m.id]||0);});}
     var jobCost=eivOk?eiv*(sci+fac+scc)/100:0;
-    var totalCost=mci.cost+jobCost;
     var outQty=(rec?(rec.productQty||1):1)*runs;
     var pPrice=firstOrderPrice(res,sellstrat==='buy'?'buy':'sell');
     var gross=isFinite(pPrice)?pPrice*outQty:NaN;
-    var netRev=gross*(1-sales/100-broker/100);
-    var profit=netRev-totalCost;
-    var margin=totalCost>0?(profit/totalCost*100):NaN;
+    var _fr=(sales+(sellstrat==="sell"?broker:0))/100;
+    var _fee=isFinite(gross)?gross*_fr:0;
+    var totalCost=mci.cost+jobCost+_fee;
+    var profit=isFinite(gross)?(gross-totalCost):NaN;
+    var margin=(isFinite(gross)&&gross>0)?(profit/gross*100):NaN;
     setEl('s-matcost',iskFmt(totalCost));
     setEl('s-revenue',iskFmt(gross));
     setEl('s-profit',iskFmt(profit),'stat-val '+(profit>=0?'good':'bad'));
@@ -10130,6 +10131,7 @@ section.panel::after{bottom:0;left:0;border-bottom:1px solid var(--accent);borde
   function prodName(){ var h=head(); if(!h) return ""; var t=h.querySelector("div"); return t?(t.textContent||"").split("\n")[0].trim().slice(0,60):""; }
   function outUnits(){ var h=head(); if(!h) return 1; var m=(h.textContent||"").match(/([\d,]+)\s*unit\(s\)\s*output/i); return m?Math.max(1,num(m[1])):1; }
   function feeRate(){ var b=parseFloat(($("f-broker")||{}).value)||0, s=parseFloat(($("f-sales")||{}).value)||0; return (b+s)/100; }
+  function mktFeeRate(){ var br=parseFloat(($("f-broker")||{}).value)||0, s=parseFloat(($("f-sales")||{}).value)||0; var ss=(document.getElementById("sellstrat")||{}).value; return (s+(ss==="sell"?br:0))/100; }
   function mount(){
     var h=head(); if(!h || $("so-box")) return;
     var d=document.createElement("div"); d.id="so-box";
@@ -10162,7 +10164,7 @@ section.panel::after{bottom:0;left:0;border-bottom:1px solid var(--accent);borde
     if(mkt===null || rev.textContent!==wrote.rev || pf.textContent!==wrote.pf || mg.textContent!==wrote.mg){ mkt={rev:rev.textContent, pf:pf.textContent, pfc:pf.className, mg:mg.textContent, mgc:mg.className}; }
     var px=parseFloat($("so-px").value)||0;
     var qty=parseFloat($("so-qty").value)||outUnits();
-    var cost=num(mc.textContent);
+    var cost=num(mc.textContent)-num(mkt.rev)*mktFeeRate();
     var out=$("so-out");
     var lbl=rev.parentElement.querySelector(".stat-label");
     if(!(px>0)){
