@@ -10189,8 +10189,9 @@ section.panel::after{bottom:0;left:0;border-bottom:1px solid var(--accent);borde
     var out=$("so-out");
     var mktRev=num(rev.textContent), mktCost=num(mc.textContent);
     var mdel=Number(window.__MATDELTA)||0;
-    var cost=mktCost-mktRev*mktFeeRate()+mdel;
-    var active=(px>0)||(mdel!==0);
+    var sdel=Number(window.__STRUCTDELTA)||0;
+    var cost=mktCost-mktRev*mktFeeRate()+mdel+sdel;
+    var active=(px>0)||(mdel!==0)||(sdel!==0);
     if(!active){
       [rev,pf,mg,mc].forEach(clearOv);
       flag(rev,"Product value"); flag(mc,"Total cost");
@@ -10218,7 +10219,7 @@ section.panel::after{bottom:0;left:0;border-bottom:1px solid var(--accent);borde
     setOv(mg,margin.toFixed(1)+"%",cls);
     if(own){ setOv(rev,gross.toLocaleString(undefined,{maximumFractionDigits:2})+" ISK"); flag(rev,'Product value<span class="so-flag">YOUR PRICE</span>'); }
     else { clearOv(rev); flag(rev,"Product value"); }
-    flag(mc, mdel!==0 ? 'Total cost<span class="so-flag2">YOUR COSTS</span>' : "Total cost");
+    flag(mc, (mdel!==0||sdel!==0) ? 'Total cost<span class="so-flag2">YOUR COSTS</span>' : "Total cost");
     var h1='<div><div class="so-k">After fees</div><div class="so-v">'+isk(net)+'</div></div>'+
       '<div><div class="so-k">Profit</div><div class="so-v '+(profit>=0?"good":"bad")+'">'+isk(profit)+'</div></div>'+
       '<div><div class="so-k">Margin</div><div class="so-v '+(profit>=0?"good":"bad")+'">'+margin.toFixed(1)+'%</div></div>'+
@@ -10373,6 +10374,83 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
   }
   setTimeout(boot,600);
   window.__MP={paint:paint};
+})();
+</script>
+<style>/* Structure bonus v1 */
+#sb-note{font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:-2px}
+#sb-note b{color:var(--good);font-weight:400}
+</style>
+<script>
+/* Structure bonus v1 */
+(function(){
+  var KEY="eveStructBonusV1";
+  function $(i){ return document.getElementById(i); }
+  function num(t){ var v=parseFloat(String(t==null?"":t).replace(/[^0-9.\-]/g,"")); return isFinite(v)?v:NaN; }
+  function load(){ try{ return JSON.parse(localStorage.getItem(KEY)||"{}"); }catch(e){ return {}; } }
+  function save(o){ try{ localStorage.setItem(KEY,JSON.stringify(o)); }catch(e){} }
+  function isk(v){ var a=Math.abs(v); var s=a>=1e9?(a/1e9).toFixed(2)+"B":a>=1e6?(a/1e6).toFixed(2)+"M":a>=1e3?(a/1e3).toFixed(1)+"K":a.toFixed(0); return (v<0?"-":"")+s; }
+  function mkField(id,label,val){
+    var d=document.createElement("div"); d.className="field narrow";
+    var l=document.createElement("label"); l.setAttribute("for",id); l.textContent=label;
+    var i=document.createElement("input"); i.type="number"; i.id=id; i.step="0.01"; i.min="0"; i.max="100"; i.value=val;
+    d.appendChild(l); d.appendChild(i);
+    return d;
+  }
+  function parts(){
+    var fb=$("fee-breakdown"); if(!fb) return null;
+    var t=fb.textContent||"";
+    var m=t.match(/materials\s+([\d,\.]+)\s*ISK/i);
+    var jf=t.match(/job install fee\s+([\d,\.]+)\s*ISK/i);
+    if(!m||!jf) return null;
+    var mv=num(m[1]), jv=num(jf[1]);
+    if(!isFinite(mv)||!isFinite(jv)) return null;
+    return {mat:mv, job:jv};
+  }
+  function recalc(){
+    var mi=$("f-strmat"), ji=$("f-strjob");
+    if(!mi||!ji){ window.__STRUCTDELTA=0; return; }
+    var mr=parseFloat(mi.value)||0, jr=parseFloat(ji.value)||0;
+    var p=parts();
+    if(!p || (mr<=0 && jr<=0)){ window.__STRUCTDELTA=0; note(0,0); poke(); return; }
+    var matEff=p.mat+(Number(window.__MATDELTA)||0);
+    var dMat=-matEff*(mr/100);
+    var dJob=-p.job*(jr/100);
+    window.__STRUCTDELTA=dMat+dJob;
+    note(dMat,dJob);
+    poke();
+  }
+  function note(dm,dj){
+    var host=$("f-strjob"); if(!host) return;
+    var box=host.parentElement.parentElement;
+    var n=$("sb-note");
+    if(dm===0 && dj===0){ if(n&&n.parentNode) n.parentNode.removeChild(n); return; }
+    if(!n){ n=document.createElement("div"); n.id="sb-note"; box.insertBefore(n, host.parentElement.nextSibling); }
+    var t="Saves <b>"+isk(-(dm+dj))+" ISK</b> \u00b7 materials "+isk(dm)+" \u00b7 job fee "+isk(dj);
+    if(n.innerHTML!==t) n.innerHTML=t;
+  }
+  function poke(){ if(window.__SO && window.__SO.apply) window.__SO.apply(); }
+  function boot(){
+    var anchor=$("f-broker");
+    if(!anchor || !anchor.parentElement || !anchor.parentElement.parentElement){ setTimeout(boot,600); return; }
+    if($("f-strmat")) return;
+    var s=load();
+    var host=anchor.parentElement.parentElement;
+    var after=anchor.parentElement;
+    var f1=mkField("f-strmat","Structure material bonus %", s.mat!=null?s.mat:"");
+    var f2=mkField("f-strjob","Structure job cost bonus %", s.job!=null?s.job:"");
+    host.insertBefore(f1, after.nextSibling);
+    host.insertBefore(f2, f1.nextSibling);
+    function onIn(){
+      var o={mat:parseFloat($("f-strmat").value)||0, job:parseFloat($("f-strjob").value)||0};
+      save(o); recalc();
+    }
+    $("f-strmat").addEventListener("input",onIn);
+    $("f-strjob").addEventListener("input",onIn);
+    setInterval(function(){ var tc=$("tab-calc"); if(tc && !tc.hidden && tc.offsetParent!==null) recalc(); },800);
+    recalc();
+  }
+  setTimeout(boot,700);
+  window.__SB={recalc:recalc};
 })();
 </script>
 </body>
