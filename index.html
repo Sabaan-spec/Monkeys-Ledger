@@ -10116,6 +10116,7 @@ section.panel::after{bottom:0;left:0;border-bottom:1px solid var(--accent);borde
 #so-out .so-v{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #so-out .good{color:var(--good)}#so-out .bad{color:var(--bad)}
 .so-flag{color:var(--accent);font-size:10px;letter-spacing:.05em;margin-left:6px;font-family:var(--display)}
+.so-hidden{display:none!important}
 @media (max-width:1080px){.product-head{grid-template-columns:minmax(0,1fr)}#so-box{grid-column:1;grid-row:2;border-left:0;border-top:1px solid var(--border);padding-left:0;padding-top:12px}.product-head>.hd-btns{justify-self:end}}
 </style>
 <script>
@@ -10158,29 +10159,40 @@ section.panel::after{bottom:0;left:0;border-bottom:1px solid var(--accent);borde
       save(o); }
     apply();
   }
-  var didOv=false, lastMut=0;
-  function fmtISK(v){ return v.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+" ISK"; }
+  var lastMut=0;
+  function ovSpan(el){
+    var n=el.nextElementSibling;
+    if(n && n.className && String(n.className).indexOf("so-ovv")>=0) return n;
+    n=document.createElement("span");
+    n.className="stat-val so-ovv";
+    el.parentNode.insertBefore(n, el.nextSibling);
+    return n;
+  }
+  function setOv(el,txt,cls){
+    var s=ovSpan(el);
+    if(s.textContent!==txt) s.textContent=txt;
+    var c=(cls||"stat-val")+" so-ovv";
+    if(s.className!==c) s.className=c;
+    if(String(el.className).indexOf("so-hidden")<0) el.className=el.className+" so-hidden";
+  }
+  function clearOv(el){
+    var n=el.nextElementSibling;
+    if(n && n.className && String(n.className).indexOf("so-ovv")>=0) n.parentNode.removeChild(n);
+    el.className=String(el.className).replace(/\s*so-hidden/,"");
+  }
   function apply(){
     var rev=$("s-revenue"), pf=$("s-profit"), mg=$("s-margin"), mc=$("s-matcost");
     if(!rev||!pf||!mg||!mc||!$("so-px")) return;
-    if(mkt===null || rev.textContent!==wrote.rev || pf.textContent!==wrote.pf || mg.textContent!==wrote.mg || mc.textContent!==wrote.cost){
-      mkt={rev:rev.textContent, pf:pf.textContent, pfc:pf.className, mg:mg.textContent, mgc:mg.className, cost:mc.textContent};
-    }
     var px=parseFloat($("so-px").value)||0;
     var qty=parseFloat($("so-qty").value)||outUnits();
     var out=$("so-out");
     var lbl=rev.parentElement.querySelector(".stat-label");
-    var cost=num(mkt.cost)-num(mkt.rev)*mktFeeRate();
+    var mktRev=num(rev.textContent), mktCost=num(mc.textContent);
+    var cost=mktCost-mktRev*mktFeeRate();
     if(!(px>0)){
-      if(didOv){
-        writing=true;
-        rev.textContent=mkt.rev; pf.textContent=mkt.pf; pf.className=mkt.pfc; mg.textContent=mkt.mg; mg.className=mkt.mgc; mc.textContent=mkt.cost;
-        writing=false;
-        wrote={rev:rev.textContent,pf:pf.textContent,mg:mg.textContent,cost:mc.textContent};
-        didOv=false;
-      }
+      [rev,pf,mg,mc].forEach(clearOv);
       if(lbl && lbl.innerHTML!=="Product value") lbl.innerHTML="Product value";
-      var mu=num(mkt.rev)/Math.max(1,outUnits());
+      var mu=mktRev/Math.max(1,outUnits());
       $("so-px").placeholder=mu?mu.toLocaleString(undefined,{maximumFractionDigits:2}):"market";
       var be0=cost/Math.max(1,outUnits())/(1-feeRate());
       var h0='<div><div class="so-k">Break-even / unit</div><div class="so-v">'+isk(be0)+'</div></div>'+
@@ -10195,21 +10207,11 @@ section.panel::after{bottom:0;left:0;border-bottom:1px solid var(--accent);borde
     var profit=net-cost;
     var margin=gross>0?(profit/gross*100):0;
     var be=cost/Math.max(1,qty)/(1-feeRate());
-    var sRev=gross.toLocaleString(undefined,{maximumFractionDigits:2})+" ISK";
-    var sCost=fmtISK(cost+fees);
-    var sPf=isk(profit)+" ISK";
-    var sMg=margin.toFixed(1)+"%";
     var cls="stat-val "+(profit>=0?"good":"bad");
-    if(rev.textContent!==sRev || pf.textContent!==sPf || mg.textContent!==sMg || mc.textContent!==sCost || pf.className!==cls){
-      writing=true;
-      mc.textContent=sCost;
-      rev.textContent=sRev;
-      pf.textContent=sPf; pf.className=cls;
-      mg.textContent=sMg; mg.className=cls;
-      wrote={rev:rev.textContent,pf:pf.textContent,mg:mg.textContent,cost:mc.textContent};
-      writing=false;
-    }
-    didOv=true;
+    setOv(mc,(cost+fees).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+" ISK");
+    setOv(rev,gross.toLocaleString(undefined,{maximumFractionDigits:2})+" ISK");
+    setOv(pf,isk(profit)+" ISK",cls);
+    setOv(mg,margin.toFixed(1)+"%",cls);
     var want='Product value<span class="so-flag">YOUR PRICE</span>';
     if(lbl && lbl.innerHTML!==want) lbl.innerHTML=want;
     var h1='<div><div class="so-k">After fees</div><div class="so-v">'+isk(net)+'</div></div>'+
