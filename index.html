@@ -10688,12 +10688,16 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
     if(!es.length) rows='<tr><td colspan="7" class="pj-none">No entries yet. Add an expense or a sale below, or import from your wallet.</td></tr>';
     if(body.innerHTML!==rows) body.innerHTML=rows;
   }
+  var shownId=null;
   function setFields(p){
     var nm=$("pj-name"), pr=$("pj-product"), un=$("pj-units");
     if(!nm) return;
-    if(document.activeElement!==nm) nm.value=p?(p.name||""):"";
-    if(document.activeElement!==pr) pr.value=p?(p.product||""):"";
-    if(document.activeElement!==un) un.value=p?(p.units||""):"";
+    var d=db();
+    var force=(d.active!==shownId);
+    shownId=d.active;
+    if(force || document.activeElement!==nm) nm.value=p?(p.name||""):"";
+    if(force || document.activeElement!==pr) pr.value=p?(p.product||""):"";
+    if(force || document.activeElement!==un) un.value=p?(p.units||""):"";
   }
   window.__PL={render:render, db:db, save:save, cur:cur, totals:totals, uid:uid};
 })();
