@@ -10838,7 +10838,7 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
     a.download=(p.name||"project").replace(/[^A-Za-z0-9_-]+/g,"_")+"_ledger.csv";
     document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },500);
   }
-  function panels(){ return [].slice.call(document.querySelectorAll('section[id^="tab-"]')); }
+  function panels(){ return [].slice.call(document.querySelectorAll('[id^="tab-"]')).filter(function(e){ return /^(SECTION|DIV)$/.test(e.tagName) && e.parentNode && e.id!=='tab-proj-x'; }); }
   function myBtn(){ return document.querySelector('nav.tabs button.tab[data-tab=proj]'); }
   function show(){
     panels().forEach(function(s){ if(s.id==='tab-proj') s.removeAttribute('hidden'); else s.setAttribute('hidden',''); });
