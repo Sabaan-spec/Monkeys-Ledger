@@ -10575,21 +10575,21 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
 })();
 </script>
 <style>/* Project ledger v1 */
-#tab-proj .pl-top{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;align-items:end}
-#tab-proj .pl-f{display:flex;flex-direction:column;gap:4px;min-width:0}
-#tab-proj .pl-f label{font-size:11px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;font-family:var(--display)}
+#tab-proj .pj-top{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;align-items:end}
+#tab-proj .pj-f{display:flex;flex-direction:column;gap:4px;min-width:0}
+#tab-proj .pj-f label{font-size:11px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;font-family:var(--display)}
 #tab-proj input,#tab-proj select{background:#0a141c;border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:13px;padding:6px 8px;border-radius:2px;min-width:0;width:100%;box-sizing:border-box}
 #tab-proj input:focus,#tab-proj select:focus{outline:none;border-color:var(--accent)}
-#tab-proj .pl-btn{background:transparent;border:1px solid var(--border);color:var(--muted);font-family:var(--display);font-size:11px;letter-spacing:.05em;text-transform:uppercase;padding:7px 11px;border-radius:2px;cursor:pointer;white-space:nowrap}
-#tab-proj .pl-btn:hover{border-color:var(--accent-dim);color:var(--text)}
-#tab-proj .pl-btn.go{border-color:var(--accent-dim);color:var(--accent)}
-#tab-proj .pl-btn.bad:hover{border-color:var(--bad);color:var(--bad)}
-#tab-proj .pl-row{display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-top:10px}
-#pl-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0}
-#pl-sum .pl-card{border:1px solid var(--border);background:linear-gradient(180deg,rgba(84,194,218,.05),transparent);padding:10px 12px;border-radius:2px}
-#pl-sum .pl-k{font-size:10px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;font-family:var(--display)}
-#pl-sum .pl-v{font-size:19px;font-family:var(--mono);font-variant-numeric:tabular-nums;margin-top:3px}
-#pl-sum .pl-s{font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:2px}
+#tab-proj .pj-btn{background:transparent;border:1px solid var(--border);color:var(--muted);font-family:var(--display);font-size:11px;letter-spacing:.05em;text-transform:uppercase;padding:7px 11px;border-radius:2px;cursor:pointer;white-space:nowrap}
+#tab-proj .pj-btn:hover{border-color:var(--accent-dim);color:var(--text)}
+#tab-proj .pj-btn.go{border-color:var(--accent-dim);color:var(--accent)}
+#tab-proj .pj-btn.bad:hover{border-color:var(--bad);color:var(--bad)}
+#tab-proj .pj-row{display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-top:10px}
+#pj-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0}
+#pj-sum .pj-card{border:1px solid var(--border);background:linear-gradient(180deg,rgba(84,194,218,.05),transparent);padding:10px 12px;border-radius:2px}
+#pj-sum .pj-k{font-size:10px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;font-family:var(--display)}
+#pj-sum .pj-v{font-size:19px;font-family:var(--mono);font-variant-numeric:tabular-nums;margin-top:3px}
+#pj-sum .pj-s{font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:2px}
 #tab-proj table{width:100%;border-collapse:collapse;table-layout:fixed}
 #tab-proj th,#tab-proj td{padding:0 10px;height:40px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;border-bottom:1px solid rgba(38,58,71,.55)}
 #tab-proj thead th{height:34px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-family:var(--display);text-align:right}
@@ -10597,12 +10597,12 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
 #tab-proj tbody td{font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums;text-align:right}
 #tab-proj tbody td:nth-child(1),#tab-proj tbody td:nth-child(2),#tab-proj tbody td:nth-child(3),#tab-proj tbody td:last-child{text-align:left}
 #tab-proj tbody tr:nth-child(even){background:rgba(84,194,218,.03)}
-#tab-proj .pl-exp{color:var(--bad)}#tab-proj .pl-sale{color:var(--good)}
-#tab-proj td.pl-ed{cursor:pointer}#tab-proj td.pl-ed:hover{background:rgba(84,194,218,.08)}
-#tab-proj td input.pl-in{height:26px;font-size:12px;padding:2px 5px;text-align:inherit}
-#tab-proj .pl-x{color:var(--muted);cursor:pointer;font-size:14px}#tab-proj .pl-x:hover{color:var(--bad)}
-#tab-proj .pl-none{color:var(--muted);font-size:12px;padding:14px 2px}
-#tab-proj .pl-tag{font-size:10px;border:1px solid var(--border);border-radius:2px;padding:1px 5px;color:var(--muted);margin-left:6px}
+#tab-proj .pj-exp{color:var(--bad)}#tab-proj .pj-sale{color:var(--good)}
+#tab-proj td.pj-ed{cursor:pointer}#tab-proj td.pj-ed:hover{background:rgba(84,194,218,.08)}
+#tab-proj td input.pj-in{height:26px;font-size:12px;padding:2px 5px;text-align:inherit}
+#tab-proj .pj-x{color:var(--muted);cursor:pointer;font-size:14px}#tab-proj .pj-x:hover{color:var(--bad)}
+#tab-proj .pj-none{color:var(--muted);font-size:12px;padding:14px 2px}
+#tab-proj .pj-tag{font-size:10px;border:1px solid var(--border);border-radius:2px;padding:1px 5px;color:var(--muted);margin-left:6px}
 </style>
 <style>/* Project ledger cols */
 #tab-proj th:nth-child(1),#tab-proj td:nth-child(1){width:104px}
@@ -10612,7 +10612,7 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
 #tab-proj th:nth-child(6),#tab-proj td:nth-child(6){width:152px}
 #tab-proj:not([hidden]){display:block}
 #tab-proj[hidden]{display:none!important}
-@media (max-width:900px){#tab-proj table{min-width:720px}#tab-proj .pl-row{gap:6px}}
+@media (max-width:900px){#tab-proj table{min-width:720px}#tab-proj .pj-row{gap:6px}}
 </style>
 <script>
 /* Project ledger v1 */
@@ -10642,7 +10642,7 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
       cpu:made>0?(spend/made):0};
   }
   function renderSel(){
-    var d=db(), s=$("pl-proj"); if(!s) return;
+    var d=db(), s=$("pj-proj"); if(!s) return;
     var ks=Object.keys(d.projects);
     var html=ks.map(function(k){ return '<option value="'+k+'"'+(k===d.active?" selected":"")+'>'+esc(d.projects[k].name||"Untitled")+"</option>"; }).join("");
     if(!ks.length) html='<option value="">No projects yet</option>';
@@ -10652,7 +10652,7 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
   function render(){
     renderSel();
     var p=cur();
-    var sum=$("pl-sum"), body=$("pl-body"), none=$("pl-none");
+    var sum=$("pj-sum"), body=$("pj-body"), none=$("pj-none");
     if(!p){ if(sum) sum.innerHTML=""; if(body) body.innerHTML=""; if(none){ none.style.display=""; none.textContent="Create a project to start logging."; } setFields(null); return; }
     if(none) none.style.display="none";
     setFields(p);
@@ -10667,7 +10667,7 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
       ["Unsold stock", n0(t.unsold)+" units", t.avgSale>0?("\u2248 "+shrt(t.unsoldVal)+" ISK at avg sale"):"no sales yet"]
     ];
     var h=cards.map(function(c){
-      return '<div class="pl-card"><div class="pl-k">'+esc(c[0])+'</div><div class="pl-v'+(c[3]?" "+c[3]:"")+'" style="'+(c[3]==="good"?"color:var(--good)":(c[3]==="bad"?"color:var(--bad)":""))+'">'+esc(c[1])+'</div><div class="pl-s">'+esc(c[2])+"</div></div>";
+      return '<div class="pj-card"><div class="pj-k">'+esc(c[0])+'</div><div class="pj-v'+(c[3]?" "+c[3]:"")+'" style="'+(c[3]==="good"?"color:var(--good)":(c[3]==="bad"?"color:var(--bad)":""))+'">'+esc(c[1])+'</div><div class="pj-s">'+esc(c[2])+"</div></div>";
     }).join("");
     if(sum.innerHTML!==h) sum.innerHTML=h;
     var es=(p.entries||[]).slice().sort(function(a,b){ return (b.ts||0)-(a.ts||0); });
@@ -10677,19 +10677,19 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
       var ds=d.toISOString().slice(0,10);
       return "<tr data-id=\""+e.id+"\">"+
         "<td>"+ds+"</td>"+
-        '<td class="'+(e.kind==="sale"?"pl-sale":"pl-exp")+'">'+(e.kind==="sale"?"Sale":"Expense")+(e.txid?'<span class="pl-tag">wallet</span>':"")+"</td>"+
-        '<td class="pl-ed" data-f="item">'+esc(e.item||"")+"</td>"+
-        '<td class="pl-ed" data-f="qty">'+n0(+e.qty||0)+"</td>"+
-        '<td class="pl-ed" data-f="unit">'+isk(+e.unit||0)+"</td>"+
-        '<td class="'+(e.kind==="sale"?"pl-sale":"pl-exp")+'">'+(e.kind==="sale"?"+":"-")+isk(tot)+"</td>"+
-        '<td class="pl-ed" data-f="note">'+esc(e.note||"")+' <span class="pl-x" data-x="1" title="Delete">\u00d7</span></td>'+
+        '<td class="'+(e.kind==="sale"?"pj-sale":"pj-exp")+'">'+(e.kind==="sale"?"Sale":"Expense")+(e.txid?'<span class="pj-tag">wallet</span>':"")+"</td>"+
+        '<td class="pj-ed" data-f="item">'+esc(e.item||"")+"</td>"+
+        '<td class="pj-ed" data-f="qty">'+n0(+e.qty||0)+"</td>"+
+        '<td class="pj-ed" data-f="unit">'+isk(+e.unit||0)+"</td>"+
+        '<td class="'+(e.kind==="sale"?"pj-sale":"pj-exp")+'">'+(e.kind==="sale"?"+":"-")+isk(tot)+"</td>"+
+        '<td class="pj-ed" data-f="note">'+esc(e.note||"")+' <span class="pj-x" data-x="1" title="Delete">\u00d7</span></td>'+
       "</tr>";
     }).join("");
-    if(!es.length) rows='<tr><td colspan="7" class="pl-none">No entries yet. Add an expense or a sale below, or import from your wallet.</td></tr>';
+    if(!es.length) rows='<tr><td colspan="7" class="pj-none">No entries yet. Add an expense or a sale below, or import from your wallet.</td></tr>';
     if(body.innerHTML!==rows) body.innerHTML=rows;
   }
   function setFields(p){
-    var nm=$("pl-name"), pr=$("pl-product"), un=$("pl-units");
+    var nm=$("pj-name"), pr=$("pj-product"), un=$("pj-units");
     if(!nm) return;
     if(document.activeElement!==nm) nm.value=p?(p.name||""):"";
     if(document.activeElement!==pr) pr.value=p?(p.product||""):"";
@@ -10706,31 +10706,31 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
   function P(){ return window.__PL; }
   function panelHtml(){
     return '<section class="controls panel">'+
-      '<div class="pl-top">'+
-      '<div class="pl-f"><label>Project</label><select id="pl-proj"></select></div>'+
-      '<div class="pl-f"><label>Project name</label><input id="pl-name" type="text" placeholder="e.g. Thanatos run 1"></div>'+
-      '<div class="pl-f"><label>Product</label><input id="pl-product" type="text" placeholder="e.g. Thanatos"></div>'+
-      '<div class="pl-f"><label>Units produced</label><input id="pl-units" type="number" min="0" step="1" placeholder="0"></div>'+
+      '<div class="pj-top">'+
+      '<div class="pj-f"><label>Project</label><select id="pj-proj"></select></div>'+
+      '<div class="pj-f"><label>Project name</label><input id="pj-name" type="text" placeholder="e.g. Thanatos run 1"></div>'+
+      '<div class="pj-f"><label>Product</label><input id="pj-product" type="text" placeholder="e.g. Thanatos"></div>'+
+      '<div class="pj-f"><label>Units produced</label><input id="pj-units" type="number" min="0" step="1" placeholder="0"></div>'+
       '</div>'+
-      '<div class="pl-row">'+
-      '<button class="pl-btn go" id="pl-new" type="button">New project</button>'+
-      '<button class="pl-btn" id="pl-csv" type="button">Export CSV</button>'+
-      '<button class="pl-btn" id="pl-import" type="button">Import from wallet</button>'+
-      '<button class="pl-btn bad" id="pl-del" type="button">Delete project</button>'+
+      '<div class="pj-row">'+
+      '<button class="pj-btn go" id="pj-new" type="button">New project</button>'+
+      '<button class="pj-btn" id="pj-csv" type="button">Export CSV</button>'+
+      '<button class="pj-btn" id="pj-import" type="button">Import from wallet</button>'+
+      '<button class="pj-btn bad" id="pj-del" type="button">Delete project</button>'+
       '</div></section>'+
-      '<div id="pl-sum"></div>'+
+      '<div id="pj-sum"></div>'+
       '<section class="panel">'+
-      '<div class="pl-row" style="margin:0 0 12px 0">'+
-      '<div class="pl-f" style="width:116px"><label>Type</label><select id="pl-kind"><option value="expense">Expense</option><option value="sale">Sale</option></select></div>'+
-      '<div class="pl-f" style="flex:2 1 200px"><label>Item / description</label><input id="pl-item" type="text" placeholder="Tritanium"></div>'+
-      '<div class="pl-f" style="width:120px"><label>Quantity</label><input id="pl-qty" type="number" step="any" placeholder="0"></div>'+
-      '<div class="pl-f" style="width:150px"><label>Unit price</label><input id="pl-unit" type="number" step="any" placeholder="0.00"></div>'+
-      '<div class="pl-f" style="width:150px"><label>Date</label><input id="pl-date" type="date"></div>'+
-      '<div class="pl-f" style="flex:1 1 150px"><label>Note</label><input id="pl-note" type="text" placeholder="optional"></div>'+
-      '<button class="pl-btn go" id="pl-add" type="button">Add entry</button>'+
+      '<div class="pj-row" style="margin:0 0 12px 0">'+
+      '<div class="pj-f" style="width:116px"><label>Type</label><select id="pj-kind"><option value="expense">Expense</option><option value="sale">Sale</option></select></div>'+
+      '<div class="pj-f" style="flex:2 1 200px"><label>Item / description</label><input id="pj-item" type="text" placeholder="Tritanium"></div>'+
+      '<div class="pj-f" style="width:120px"><label>Quantity</label><input id="pj-qty" type="number" step="any" placeholder="0"></div>'+
+      '<div class="pj-f" style="width:150px"><label>Unit price</label><input id="pj-unit" type="number" step="any" placeholder="0.00"></div>'+
+      '<div class="pj-f" style="width:150px"><label>Date</label><input id="pj-date" type="date"></div>'+
+      '<div class="pj-f" style="flex:1 1 150px"><label>Note</label><input id="pj-note" type="text" placeholder="optional"></div>'+
+      '<button class="pj-btn go" id="pj-add" type="button">Add entry</button>'+
       '</div>'+
-      '<table><thead><tr><th>Date</th><th>Type</th><th>Item</th><th>Qty</th><th>Unit price</th><th>Total</th><th>Note</th></tr></thead><tbody id="pl-body"></tbody></table>'+
-      '<div id="pl-none" class="pl-none"></div>'+
+      '<table><thead><tr><th>Date</th><th>Type</th><th>Item</th><th>Qty</th><th>Unit price</th><th>Total</th><th>Note</th></tr></thead><tbody id="pj-body"></tbody></table>'+
+      '<div id="pj-none" class="pj-none"></div>'+
       '</section>';
   }
   function mount(){
@@ -10751,22 +10751,22 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
     return true;
   }
   function wire(){
-    $("pl-proj").addEventListener("change",function(){ var d=P().db(); d.active=this.value; P().save(d); P().render(); });
-    ["pl-name","pl-product","pl-units"].forEach(function(id){
+    $("pj-proj").addEventListener("change",function(){ var d=P().db(); d.active=this.value; P().save(d); P().render(); });
+    ["pj-name","pj-product","pj-units"].forEach(function(id){
       $(id).addEventListener("input",function(){
         var d=P().db(), p=d.projects[d.active]; if(!p) return;
-        if(id==="pl-name") p.name=this.value;
-        if(id==="pl-product") p.product=this.value;
-        if(id==="pl-units") p.units=parseFloat(this.value)||0;
+        if(id==="pj-name") p.name=this.value;
+        if(id==="pj-product") p.product=this.value;
+        if(id==="pj-units") p.units=parseFloat(this.value)||0;
         P().save(d); P().render();
       });
     });
-    $("pl-new").addEventListener("click",function(){
+    $("pj-new").addEventListener("click",function(){
       var d=P().db(), id=P().uid();
       d.projects[id]={id:id,name:"Project "+(Object.keys(d.projects).length+1),product:"",units:0,created:Date.now(),entries:[]};
-      d.active=id; P().save(d); P().render(); $("pl-name").focus();
+      d.active=id; P().save(d); P().render(); $("pj-name").focus();
     });
-    $("pl-del").addEventListener("click",function(){
+    $("pj-del").addEventListener("click",function(){
       var d=P().db(); if(!d.projects[d.active]) return;
       var nm=d.projects[d.active].name||"this project";
       if(!confirm("Delete "+nm+" and all its entries?")) return;
@@ -10774,26 +10774,26 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
       d.active=Object.keys(d.projects)[0]||null;
       P().save(d); P().render();
     });
-    $("pl-add").addEventListener("click",addEntry);
-    $("pl-note").addEventListener("keydown",function(e){ if(e.key==="Enter") addEntry(); });
-    $("pl-unit").addEventListener("keydown",function(e){ if(e.key==="Enter") addEntry(); });
-    $("pl-csv").addEventListener("click",csv);
-    $("pl-body").addEventListener("click",onCell);
+    $("pj-add").addEventListener("click",addEntry);
+    $("pj-note").addEventListener("keydown",function(e){ if(e.key==="Enter") addEntry(); });
+    $("pj-unit").addEventListener("keydown",function(e){ if(e.key==="Enter") addEntry(); });
+    $("pj-csv").addEventListener("click",csv);
+    $("pj-body").addEventListener("click",onCell);
   }
   function addEntry(){
     var d=P().db(), p=d.projects[d.active];
     if(!p){ alert("Create a project first."); return; }
-    var item=($("pl-item").value||"").trim();
-    var qty=parseFloat($("pl-qty").value)||0;
-    var unit=parseFloat($("pl-unit").value)||0;
+    var item=($("pj-item").value||"").trim();
+    var qty=parseFloat($("pj-qty").value)||0;
+    var unit=parseFloat($("pj-unit").value)||0;
     if(!item && !qty && !unit) return;
-    var ds=$("pl-date").value;
+    var ds=$("pj-date").value;
     var ts=ds?(new Date(ds+"T12:00:00")).getTime():Date.now();
     p.entries=p.entries||[];
-    p.entries.push({id:P().uid(), ts:ts, kind:$("pl-kind").value, item:item, qty:qty, unit:unit, note:($("pl-note").value||"").trim()});
+    p.entries.push({id:P().uid(), ts:ts, kind:$("pj-kind").value, item:item, qty:qty, unit:unit, note:($("pj-note").value||"").trim()});
     P().save(d);
-    $("pl-item").value=""; $("pl-qty").value=""; $("pl-unit").value=""; $("pl-note").value="";
-    P().render(); $("pl-item").focus();
+    $("pj-item").value=""; $("pj-qty").value=""; $("pj-unit").value=""; $("pj-note").value="";
+    P().render(); $("pj-item").focus();
   }
   function onCell(e){
     var tr=e.target.closest?e.target.closest("tr[data-id]"):null; if(!tr) return;
@@ -10803,12 +10803,12 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
       p.entries=(p.entries||[]).filter(function(x){ return x.id!==id; });
       P().save(d); P().render(); return;
     }
-    var td=e.target.closest("td.pl-ed"); if(!td || td.querySelector("input")) return;
+    var td=e.target.closest("td.pj-ed"); if(!td || td.querySelector("input")) return;
     var f=td.getAttribute("data-f");
     var ent=(p.entries||[]).filter(function(x){ return x.id===id; })[0]; if(!ent) return;
     var isNum=(f==="qty"||f==="unit");
     var inp=document.createElement("input");
-    inp.className="pl-in"; inp.type=isNum?"number":"text"; if(isNum) inp.step="any";
+    inp.className="pj-in"; inp.type=isNum?"number":"text"; if(isNum) inp.step="any";
     inp.value=isNum?(ent[f]||0):(ent[f]||"");
     td.textContent=""; td.appendChild(inp); inp.focus(); inp.select&&inp.select();
     var done=false;
