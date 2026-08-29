@@ -10866,6 +10866,173 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
   setTimeout(boot,900);
 })();
 </script>
+<style>/* Project ledger import v1 */
+#pj-modal{position:fixed;inset:0;background:rgba(3,8,12,.82);z-index:9999;display:none;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto}
+#pj-modal.on{display:flex}
+#pj-mbox{background:var(--panel);border:1px solid var(--border);border-radius:3px;width:min(1100px,100%);padding:18px 20px}
+#pj-mbox h4{font-family:var(--display);font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin:0 0 12px 0}
+#pj-tx{max-height:52vh;overflow:auto;border:1px solid var(--border);border-radius:2px}
+#pj-tx table{width:100%;border-collapse:collapse;table-layout:fixed}
+#pj-tx th{position:sticky;top:0;background:var(--panel);z-index:1;font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-family:var(--display)}
+#pj-tx td,#pj-tx th{height:34px;padding:0 8px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-bottom:1px solid rgba(38,58,71,.5);text-align:left}
+#pj-tx td{font-family:var(--mono);font-variant-numeric:tabular-nums}
+#pj-tx tr.dup{opacity:.45}
+#pj-tx td:nth-child(1),#pj-tx th:nth-child(1){width:34px}
+#pj-tx td:nth-child(2),#pj-tx th:nth-child(2){width:96px}
+#pj-tx td:nth-child(3),#pj-tx th:nth-child(3){width:130px}
+#pj-tx td:nth-child(4),#pj-tx th:nth-child(4){width:80px}
+#pj-tx td:nth-child(6),#pj-tx th:nth-child(6){width:90px;text-align:right}
+#pj-tx td:nth-child(7),#pj-tx th:nth-child(7){width:120px;text-align:right}
+#pj-tx td:nth-child(8),#pj-tx th:nth-child(8){width:140px;text-align:right}
+#pj-mstat{font-size:12px;color:var(--muted);font-family:var(--mono)}
+</style>
+<script>
+/* Project ledger import v1 */
+(function(){
+  function $(i){ return document.getElementById(i); }
+  var TX=[], NAMES={};
+  function isk(v){ return (v<0?"-":"")+Math.abs(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+  function stat(t){ var e=$("pj-mstat"); if(e) e.textContent=t; }
+  function modal(){
+    if($("pj-modal")) return $("pj-modal");
+    var d=document.createElement("div"); d.id="pj-modal";
+    d.innerHTML='<div id="pj-mbox"><h4>Import wallet transactions</h4>'+
+      '<div class="pj-row" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:12px">'+
+      '<div class="pj-f" style="width:190px"><label>Character</label><select id="pj-mchar"><option value="">All characters</option></select></div>'+
+      '<div class="pj-f" style="width:160px"><label>From date</label><input id="pj-mfrom" type="date"></div>'+
+      '<div class="pj-f" style="flex:1 1 180px"><label>Item contains</label><input id="pj-mfilter" type="text" placeholder="optional"></div>'+
+      '<button class="pj-btn go" id="pj-mfetch" type="button">Fetch</button>'+
+      '<button class="pj-btn" id="pj-mall" type="button">Select all shown</button>'+
+      '<button class="pj-btn" id="pj-mnone" type="button">Clear</button>'+
+      '</div>'+
+      '<div id="pj-tx"></div>'+
+      '<div style="display:flex;gap:8px;align-items:center;margin-top:12px">'+
+      '<button class="pj-btn go" id="pj-madd" type="button">Add selected to project</button>'+
+      '<button class="pj-btn" id="pj-mclose" type="button">Close</button>'+
+      '<span id="pj-mstat"></span></div></div>';
+    document.body.appendChild(d);
+    $("pj-mclose").addEventListener("click",function(){ d.className=""; });
+    d.addEventListener("click",function(e){ if(e.target===d) d.className=""; });
+    $("pj-mfetch").addEventListener("click",fetchTx);
+    $("pj-madd").addEventListener("click",addSel);
+    $("pj-mall").addEventListener("click",function(){ [].slice.call(d.querySelectorAll("#pj-tx input[type=checkbox]:not(:disabled)")).forEach(function(c){ c.checked=true; }); });
+    $("pj-mnone").addEventListener("click",function(){ [].slice.call(d.querySelectorAll("#pj-tx input[type=checkbox]")).forEach(function(c){ c.checked=false; }); });
+    return d;
+  }
+  async function chars(){
+    var out=[];
+    try{
+      if(window.EVEMULTI && window.EVEMULTI.accounts){
+        var accs=window.EVEMULTI.accounts()||[];
+        for(var i=0;i<accs.length;i++){
+          var a=accs[i], cid=a.id||a.character_id||a.CharacterID;
+          try{ var tok=await window.EVEMULTI.mint(a); if(cid&&tok) out.push({id:cid,name:a.name||("Character "+cid),token:tok}); }catch(e){}
+        }
+      }
+    }catch(e){}
+    if(!out.length && window.EVEAPI){
+      try{
+        var ch=await window.EVEAPI.getChar(); var t=await window.EVEAPI.getAccess();
+        if(ch && t) out.push({id:ch.CharacterID, name:ch.CharacterName||"Character", token:t});
+      }catch(e){}
+    }
+    return out;
+  }
+  async function nameFor(ids){
+    var need=ids.filter(function(i){ return !NAMES[i]; });
+    try{ var c=JSON.parse(localStorage.getItem("eveTypeNamesV1")||"{}");
+      need=need.filter(function(i){ if(c[i]){ NAMES[i]=c[i]; return false; } return true; }); }catch(e){}
+    if(!need.length) return;
+    try{
+      if(window.EVEAPI && window.EVEAPI.names){
+        var r=await window.EVEAPI.names(need);
+        (r||[]).forEach(function(x){ if(x && x.id) NAMES[x.id]=x.name; });
+      }
+    }catch(e){}
+  }
+  async function fetchTx(){
+    stat("Fetching\u2026"); TX=[];
+    var cs=await chars();
+    if(!cs.length){ stat("No linked characters found \u2014 sign in on the Account tab first."); return; }
+    var sel=$("pj-mchar");
+    if(sel.options.length<=1){ cs.forEach(function(c){ var o=document.createElement("option"); o.value=String(c.id); o.textContent=c.name; sel.appendChild(o); }); }
+    var pick=sel.value;
+    var use=pick?cs.filter(function(c){ return String(c.id)===String(pick); }):cs;
+    var errs=[];
+    for(var i=0;i<use.length;i++){
+      var c=use[i];
+      try{
+        var r=await fetch("https://esi.evetech.net/latest/characters/"+c.id+"/wallet/transactions/",{headers:{Authorization:"Bearer "+c.token}});
+        if(!r.ok){ errs.push(c.name+" ("+r.status+")"); continue; }
+        var arr=await r.json();
+        (arr||[]).forEach(function(t){ t.__char=c.name; TX.push(t); });
+      }catch(e){ errs.push(c.name); }
+    }
+    if(!TX.length){ stat(errs.length?("Could not read wallet: "+errs.join(", ")+". The wallet scope may need re-authorising on the Account tab."):"No transactions returned."); render(); return; }
+    await nameFor(TX.map(function(t){ return t.type_id; }).filter(function(v,i,a){ return a.indexOf(v)===i; }));
+    stat(TX.length+" transactions loaded"+(errs.length?(" \u00b7 failed: "+errs.join(", ")):""));
+    render();
+  }
+  function existing(){
+    var p=window.__PL.cur(); var m={};
+    ((p&&p.entries)||[]).forEach(function(e){ if(e.txid) m[e.txid]=true; });
+    return m;
+  }
+  function render(){
+    if(!$("pj-tx")) return;
+    var from=$("pj-mfrom").value, f=($("pj-mfilter").value||"").toLowerCase();
+    var dup=existing();
+    var rows=TX.filter(function(t){
+      if(from && String(t.date).slice(0,10)<from) return false;
+      if(f && String(NAMES[t.type_id]||t.type_id).toLowerCase().indexOf(f)<0) return false;
+      return true;
+    }).sort(function(a,b){ return String(b.date).localeCompare(String(a.date)); });
+    var h='<table><thead><tr><th></th><th>Date</th><th>Character</th><th>Type</th><th>Item</th><th>Qty</th><th>Unit price</th><th>Total</th></tr></thead><tbody>';
+    h+=rows.map(function(t){
+      var d=!!dup[String(t.transaction_id)];
+      var tot=(+t.quantity||0)*(+t.unit_price||0);
+      return '<tr class="'+(d?"dup":"")+'"><td><input type="checkbox" data-tx="'+t.transaction_id+'"'+(d?" disabled":"")+'></td>'+
+        "<td>"+esc(String(t.date).slice(0,10))+"</td><td>"+esc(t.__char||"")+"</td>"+
+        '<td class="'+(t.is_buy?"pj-exp":"pj-sale")+'">'+(t.is_buy?"Expense":"Sale")+"</td>"+
+        "<td>"+esc(NAMES[t.type_id]||("Type "+t.type_id))+"</td>"+
+        "<td>"+(+t.quantity||0).toLocaleString()+"</td><td>"+isk(+t.unit_price||0)+"</td><td>"+isk(tot)+"</td></tr>";
+    }).join("");
+    h+="</tbody></table>";
+    if(!rows.length) h='<div class="pj-none" style="padding:14px">Nothing to show. Press Fetch, or widen the date range.</div>';
+    $("pj-tx").innerHTML=h;
+  }
+  function addSel(){
+    var d=window.__PL.db(), p=d.projects[d.active];
+    if(!p){ stat("Create a project first."); return; }
+    var boxes=[].slice.call(document.querySelectorAll("#pj-tx input[type=checkbox]:checked"));
+    if(!boxes.length){ stat("Nothing selected."); return; }
+    var byId={}; TX.forEach(function(t){ byId[String(t.transaction_id)]=t; });
+    var n=0;
+    p.entries=p.entries||[];
+    boxes.forEach(function(b){
+      var t=byId[b.getAttribute("data-tx")]; if(!t) return;
+      p.entries.push({id:window.__PL.uid(), ts:Date.parse(t.date)||Date.now(), kind:t.is_buy?"expense":"sale",
+        item:(NAMES[t.type_id]||("Type "+t.type_id)), qty:+t.quantity||0, unit:+t.unit_price||0,
+        note:(t.__char||""), txid:String(t.transaction_id)});
+      n++;
+    });
+    window.__PL.save(d); window.__PL.render(); render();
+    stat("Added "+n+" entr"+(n===1?"y":"ies")+" to "+(p.name||"project")+".");
+  }
+  function boot(){
+    var b=$("pj-import");
+    if(!b || !window.__PL){ setTimeout(boot,600); return; }
+    b.addEventListener("click",function(){
+      var m=modal(); m.className="on";
+      if(!$("pj-mfrom").value){ var dt=new Date(Date.now()-30*864e5); $("pj-mfrom").value=dt.toISOString().slice(0,10); }
+      stat("Press Fetch to load your wallet transactions.");
+      ["pj-mfilter","pj-mfrom"].forEach(function(id){ var e=$(id); if(e && !e.__w){ e.__w=1; e.addEventListener("input",render); } });
+    });
+  }
+  setTimeout(boot,1200);
+})();
+</script>
 </body>
 </html>
 
