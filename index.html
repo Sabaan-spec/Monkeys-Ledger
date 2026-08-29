@@ -10747,6 +10747,7 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
     sec.innerHTML=panelHtml();
     anchor.parentNode.insertBefore(sec, anchor.nextSibling);
     wire();
+    b.addEventListener('click',show);
     return true;
   }
   function wire(){
@@ -10837,12 +10838,30 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
     a.download=(p.name||"project").replace(/[^A-Za-z0-9_-]+/g,"_")+"_ledger.csv";
     document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },500);
   }
+  function panels(){ return [].slice.call(document.querySelectorAll('section[id^="tab-"]')); }
+  function myBtn(){ return document.querySelector('nav.tabs button.tab[data-tab=proj]'); }
+  function show(){
+    panels().forEach(function(s){ if(s.id==='tab-proj') s.removeAttribute('hidden'); else s.setAttribute('hidden',''); });
+    [].slice.call(document.querySelectorAll('nav.tabs button.tab')).forEach(function(x){ x.className=String(x.className).replace(/\s*active/,''); });
+    var me=myBtn(); if(me && !/\bactive\b/.test(me.className)) me.className+=' active';
+    if(window.__PL) window.__PL.render();
+    if(window.__tabTick) window.__tabTick();
+  }
+  function guard(){
+    var sec=$('tab-proj'), me=myBtn(); if(!sec||!me) return;
+    var mine=/\bactive\b/.test(me.className);
+    var otherActive=[].slice.call(document.querySelectorAll('nav.tabs button.tab')).some(function(x){ return x!==me && /\bactive\b/.test(x.className); });
+    if(otherActive && mine){ me.className=String(me.className).replace(/\s*active/,''); mine=false; }
+    if(mine && sec.hasAttribute('hidden')) sec.removeAttribute('hidden');
+    if(!mine && !sec.hasAttribute('hidden')) sec.setAttribute('hidden','');
+  }
   function boot(){
     if(!window.__PL){ setTimeout(boot,400); return; }
     if(!mount()){ setTimeout(boot,500); return; }
     window.__PL.render();
     if(window.__tabTick) window.__tabTick();
     setInterval(function(){ var t=$("tab-proj"); if(t && !t.hasAttribute("hidden")) window.__PL.render(); },1500);
+    setInterval(guard,400);
   }
   setTimeout(boot,900);
 })();
