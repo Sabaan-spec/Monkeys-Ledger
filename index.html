@@ -11136,6 +11136,95 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
   window.__STRUCTMKT={augment:augment, ensure:ensure, reg:reg, discover:discover, targetSys:targetSys};
 })();
 </script>
+<script>
+/* Market location memory v1 */
+(function(){
+  var RK="eveMbRegionV1", FK="eveSysFilterV1", SK="eveSysStockV1", MK="eveMapV2";
+  var STALE=60*60*1000;
+  var regCache={};
+  function $(i){ return document.getElementById(i); }
+  function filt(){ try{ return JSON.parse(localStorage.getItem(FK)||"{}"); }catch(e){ return {}; } }
+  function fromMap(sid){
+    try{
+      var m=JSON.parse(localStorage.getItem(MK)||"{}");
+      var s=m.sys||m;
+      var e=s[String(sid)];
+      if(e && e.length>1 && Number(e[1])>0) return Number(e[1]);
+      for(var k in s){ var v=s[k]; if(v && Number(v[0])===Number(sid) && v.length>1) return Number(v[1]); }
+    }catch(e){}
+    return 0;
+  }
+  async function regionFor(sid){
+    if(regCache[sid]) return regCache[sid];
+    var r=fromMap(sid);
+    if(!r){
+      try{
+        var s=await fetch("https://esi.evetech.net/latest/universe/systems/"+sid+"/").then(function(x){ return x.ok?x.json():null; });
+        if(s && s.constellation_id){
+          var c=await fetch("https://esi.evetech.net/latest/universe/constellations/"+s.constellation_id+"/").then(function(x){ return x.ok?x.json():null; });
+          if(c && c.region_id) r=Number(c.region_id);
+        }
+      }catch(e){}
+    }
+    if(r) regCache[sid]=r;
+    return r;
+  }
+  function hasOpt(sel,v){ var f=false; [].forEach.call(sel.options,function(o){ if(o.value===String(v)) f=true; }); return f; }
+  var restored=false;
+  async function restore(){
+    var sel=$("mb-region"); if(!sel || !sel.options.length) return false;
+    var f=filt(), want=0;
+    if(f.on && f.sysId) want=await regionFor(f.sysId);
+    if(!want){ try{ want=Number(JSON.parse(localStorage.getItem(RK)||"0"))||0; }catch(e){} }
+    if(!want) return true;
+    if(!hasOpt(sel,want)) return false;
+    if(String(sel.value)!==String(want)){
+      sel.value=String(want);
+      sel.dispatchEvent(new Event("change",{bubbles:true}));
+    }
+    return true;
+  }
+  function watchRegion(){
+    var sel=$("mb-region"); if(!sel || sel.__lm) return;
+    sel.__lm=1;
+    sel.addEventListener("change",function(){
+      try{ localStorage.setItem(RK, JSON.stringify(Number(sel.value)||0)); }catch(e){}
+    });
+  }
+  function fresh(){
+    var f=filt(), sel=$("mb-region");
+    if(!f.on || !f.sysId || !sel) return true;
+    try{
+      var o=JSON.parse(localStorage.getItem(SK)||"{}");
+      var e=o[sel.value+"|"+f.sysId];
+      return !!(e && (Date.now()-(e.t||0))<STALE);
+    }catch(e){ return true; }
+  }
+  var lastAuto="";
+  function maybeScan(){
+    var f=filt(), sel=$("mb-region"), btn=$("mkl-scan");
+    if(!f.on || !f.sysId || !sel || !btn) return;
+    if(!sel.value || sel.value==="0") return;
+    var key=sel.value+"|"+f.sysId;
+    if(lastAuto===key) return;
+    if(fresh()){ lastAuto=key; return; }
+    if(/cancel/i.test(btn.textContent||"")) return;
+    lastAuto=key;
+    btn.click();
+  }
+  function visible(){ var p=$("tab-arb"); return !!(p && !p.hasAttribute("hidden") && p.offsetParent!==null); }
+  async function tick(){
+    try{
+      watchRegion();
+      if(!restored){ restored=await restore(); }
+      if(visible()) maybeScan();
+    }catch(e){}
+  }
+  setInterval(function(){ tick(); },1200);
+  setTimeout(function(){ tick(); },1500);
+  window.__LOCMEM={restore:restore, maybeScan:maybeScan, regionFor:regionFor, fresh:fresh};
+})();
+</script>
 </body>
 </html>
 
