@@ -8468,7 +8468,8 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       await Promise.all(ws);
       if(cancelFlag){ status("Scan cancelled."); }
       else{
-        var ids=Object.keys(found);
+        var ids=Object.keys(found)
+      try{ if(window.__STRUCTMKT && window.__STRUCTMKT.stockIds){ var _ex=await window.__STRUCTMKT.stockIds(st.sysId); _ex.forEach(function(t){ if(!found[t]){ found[t]=1; ids.push(String(t)); } }); } }catch(e){};
         setStock(ids); loadSet(); applyTree(); slock=Date.now()+9000;
         status(ids.length.toLocaleString()+" item types have stock in "+st.sys+". Expand a category on the left \u2014 anything with no stock there is now hidden.");
       }
@@ -11147,7 +11148,24 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
     }catch(e){}
     return all;
   }
-  window.__STRUCTMKT={augment:augment, ensure:ensure, reg:reg, discover:discover, targetSys:targetSys};
+  async function stockIds(sys){
+    var out=[];
+    try{
+      if(!window.EVEMKT || !window.EVEMKT.structureBook) return out;
+      sys=Number(sys)||Number(targetSys());
+      if(!sys) return out;
+      var r=await ensure();
+      var sids=Object.keys(r).filter(function(k){ return k!=="__meta" && r[k] && !r[k].bad && Number(r[k].sys)===sys; });
+      var seen={};
+      for(var i=0;i<sids.length && i<12;i++){
+        var book=null;
+        try{ book=await window.EVEMKT.structureBook(sids[i]); }catch(e){}
+        (book||[]).forEach(function(o){ if(o && !o.is_buy_order && o.type_id && !seen[o.type_id]){ seen[o.type_id]=1; out.push(Number(o.type_id)); } });
+      }
+    }catch(e){}
+    return out;
+  }
+  window.__STRUCTMKT={augment:augment, ensure:ensure, reg:reg, discover:discover, targetSys:targetSys, stockIds:stockIds};
 })();
 </script>
 <script>
