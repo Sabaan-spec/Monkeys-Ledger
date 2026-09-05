@@ -3413,7 +3413,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     if(!silent||!host.querySelector('.mb-ot'))host.innerHTML='<div class="muted small" style="padding:12px">'+(agg?'Scanning all regions\u2026 this can take 10\u201330s.':'Loading live orders\u2026')+'</div>';
     if(agg){var regs=REGIONS.map(function(r){return r.id;}).filter(function(id){return id>=10000000&&id<11000000;});var tasks=regs.map(function(rg){return function(){return fetchRegionOrders(rg,cur.id,2);};});pool(tasks,12).then(function(res){if(my!==token)return;var all=[];res.forEach(function(a){if(a)all=all.concat(a);});finish(all,true,my);});}
     else{fetchRegionOrders(curRegion,cur.id,25).then(function(all){if(my!==token)return;finish(all,false,my);});}
-    function finish(all,agg,my){
+    function finish(all,agg,my){if(!all.__aug&&window.__STRUCTMKT&&window.__STRUCTMKT.augment){try{all.__aug=1;}catch(e){}window.__STRUCTMKT.augment(all,cur.id).then(function(m){finish(m,agg,my);});return;}
       if(my!==token)return;
       if(!all.length){host.innerHTML='<div class="muted small" style="padding:12px">No orders for this item in '+regionName(curRegion)+'.</div>';setStats(null);return;}
       var sells=all.filter(function(o){return !o.is_buy_order;}).sort(function(a,b){return a.price-b.price;});
@@ -11037,6 +11037,103 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
     });
   }
   setTimeout(boot,1200);
+})();
+</script>
+<script>
+/* Structure market merge v1 */
+(function(){
+  var RKEY="eveStructRegV1", ESI="https://esi.evetech.net/latest";
+  var TTL=7*864e5, DISC=6*36e5;
+  var busy=null;
+  function reg(){ try{ return JSON.parse(localStorage.getItem(RKEY)||"{}"); }catch(e){ return {}; } }
+  function save(r){ try{ localStorage.setItem(RKEY,JSON.stringify(r)); }catch(e){} }
+  async function chars(){
+    var out=[];
+    try{
+      if(window.EVEMULTI && window.EVEMULTI.accounts){
+        var accs=window.EVEMULTI.accounts()||[];
+        for(var i=0;i<accs.length;i++){
+          var a=accs[i], cid=a.id||a.character_id||a.CharacterID;
+          try{ var tok=await window.EVEMULTI.mint(a); if(cid&&tok) out.push({id:cid,token:tok}); }catch(e){}
+        }
+      }
+    }catch(e){}
+    if(!out.length && window.EVEAPI){
+      try{ var ch=await window.EVEAPI.getChar(), t=await window.EVEAPI.getAccess(); if(ch&&t) out.push({id:ch.CharacterID,token:t}); }catch(e){}
+    }
+    return out;
+  }
+  async function resolve(id){
+    try{
+      var d=await window.EVEAPI.esi("/universe/structures/"+id+"/");
+      var v=(d&&d.data)?d.data:d;
+      if(v && v.solar_system_id) return {name:v.name||("Structure "+id), sys:v.solar_system_id, ts:Date.now()};
+    }catch(e){}
+    return {name:null, sys:0, ts:Date.now(), bad:1};
+  }
+  async function discover(){
+    var r=reg();
+    var meta=r.__meta||{ts:0};
+    if(Date.now()-(meta.ts||0) < DISC) return r;
+    var mine={}, pub={};
+    try{
+      var cs=await chars();
+      for(var i=0;i<cs.length;i++){
+        try{
+          var res=await fetch(ESI+"/characters/"+cs[i].id+"/orders/",{headers:{Authorization:"Bearer "+cs[i].token}});
+          if(!res.ok) continue;
+          var arr=await res.json();
+          (arr||[]).forEach(function(o){ if(o && o.location_id>1000000000000) mine[o.location_id]=1; });
+        }catch(e){}
+      }
+    }catch(e){}
+    try{
+      var p=await fetch(ESI+"/universe/structures/?filter=market");
+      if(p.ok){ var ids=await p.json(); (ids||[]).forEach(function(i){ pub[i]=1; }); }
+    }catch(e){}
+    var order=Object.keys(mine).concat(Object.keys(pub).filter(function(k){ return !mine[k]; }));
+    var budget=70, n=0;
+    for(var k=0;k<order.length && n<budget;k++){
+      var id=order[k], cur=r[id];
+      if(cur && !cur.bad && (Date.now()-(cur.ts||0)) < TTL) continue;
+      if(cur && cur.bad && (Date.now()-(cur.ts||0)) < DISC) continue;
+      r[id]=await resolve(id); n++;
+    }
+    r.__meta={ts:Date.now()};
+    save(r);
+    return r;
+  }
+  function ensure(){ if(!busy) busy=discover().then(function(r){ busy=null; return r; },function(){ busy=null; return reg(); }); return busy; }
+  function targetSys(){
+    try{ var f=JSON.parse(localStorage.getItem("eveSysFilterV1")||"{}"); if(f && f.on && f.sysId) return f.sysId; }catch(e){}
+    return 0;
+  }
+  async function augment(all, typeId){
+    try{
+      if(!window.EVEMKT || !window.EVEMKT.structureBook) return all;
+      var sys=targetSys(); if(!sys) return all;
+      var r=await ensure();
+      var sids=Object.keys(r).filter(function(k){ return k!=="__meta" && r[k] && !r[k].bad && Number(r[k].sys)===Number(sys); });
+      if(!sids.length) return all;
+      var seen={}; (all||[]).forEach(function(o){ if(o&&o.order_id) seen[o.order_id]=1; });
+      var added=0;
+      for(var i=0;i<sids.length && i<12;i++){
+        var book=null;
+        try{ book=await window.EVEMKT.structureBook(sids[i]); }catch(e){}
+        (book||[]).forEach(function(o){
+          if(!o || Number(o.type_id)!==Number(typeId)) return;
+          if(seen[o.order_id]) return;
+          seen[o.order_id]=1;
+          o.system_id=sys;
+          o._structName=(r[sids[i]]&&r[sids[i]].name)||null;
+          all.push(o); added++;
+        });
+      }
+      window.__STRUCTADDED=added;
+    }catch(e){}
+    return all;
+  }
+  window.__STRUCTMKT={augment:augment, ensure:ensure, reg:reg, discover:discover, targetSys:targetSys};
 })();
 </script>
 </body>
