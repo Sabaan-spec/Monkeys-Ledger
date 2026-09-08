@@ -10300,7 +10300,7 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
 (function(){
   var KEY="eveMatPxV1";
   function $(i){ return document.getElementById(i); }
-  function num(t){ var v=parseFloat(String(t==null?"":t).replace(/[^0-9.\-]/g,"")); return isFinite(v)?v:NaN; }
+  function num(t){ var m=String(t==null?"":t).match(/-?\d[\d,]*(\.\d+)?/); if(!m) return NaN; var v=parseFloat(m[0].replace(/,/g,"")); return isFinite(v)?v:NaN; }
   function store(){ try{ return JSON.parse(localStorage.getItem(KEY)||"{}"); }catch(e){ return {}; } }
   function save(o){ try{ localStorage.setItem(KEY,JSON.stringify(o)); }catch(e){} }
   function prod(){ var p=$("product-name"); var v=p?(p.textContent||"").trim():""; return (v && v!=="\u2014")?v:""; }
@@ -10417,7 +10417,7 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
 (function(){
   var KEY="eveStructBonusV1";
   function $(i){ return document.getElementById(i); }
-  function num(t){ var v=parseFloat(String(t==null?"":t).replace(/[^0-9.\-]/g,"")); return isFinite(v)?v:NaN; }
+  function num(t){ var m=String(t==null?"":t).match(/-?\d[\d,]*(\.\d+)?/); if(!m) return NaN; var v=parseFloat(m[0].replace(/,/g,"")); return isFinite(v)?v:NaN; }
   function load(){ try{ return JSON.parse(localStorage.getItem(KEY)||"{}"); }catch(e){ return {}; } }
   function save(o){ try{ localStorage.setItem(KEY,JSON.stringify(o)); }catch(e){} }
   function isk(v){ var a=Math.abs(v); var s=a>=1e9?(a/1e9).toFixed(2)+"B":a>=1e6?(a/1e6).toFixed(2)+"M":a>=1e3?(a/1e3).toFixed(1)+"K":a.toFixed(0); return (v<0?"-":"")+s; }
