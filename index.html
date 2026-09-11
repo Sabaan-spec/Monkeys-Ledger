@@ -5829,7 +5829,34 @@ function tagOre(){
   var sCache={}, rCache={};
   var STRUCT_TTL=300000, REG_TTL=180000;
   function isStructure(id){ return Number(id)>=1000000000000; }
-  async function auth(p){ try{ var r=await EVEAPI.esi(p); return (r&&r.data)?r.data:r; }catch(e){ return null; } }
+  var _tokCache=null, _tokTs=0;
+  async function _tokens(){
+    if(_tokCache && (Date.now()-_tokTs)<600000) return _tokCache;
+    var out=[];
+    try{
+      if(window.EVEMULTI && window.EVEMULTI.accounts){
+        var accs=window.EVEMULTI.accounts()||[];
+        for(var i=0;i<accs.length;i++){
+          try{ var t=await window.EVEMULTI.mint(accs[i]); if(t) out.push(t); }catch(e){}
+        }
+      }
+    }catch(e){}
+    _tokCache=out; _tokTs=Date.now();
+    return out;
+  }
+  async function auth(p){
+    try{ var r=await EVEAPI.esi(p); var v=(r&&r.data)?r.data:r; if(v) return v; }catch(e){}
+    try{
+      var toks=await _tokens();
+      for(var i=0;i<toks.length;i++){
+        try{
+          var rr=await fetch("https://esi.evetech.net/latest"+p,{headers:{Authorization:"Bearer "+toks[i]}});
+          if(rr.ok) return await rr.json();
+        }catch(e){}
+      }
+    }catch(e){}
+    return null;
+  }
   async function pub(p){ try{ var r=await fetch(ESI+p); if(!r.ok) return null; return await r.json(); }catch(e){ return null; } }
   async function structureBook(sid){
     sid=String(sid);
