@@ -3544,12 +3544,9 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
     var totalCost=mci.cost+jobCost+_fee;
     var profit=isFinite(gross)?(gross-totalCost):NaN;
     var margin=(isFinite(gross)&&gross>0)?(profit/gross*100):NaN;
-    setEl('s-matcost',iskFmt(totalCost));
-    setEl('s-revenue',iskFmt(gross));
-    setEl('s-profit',iskFmt(profit),'stat-val '+(profit>=0?'good':'bad'));
-    setEl('s-margin',isFinite(margin)?((margin>=0?'+':'')+margin.toFixed(1)+'%'):'\u2014','stat-val '+(margin>=0?'good':'bad'));
+    /* card writes removed — the main calculator is the single writer for s-matcost/s-revenue/s-profit/s-margin */
   }
-  setInterval(function(){var t=$('tab-calc');if(t&&!t.hidden&&t.offsetParent!==null)apply();},1500);
+  /* 1.5s re-render interval removed with the duplicate writer */
 })();
 </script>
 <script>
