@@ -5747,7 +5747,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       var ids=Object.keys(types);
       var px=await fuzz(HUBREG[hub]||10000002, ids);
       var missing=ids.filter(function(t){ return !px[t]; });
-      if(missing.length && window.__PXFIX){ var mk=await window.__PXFIX.market(missing, (HUBREG&&HUBREG[hub])||10000002, 40); missing.forEach(function(t){ if(mk[t]) px[t]=mk[t]; }); }
+      if(missing.length){ if(window.__PXFIX){ var mk=await window.__PXFIX.market(missing, (HUBREG&&HUBREG[hub])||10000002, 40); missing.forEach(function(t){ if(mk[t]) px[t]=mk[t]; }); } var still=missing.filter(function(t){ return !px[t]; }); if(still.length){ var adj=await adjusted(still); still.forEach(function(t){ if(adj[t]) px[t]=adj[t]; }); } }
       var locTotal={}, locQty={};
       placed.forEach(function(p){
         var v=(px[p.t]||0)*p.q;
@@ -11450,7 +11450,6 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
         var sells=(a||[]).filter(function(o){ return !o.is_buy_order; }).map(function(o){ return o.price; });
         var buys=(a||[]).filter(function(o){ return o.is_buy_order; }).map(function(o){ return o.price; });
         if(sells.length) v=Math.min.apply(null,sells);
-        else if(buys.length) v=Math.max.apply(null,buys);
       }
     }catch(e){}
     cache[k]={t:Date.now(), v:v};
