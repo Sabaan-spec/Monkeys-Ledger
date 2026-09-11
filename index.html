@@ -3276,7 +3276,7 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       var nameOnly=rowName(tr);if(!nameOnly)return;
       var id=idOf(nameOnly);var reproable=id&&REPRO.rows[id];
       if(!reproable)return;
-      tr.classList.add('os-click');tr.style.cursor='pointer';
+      tr.classList.add('os-click');if(tr.style.cursor!=="pointer") tr.style.cursor='pointer';
       var ru=refinedUnit(id,prices);
       var sellUnit=num(tr.children[sellIdx]?tr.children[sellIdx].textContent:'');
       var badge=c0.querySelector('.os-rsbadge');
