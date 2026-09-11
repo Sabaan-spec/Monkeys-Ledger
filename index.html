@@ -3290,7 +3290,14 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       badge.title=(refine?'Refining ~'+Math.round(ru).toLocaleString()+' ISK/unit beats selling ore at '+Math.round(sellUnit).toLocaleString():'Selling ore '+Math.round(sellUnit).toLocaleString()+' ISK/unit beats refining ~'+Math.round(ru).toLocaleString())+' ISK/unit ('+hub+', yield '+Math.round(yieldPct()*100)+'%). Click row to open in Reprocess.';
     });
   }
-  function tagOre(){
+function tagOre(){
+    try{
+      var _r=document.getElementById("os-results")||document.getElementById("ore-body");
+      var _hb=(document.getElementById("os-hub")||{}).value||"";
+      var _sig=_hb+"|"+(_r?(_r.textContent||"").length:0)+"|"+(_r?_r.querySelectorAll("tr").length:0);
+      if(window.__oreSig===_sig) return;
+      window.__oreSig=_sig;
+    }catch(e){}
     var res=$('os-results');
     if(res){var hub2=($('os-hub')||{}).value||'jita';var reg2=HUBREG[hub2]||10000002;var tbl=res.querySelector('table');ensurePrices(reg2).then(function(p){tagRows(res.querySelectorAll('tr'),1,p,hub2);if(tbl)addHint(res,tbl);});}
     var ob=$('ore-body');
