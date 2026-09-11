@@ -3284,20 +3284,13 @@ function catOf(flag){ if(flag>=27&&flag<=34)return 'high'; if(flag>=19&&flag<=26
       if(!c0.getAttribute('data-name'))c0.setAttribute('data-name',nameOnly);
       var refine=ru>sellUnit;var pct=refine?Math.round((ru-sellUnit)/sellUnit*100):Math.round((sellUnit-ru)/(ru||1)*100);
       if(!badge){badge=document.createElement('span');badge.className='os-rsbadge';badge.style.cssText='margin-left:8px;font-size:.66rem;font-weight:700;padding:1px 6px;border-radius:3px;vertical-align:middle;white-space:nowrap';c0.appendChild(badge);}
-      badge.textContent=(refine?'REFINE':'SELL')+' +'+pct+'%';
-      badge.style.background=refine?'rgba(84,194,138,.16)':'rgba(120,150,170,.16)';
-      badge.style.color=refine?'#54c28a':'#9fb0bd';
-      badge.title=(refine?'Refining ~'+Math.round(ru).toLocaleString()+' ISK/unit beats selling ore at '+Math.round(sellUnit).toLocaleString():'Selling ore '+Math.round(sellUnit).toLocaleString()+' ISK/unit beats refining ~'+Math.round(ru).toLocaleString())+' ISK/unit ('+hub+', yield '+Math.round(yieldPct()*100)+'%). Click row to open in Reprocess.';
+      var _bt=((refine?'REFINE':'SELL')+' +'+pct+'%'); if(badge.textContent!==_bt) badge.textContent=_bt;
+      var _bb=(refine?'rgba(84,194,138,.16)':'rgba(120,150,170,.16)'); if(badge.style.background!==_bb) badge.style.background=_bb;
+      var _bc=(refine?'#54c28a':'#9fb0bd'); if(badge.style.color!==_bc) badge.style.color=_bc;
+      var _bl=((refine?'Refining ~'+Math.round(ru).toLocaleString()+' ISK/unit beats selling ore at '+Math.round(sellUnit).toLocaleString():'Selling ore '+Math.round(sellUnit).toLocaleString()+' ISK/unit beats refining ~'+Math.round(ru).toLocaleString())+' ISK/unit ('+hub+', yield '+Math.round(yieldPct()*100)+'%). Click row to open in Reprocess.'); if(badge.title!==_bl) badge.title=_bl;
     });
   }
 function tagOre(){
-    try{
-      var _r=document.getElementById("os-results")||document.getElementById("ore-body");
-      var _hb=(document.getElementById("os-hub")||{}).value||"";
-      var _sig=_hb+"|"+(_r?(_r.textContent||"").length:0)+"|"+(_r?_r.querySelectorAll("tr").length:0);
-      if(window.__oreSig===_sig) return;
-      window.__oreSig=_sig;
-    }catch(e){}
     var res=$('os-results');
     if(res){var hub2=($('os-hub')||{}).value||'jita';var reg2=HUBREG[hub2]||10000002;var tbl=res.querySelector('table');ensurePrices(reg2).then(function(p){tagRows(res.querySelectorAll('tr'),1,p,hub2);if(tbl)addHint(res,tbl);});}
     var ob=$('ore-body');
