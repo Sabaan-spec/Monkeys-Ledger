@@ -5117,7 +5117,7 @@ function tagOre(){
 /* Dual cost view v2 */
 (function(){
   function $(id){return document.getElementById(id);}
-  function num(s){var v=parseFloat(String(s||'').replace(/[^0-9.\-]/g,''));return isFinite(v)?v:0;}
+  function num(s){ var m=String(s==null?"":s).match(/-?\d[\d,]*(\.\d+)?/); if(!m) return 0; var v=parseFloat(m[0].replace(/,/g,"")); return isFinite(v)?v:0; }
   function exact(n){return Number(n).toLocaleString(undefined,{maximumFractionDigits:2})+' ISK';}
   function short(n){var a=Math.abs(n),sg=n<0?'-':'';
     if(a>=1e12)return sg+(a/1e12).toFixed(2)+'T';
@@ -5157,7 +5157,10 @@ function tagOre(){
     });
     if(savings<=0){wipe();return;}
     var cash=oopMat+bd.jobFee;
-    var rev=num(($('s-revenue')||{}).textContent);if(!(rev>0))return;
+    var _rvEl=$("s-revenue");
+    var _rvOv=_rvEl?_rvEl.nextElementSibling:null;
+    var _rvTxt=(_rvOv && String(_rvOv.className).indexOf("so-ovv")>=0)?_rvOv.textContent:(_rvEl?_rvEl.textContent:"");
+    var rev=num(_rvTxt); if(!(rev>0)){ wipe(); return; }
     var cashProfit=rev*(1-taxes())-cash;
     var ret=cash>0?(cashProfit/cash*100):0;
     function set(id,label,val,title,note){
