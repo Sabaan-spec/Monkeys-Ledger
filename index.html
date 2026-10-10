@@ -1206,15 +1206,15 @@ async function renderRepro(){
   const ids=[rpCur.id,...row.o.map(x=>x[0])];
   let agg={}; try{agg=await fuzzAgg(region,ids);}catch(e){}
   const px=id=>{const a=agg[id]||{};return basis==="buy"?(a.buy&&Number(a.buy.max)>0?Number(a.buy.max):null):(a.sell&&Number(a.sell.min)>0?Number(a.sell.min):null);};
-  const portions=Math.floor(qty/row.p);
+  const portions=(row.p>0?(qty/row.p):0);
   let refinedValue=0;
-  const rows=row.o.map(([mid,q])=>{const rq=Math.floor(q*portions*yld);const up=px(mid);const val=(up!=null)?up*rq:null;if(val!=null)refinedValue+=val;return {name:REPRO.mats[mid]||("Type "+mid),qty:rq,up,val};});
+  const rows=row.o.map(([mid,q])=>{const rq=Math.round(q*portions*yld*100)/100;const up=px(mid);const val=(up!=null)?up*rq:null;if(val!=null)refinedValue+=val;return {name:REPRO.mats[mid]||("Type "+mid),qty:rq,up,val};});
   const orePx=px(rpCur.id);
   const oreValue=(orePx!=null)?orePx*qty:null;
   const diff=(oreValue!=null)?refinedValue-oreValue:null;
   const vol=(oreLookup[rpCur.id]||{}).vol||rpCur.vol||0;
   const iskm3=(vol>0)?refinedValue/(qty*vol):null;
-  $("rp-product-meta").textContent=`${qty.toLocaleString()} units · ${portions} batch(es) of ${row.p} · ${(yld*100).toFixed(1)}% yield · ${HUBS[hubKey].name}${portions<1?" · below one reprocess batch":""}`;
+  $("rp-product-meta").textContent=`${qty.toLocaleString()} units · ${portions} batch(es) of ${row.p} · ${(yld*100).toFixed(1)}% yield · ${HUBS[hubKey].name}${portions<1?" · below one reprocess batch":""}`;try{var _wb=Math.floor(qty/row.p);var _mt=$("rp-product-meta");if(_mt&&row.p>0&&(qty%row.p)!==0){_mt.textContent=_mt.textContent.replace(/·\s*below one reprocess batch/,"").trim()+" · "+_wb+" full batch(es) — values shown pro-rata";}}catch(e){}
   countTo($("rp-refined"),refinedValue,isk);
   const ov=$("rp-orev"); if(oreValue==null){ov.textContent="no orders";ov._v=0;} else countTo(ov,oreValue,isk);
   const de=$("rp-diff"); de.className="stat-val "+(diff==null?"":diff>=0?"good":"bad"); if(diff==null){de.textContent="—";de._v=0;} else countTo(de,diff,isk);
