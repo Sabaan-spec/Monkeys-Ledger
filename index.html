@@ -6067,7 +6067,7 @@ function tagOre(){
 <script>/* Tab groups v2 */
 (function(){
   var GROUPS=[
-    {id:"ind",label:"Industry",tabs:["calc","cheapsys","tree","proj","research","invent","react"]},
+    {id:"ind",label:"Industry",tabs:["calc","cheapsys","tree","proj","research","invent","react","muta"]},
     {id:"mat",label:"Materials",tabs:["ore","repro","pi"]},
     {id:"acct",label:"Account",tabs:["sso"]},
     {id:"trade",label:"Trade",tabs:["arb","top","pos","plan","scan","pricecheck"]},
@@ -11501,6 +11501,304 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
     return out;
   }
   window.__PXFIX={market:market, one:one};
+})();
+</script>
+<style>/* Mutaplasmid planner v1 */
+#tab-muta .mu-top{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;align-items:end}
+#tab-muta .mu-f{display:flex;flex-direction:column;gap:4px;min-width:0;position:relative}
+#tab-muta .mu-f label{font-size:11px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;font-family:var(--display)}
+#tab-muta input,#tab-muta select{background:#0a141c;border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:13px;padding:6px 8px;border-radius:2px;width:100%;box-sizing:border-box}
+#tab-muta input:focus,#tab-muta select:focus{outline:none;border-color:var(--accent)}
+#mu-sug{position:fixed;z-index:9998;background:var(--panel);border:1px solid var(--border);border-radius:2px;max-height:300px;overflow:auto;display:none;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+#mu-sug div{padding:6px 10px;cursor:pointer;font-size:13px;white-space:nowrap}
+#mu-sug div:hover{background:rgba(84,194,218,.12)}
+#mu-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:14px 0}
+#mu-cards .mu-card{border:1px solid var(--border);background:linear-gradient(180deg,rgba(84,194,218,.05),transparent);padding:10px 12px;border-radius:2px}
+#mu-cards .mu-k{font-size:10px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;font-family:var(--display)}
+#mu-cards .mu-v{font-size:19px;font-family:var(--mono);font-variant-numeric:tabular-nums;margin-top:3px}
+#mu-cards .mu-s{font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:2px}
+#tab-muta table{width:100%;border-collapse:collapse;table-layout:fixed}
+#tab-muta th,#tab-muta td{padding:0 10px;height:42px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-bottom:1px solid rgba(38,58,71,.55);vertical-align:middle}
+#tab-muta thead th{height:34px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-family:var(--display);text-align:right}
+#tab-muta thead th:first-child{text-align:left}
+#tab-muta tbody td{font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums;text-align:right}
+#tab-muta tbody td:first-child{text-align:left}
+#tab-muta tbody tr:nth-child(even){background:rgba(84,194,218,.03)}
+#tab-muta .mu-good{color:var(--good)}#tab-muta .mu-bad{color:var(--bad)}
+#tab-muta td input{height:28px;font-size:12px;text-align:right;padding:2px 6px}
+#tab-muta .mu-op{color:var(--muted);font-size:11px;margin-right:4px}
+#tab-muta .mu-none{color:var(--muted);font-size:12px;padding:14px 2px}
+#tab-muta th:nth-child(1),#tab-muta td:nth-child(1){width:30%}
+#tab-muta th:nth-child(6),#tab-muta td:nth-child(6){width:150px}
+#tab-muta th:nth-child(7),#tab-muta td:nth-child(7){width:90px}
+</style>
+<style>/* Mutaplasmid panel display */
+#tab-muta:not([hidden]){display:block}
+#tab-muta[hidden]{display:none!important}
+@media (max-width:900px){#tab-muta table{min-width:720px}}
+</style>
+<script>
+/* Mutaplasmid planner v1 — data */
+(function(){
+  var REF="https://ref-data.everef.net", ESI="https://esi.evetech.net/latest";
+  var LKEY="eveMutaListV1", AKEY="eveDogmaAttrV1";
+  var LIST=null, ATTR=null, TYPEC={}, MUTAC={};
+  function lsGet(k){ try{ return JSON.parse(localStorage.getItem(k)||"null"); }catch(e){ return null; } }
+  function lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
+  async function names(ids){
+    var out={};
+    for(var i=0;i<ids.length;i+=900){
+      var chunk=ids.slice(i,i+900);
+      try{
+        var r=await fetch(ESI+"/universe/names/",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(chunk)});
+        if(r.ok){ (await r.json()).forEach(function(n){ out[n.id]=n.name; }); }
+      }catch(e){}
+    }
+    return out;
+  }
+  async function list(){
+    if(LIST) return LIST;
+    var c=lsGet(LKEY);
+    if(c && c.t && (Date.now()-c.t)<30*864e5 && c.rows && c.rows.length){ LIST=c.rows; return LIST; }
+    var ids=[];
+    try{ ids=await fetch(REF+"/mutaplasmids").then(function(r){ return r.ok?r.json():[]; }); }catch(e){}
+    if(!ids.length){ LIST=[]; return LIST; }
+    var nm=await names(ids);
+    LIST=ids.map(function(id){ return {id:id, name:nm[id]||("Type "+id)}; }).filter(function(x){ return x.name; });
+    LIST.sort(function(a,b){ return a.name<b.name?-1:1; });
+    lsSet(LKEY,{t:Date.now(), rows:LIST});
+    return LIST;
+  }
+  async function muta(id){
+    if(MUTAC[id]) return MUTAC[id];
+    var d=null;
+    try{ d=await fetch(REF+"/mutaplasmids/"+id).then(function(r){ return r.ok?r.json():null; }); }catch(e){}
+    MUTAC[id]=d; return d;
+  }
+  async function type(id){
+    if(TYPEC[id]) return TYPEC[id];
+    var d=null;
+    try{ d=await fetch(ESI+"/universe/types/"+id+"/?include_dogma=true").then(function(r){ return r.ok?r.json():null; }); }catch(e){}
+    TYPEC[id]=d; return d;
+  }
+  async function attrMeta(aids){
+    if(!ATTR){ ATTR=lsGet(AKEY)||{}; }
+    var need=aids.filter(function(a){ return !ATTR[a]; });
+    for(var i=0;i<need.length;i++){
+      try{
+        var d=await fetch(ESI+"/dogma/attributes/"+need[i]+"/").then(function(r){ return r.ok?r.json():null; });
+        if(d) ATTR[need[i]]={n:d.display_name||d.name||("Attr "+need[i]), hig:(d.high_is_good!==false)};
+      }catch(e){}
+    }
+    if(need.length) lsSet(AKEY,ATTR);
+    return ATTR;
+  }
+  async function price(id){
+    try{
+      if(window.EVEMKT && window.EVEMKT.best){
+        var b=await window.EVEMKT.best("60003760", Number(id));
+        if(b && b.sell>0) return b.sell;
+      }
+    }catch(e){}
+    try{
+      var r=await fetch(ESI+"/markets/10000002/orders/?order_type=sell&type_id="+id+"&page=1");
+      if(r.ok){ var a=await r.json(); var s=(a||[]).map(function(o){ return o.price; }); if(s.length) return Math.min.apply(null,s); }
+    }catch(e){}
+    return 0;
+  }
+  window.__MUTA={list:list, muta:muta, type:type, attrMeta:attrMeta, price:price, names:names};
+})();
+</script>
+<script>
+/* Mutaplasmid planner v1 — ui */
+(function(){
+  function $(i){ return document.getElementById(i); }
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+  function fmt(v){ if(v==null||!isFinite(v)) return "\u2014"; var a=Math.abs(v); var d=a>=100?0:(a>=1?2:4); return Number(v).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}); }
+  function isk(v){ if(!isFinite(v)||v<=0) return "\u2014"; var a=Math.abs(v); if(a>=1e9) return (v/1e9).toFixed(2)+"B"; if(a>=1e6) return (v/1e6).toFixed(2)+"M"; if(a>=1e3) return (v/1e3).toFixed(1)+"K"; return v.toFixed(0); }
+  var CUR=null, BASE=null, META={}, MAP={}, TGT={}, PX={base:0,muta:0};
+  function panelHtml(){
+    return '<section class="controls panel"><div class="mu-top">'+
+      '<div class="mu-f"><label>Mutaplasmid</label><input id="mu-search" type="text" autocomplete="off" placeholder="e.g. Decayed Compact MWD"></div>'+
+      '<div class="mu-f"><label>Base module</label><select id="mu-base"><option value="">pick a mutaplasmid first</option></select></div>'+
+      '<div class="mu-f"><label>Attempts you will buy</label><input id="mu-n" type="number" min="1" step="1" value="1"></div>'+
+      '</div><div id="mu-status" class="mu-none"></div></section>'+
+      '<div id="mu-cards"></div>'+
+      '<section class="panel"><table><thead><tr><th>Attribute</th><th>Base</th><th>Worst roll</th><th>Best roll</th><th>Multiplier</th><th>Your target</th><th>Chance</th></tr></thead><tbody id="mu-body"></tbody></table>'+
+      '<div id="mu-note" class="mu-none"></div></section>';
+  }
+  function sugBox(){ var b=$("mu-sug"); if(!b){ b=document.createElement("div"); b.id="mu-sug"; document.body.appendChild(b); } return b; }
+  function hideSug(){ var b=$("mu-sug"); if(b && b.style.display!=="none") b.style.display="none"; }
+  async function suggest(){
+    var inp=$("mu-search"); if(!inp) return;
+    var q=(inp.value||"").trim().toUpperCase();
+    if(q.length<2){ hideSug(); return; }
+    var rows=await window.__MUTA.list();
+    var hit=rows.filter(function(r){ return r.name.toUpperCase().indexOf(q)>=0; }).slice(0,12);
+    var box=sugBox();
+    if(!hit.length){ hideSug(); return; }
+    box.innerHTML="";
+    hit.forEach(function(r){
+      var d=document.createElement("div"); d.textContent=r.name;
+      d.addEventListener("mousedown",function(ev){ ev.preventDefault(); inp.value=r.name; hideSug(); pick(r.id); });
+      box.appendChild(d);
+    });
+    var rc=inp.getBoundingClientRect();
+    box.style.display="block"; box.style.left=rc.left+"px"; box.style.minWidth=Math.max(260,rc.width)+"px"; box.style.top=(rc.bottom+4)+"px";
+  }
+  function status(t){ var e=$("mu-status"); if(e && e.textContent!==t) e.textContent=t; }
+  async function pick(id){
+    status("Loading mutaplasmid\u2026");
+    CUR=await window.__MUTA.muta(id);
+    if(!CUR || !CUR.dogma_modifications){ status("Could not load that mutaplasmid."); return; }
+    MAP={};
+    var opts=[], seen={};
+    Object.keys(CUR.type_mappings||{}).forEach(function(k){
+      var m=CUR.type_mappings[k];
+      (m.applicable_type_ids||[]).forEach(function(t){ if(!seen[t]){ seen[t]=1; MAP[t]=m.resulting_type_id; opts.push(t); } });
+    });
+    var nm=await window.__MUTA.names(opts);
+    var sel=$("mu-base");
+    var rows=opts.map(function(t){ return {id:t, name:nm[t]||("Type "+t)}; }).sort(function(a,b){ return a.name<b.name?-1:1; });
+    sel.innerHTML=rows.map(function(r){ return '<option value="'+r.id+'">'+esc(r.name)+"</option>"; }).join("");
+    PX.muta=await window.__MUTA.price(id);
+    status(rows.length+" base module"+(rows.length===1?"":"s")+" accept this mutaplasmid.");
+    if(rows.length) await chooseBase(rows[0].id);
+  }
+  async function chooseBase(id){
+    TGT={};
+    var t=await window.__MUTA.type(id);
+    if(!t){ status("Could not load that module."); return; }
+    var vals={};
+    (t.dogma_attributes||[]).forEach(function(a){ vals[a.attribute_id]=a.value; });
+    BASE={id:id, name:t.name, vals:vals};
+    META=await window.__MUTA.attrMeta(Object.keys(CUR.dogma_modifications).map(Number));
+    PX.base=await window.__MUTA.price(id);
+    render();
+  }
+  function rowsData(){
+    if(!CUR||!BASE) return [];
+    return Object.keys(CUR.dogma_modifications).map(function(aid){
+      var r=CUR.dogma_modifications[aid];
+      var base=BASE.vals[aid];
+      var m=META[aid]||{n:"Attr "+aid, hig:true};
+      var lo=(base!=null)?base*r.min:null, hi=(base!=null)?base*r.max:null;
+      return {aid:aid, name:m.n, hig:m.hig, base:base, min:r.min, max:r.max, lo:lo, hi:hi};
+    }).filter(function(x){ return x.base!=null && isFinite(x.base) && x.base!==0; });
+  }
+  function chanceFor(r){
+    var t=TGT[r.aid];
+    if(t==null||!isFinite(t)) return null;
+    var need=t/r.base;
+    var span=r.max-r.min;
+    if(span<=0) return (r.hig?(r.min>=need):(r.min<=need))?1:0;
+    var ok;
+    if(r.hig) ok=(r.max-Math.max(r.min,need));
+    else ok=(Math.min(r.max,need)-r.min);
+    return Math.max(0,Math.min(1,ok/span));
+  }
+  function render(){
+    var rows=rowsData(), body=$("mu-body");
+    if(!body) return;
+    if(!rows.length){ body.innerHTML='<tr><td colspan="7" class="mu-none">Pick a mutaplasmid and a base module.</td></tr>'; $("mu-cards").innerHTML=""; return; }
+    var html=rows.map(function(r){
+      var op=r.hig?"\u2265":"\u2264";
+      var c=chanceFor(r);
+      var dir=r.hig?"higher is better":"lower is better";
+      return "<tr>"+
+        "<td>"+esc(r.name)+'<div style="font-size:10px;color:var(--muted)">'+dir+"</div></td>"+
+        "<td>"+fmt(r.base)+"</td>"+
+        '<td class="'+(r.hig?"mu-bad":"mu-good")+'">'+fmt(r.lo)+"</td>"+
+        '<td class="'+(r.hig?"mu-good":"mu-bad")+'">'+fmt(r.hi)+"</td>"+
+        "<td>"+r.min.toFixed(2)+"\u2013"+r.max.toFixed(2)+"x</td>"+
+        '<td><span class="mu-op">'+op+'</span><input data-a="'+r.aid+'" type="number" step="any" style="width:88px;display:inline-block" value="'+(TGT[r.aid]!=null?TGT[r.aid]:"")+'" placeholder="'+fmt(r.base)+'"></td>'+
+        "<td>"+(c==null?"\u2014":(c*100).toFixed(1)+"%")+"</td>"+
+      "</tr>";
+    }).join("");
+    if(body.innerHTML!==html) body.innerHTML=html;
+    var p=1, any=false;
+    rows.forEach(function(r){ var c=chanceFor(r); if(c!=null){ any=true; p*=c; } });
+    if(!any) p=null;
+    var pBetter=1;
+    rows.forEach(function(r){
+      var span=r.max-r.min; if(span<=0) return;
+      var ok=r.hig?(r.max-Math.max(r.min,1)):(Math.min(r.max,1)-r.min);
+      pBetter*=Math.max(0,Math.min(1,ok/span));
+    });
+    var cost=(PX.base||0)+(PX.muta||0);
+    var n=parseFloat(($("mu-n")||{}).value)||1;
+    var perSuccess=(p&&p>0)?(cost/p):null;
+    var cards=[
+      ["Chance per roll", p==null?"set a target":(p*100).toFixed(2)+"%", p==null?"enter a target below":"all targets met"],
+      ["Rolls per success", (p&&p>0)?(1/p).toFixed(1):"\u2014", "on average"],
+      ["Cost per attempt", isk(cost)+" ISK", "module "+isk(PX.base)+" + plasmid "+isk(PX.muta)],
+      ["Expected ISK per success", perSuccess?isk(perSuccess)+" ISK":"\u2014", "at Jita sell"],
+      ["Spend for "+n+" attempt"+(n===1?"":"s"), isk(cost*n)+" ISK", (p!=null&&p>0)?("P(at least one hit) "+((1-Math.pow(1-p,n))*100).toFixed(1)+"%"):"set a target"],
+      ["Every stat beats base", (pBetter*100).toFixed(2)+"%", "ignores your targets"]
+    ];
+    var ch=cards.map(function(c){ return '<div class="mu-card"><div class="mu-k">'+esc(c[0])+'</div><div class="mu-v">'+esc(c[1])+'</div><div class="mu-s">'+esc(c[2])+"</div></div>"; }).join("");
+    var cc=$("mu-cards"); if(cc.innerHTML!==ch) cc.innerHTML=ch;
+    var note=$("mu-note");
+    var nt="Each attribute rolls independently and uniformly across its range, so the chance of meeting every target is the product of the individual chances. Abyssal modules only sell via contracts, so the app cannot price the result \u2014 compare the ISK per success against what the roll sells for.";
+    if(note && note.textContent!==nt) note.textContent=nt;
+  }
+  function wire(){
+    $("mu-search").addEventListener("input",suggest);
+    $("mu-search").addEventListener("focus",suggest);
+    $("mu-search").addEventListener("blur",function(){ setTimeout(hideSug,150); });
+    $("mu-base").addEventListener("change",function(){ chooseBase(Number(this.value)); });
+    $("mu-n").addEventListener("input",render);
+    $("mu-body").addEventListener("input",function(e){
+      var a=e.target&&e.target.getAttribute?e.target.getAttribute("data-a"):null;
+      if(!a) return;
+      var v=parseFloat(e.target.value);
+      if(isFinite(v)) TGT[a]=v; else delete TGT[a];
+      render();
+    });
+    window.addEventListener("scroll",hideSug,true);
+    window.addEventListener("resize",hideSug);
+  }
+  function panels(){ return [].slice.call(document.querySelectorAll('[id^="tab-"]')).filter(function(e){ return /^(SECTION|DIV)$/.test(e.tagName); }); }
+  function myBtn(){ return document.querySelector('nav.tabs button.tab[data-tab=muta]'); }
+  function show(){
+    panels().forEach(function(s){ if(s.id==="tab-muta") s.removeAttribute("hidden"); else s.setAttribute("hidden",""); });
+    [].slice.call(document.querySelectorAll("nav.tabs button.tab")).forEach(function(x){ x.className=String(x.className).replace(/\s*active/,""); });
+    var me=myBtn(); if(me && !/\bactive\b/.test(me.className)) me.className+=" active";
+    if(window.__tabTick) window.__tabTick();
+    render();
+  }
+  function guard(){
+    var sec=$("tab-muta"), me=myBtn(); if(!sec||!me) return;
+    var mine=/\bactive\b/.test(me.className);
+    var other=[].slice.call(document.querySelectorAll("nav.tabs button.tab")).some(function(x){ return x!==me && /\bactive\b/.test(x.className); });
+    if(other && mine){ me.className=String(me.className).replace(/\s*active/,""); mine=false; }
+    if(mine && sec.hasAttribute("hidden")) sec.removeAttribute("hidden");
+    if(!mine && !sec.hasAttribute("hidden")) sec.setAttribute("hidden","");
+  }
+  function mount(){
+    if($("tab-muta")) return true;
+    var nav=document.querySelector("nav.tabs");
+    var anchor=$("tab-react")||$("tab-calc");
+    if(!nav||!anchor) return false;
+    var b=document.createElement("button");
+    b.className="tab"; b.setAttribute("data-tab","muta"); b.textContent="Mutaplasmids"; b.style.display="none";
+    nav.appendChild(b);
+    var sec=document.createElement("section"); sec.id="tab-muta"; sec.setAttribute("hidden","");
+    sec.innerHTML=panelHtml();
+    anchor.parentNode.insertBefore(sec, anchor.nextSibling);
+    wire();
+    b.addEventListener("click",show);
+    return true;
+  }
+  function boot(){
+    if(!window.__MUTA){ setTimeout(boot,400); return; }
+    if(!mount()){ setTimeout(boot,500); return; }
+    if(window.__tabTick) window.__tabTick();
+    setInterval(guard,400);
+    render();
+  }
+  setTimeout(boot,1000);
+  window.__MUTAUI={render:render, pick:pick, chooseBase:chooseBase, rows:rowsData, chance:chanceFor};
 })();
 </script>
 </body>
