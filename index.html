@@ -7225,6 +7225,8 @@ function tagOre(){
       var z=await fetch("https://zkillboard.com/api/regionID/"+region+"/").then(function(r){ return r.ok?r.json():[]; });
       if(!z.length){ if(note) note.textContent="No recent kills returned for this region."; busy=false; return; }
       var hulls={}, mods={}, times=[];
+      var ammo={};
+      var CHG=(function(){ var s={}; try{ var ci=JSON.parse(localStorage.getItem("eveCatIdxV1")||"{}"); (ci.groups||[]).forEach(function(g){ if(Number(g.cat)===8) (g.types||[]).forEach(function(t){ s[t]=1; }); }); }catch(e){} return s; })();
       z.forEach(function(k){
         if(k.killmail_time) times.push(Date.parse(k.killmail_time));
         var v=k.victim||{};
@@ -7233,29 +7235,31 @@ function tagOre(){
           if(!FITTED(it.flag)) return;
           var q=(it.quantity_destroyed||0)+(it.quantity_dropped||0);
           if(!q) q=1;
-          mods[it.item_type_id]=(mods[it.item_type_id]||0)+q;
+          if(CHG[it.item_type_id]) ammo[it.item_type_id]=(ammo[it.item_type_id]||0)+q; else mods[it.item_type_id]=(mods[it.item_type_id]||0)+q;
         });
       });
       function top(o,n){ return Object.keys(o).map(function(k){ return {id:Number(k),n:o[k]}; }).sort(function(a,b){ return b.n-a.n; }).slice(0,n); }
       var CAPSULES={670:1,33328:1};
       Object.keys(CAPSULES).forEach(function(cid){ delete hulls[cid]; });
-      var tH=top(hulls,12), tM=top(mods,12);
-      var ids=tH.concat(tM).map(function(r){ return r.id; });
+      var tH=top(hulls,12), tM=top(mods,12), tA=top(ammo,12);
+      var ids=tH.concat(tM).concat(tA).map(function(r){ return r.id; });
       var nm={};
       try{ nm=await EVEAPI.names(ids)||{}; }catch(e){ nm={}; }
       tH.forEach(function(r){ r.name=nm[r.id]||("Type "+r.id); });
       tM.forEach(function(r){ r.name=nm[r.id]||("Type "+r.id); });
+      tA.forEach(function(r){ r.name=nm[r.id]||("Type "+r.id); });
       var px=await fuzz(Number(region),ids.map(String));
       var bpOk=!!(window.EVEBP&&window.EVEBP.ok);
-      var vH=0,vM=0,nH=0,nM=0;
+      var vH=0,vM=0,nH=0,nM=0; var vA=0,nA=0;
       tH.forEach(function(r){ nH+=r.n; var u=px[r.id]; if(u) vH+=u*r.n; });
       tM.forEach(function(r){ nM+=r.n; var u=px[r.id]; if(u) vM+=u*r.n; });
+      tA.forEach(function(r){ nA+=r.n; var u=px[r.id]; if(u) vA+=u*r.n; });
       var richest=tH.slice().sort(function(a,b){ return ((px[b.id]||0)*b.n)-((px[a.id]||0)*a.n); })[0];
       var canBuild=0;
       if(bpOk&&window.EVEBP&&window.EVEBP.byProduct){ tH.forEach(function(r){ if(window.EVEBP.byProduct[r.id]) canBuild++; }); }
       var hrs2=times.length?((Math.max.apply(null,times)-Math.min.apply(null,times))/3600000):0;
       var cards="<div id=kd-cards>";
-      cards+="<div class=kd-card><b>"+isk(vH+vM)+"</b><span>Replaceable value</span><small>hulls and fitted modules</small></div>";
+      cards+="<div class=kd-card><b>"+isk(vH+vM+vA)+"</b><span>Replaceable value</span><small>hulls, modules and ammo</small></div>";
       cards+="<div class=kd-card><b>"+z.length+"</b><span>Kills sampled</span><small>"+(hrs2?(hrs2<1?(Math.round(hrs2*60)+" minutes"):(hrs2.toFixed(1)+" hours")):"recent")+"</small></div>";
       cards+="<div class=kd-card><b>"+(hrs2?(z.length/hrs2).toFixed(1):"\u2014")+"</b><span>Kills per hour</span><small>in this region</small></div>";
       cards+="<div class=kd-card><b>"+esc(tH[0]?tH[0].name:"\u2014")+"</b><span>Most lost hull</span><small>"+(tH[0]?(tH[0].n+" destroyed"):"")+"</small></div>";
@@ -7264,7 +7268,7 @@ function tagOre(){
       cards+="</div>";
       var oldc=$("kd-cards"); if(oldc&&oldc.parentNode) oldc.parentNode.removeChild(oldc);
       $("kd-note").insertAdjacentHTML("afterend",cards);
-      $("kd-grid").innerHTML=table("Hulls lost",tH,px,bpOk)+table("Fitted modules lost",tM,px,bpOk);
+      $("kd-grid").innerHTML=table("Hulls lost",tH,px,bpOk)+table("Fitted modules lost",tM,px,bpOk)+table("Ammo & charges lost",tA,px,bpOk);
       var span="";
       if(times.length){
         var hrs=(Math.max.apply(null,times)-Math.min.apply(null,times))/3600000;
