@@ -11541,7 +11541,7 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
 /* Mutaplasmid planner v1 — data */
 (function(){
   var REF="https://ref-data.everef.net", ESI="https://esi.evetech.net/latest";
-  var LKEY="eveMutaListV1", AKEY="eveDogmaAttrV1";
+  var LKEY="eveMutaListV1", AKEY="eveDogmaAttrV2";
   var LIST=null, ATTR=null, TYPEC={}, MUTAC={};
   function lsGet(k){ try{ return JSON.parse(localStorage.getItem(k)||"null"); }catch(e){ return null; } }
   function lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
@@ -11587,7 +11587,7 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
     for(var i=0;i<need.length;i++){
       try{
         var d=await fetch(ESI+"/dogma/attributes/"+need[i]+"/").then(function(r){ return r.ok?r.json():null; });
-        if(d) ATTR[need[i]]={n:d.display_name||d.name||("Attr "+need[i]), hig:(d.high_is_good!==false)};
+        if(d) ATTR[need[i]]={n:d.display_name||d.name||("Attr "+need[i]), hig:(d.high_is_good===true)};
       }catch(e){}
     }
     if(need.length) lsSet(AKEY,ATTR);
