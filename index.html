@@ -11708,8 +11708,8 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
       return "<tr>"+
         "<td>"+esc(r.name)+'<div style="font-size:10px;color:var(--muted)">'+dir+"</div></td>"+
         "<td>"+fmt(r.base)+"</td>"+
-        '<td class="'+(r.hig?"mu-bad":"mu-good")+'">'+fmt(r.lo)+"</td>"+
-        '<td class="'+(r.hig?"mu-good":"mu-bad")+'">'+fmt(r.hi)+"</td>"+
+        '<td class="mu-bad">'+fmt(r.hig?r.lo:r.hi)+"</td>"+
+        '<td class="mu-good">'+fmt(r.hig?r.hi:r.lo)+"</td>"+
         "<td>"+r.min.toFixed(2)+"\u2013"+r.max.toFixed(2)+"x</td>"+
         '<td><span class="mu-op">'+op+'</span><input data-a="'+r.aid+'" type="number" step="any" style="width:88px;display:inline-block" value="'+(TGT[r.aid]!=null?TGT[r.aid]:"")+'" placeholder="'+fmt(r.base)+'"></td>'+
         "<td>"+(c==null?"\u2014":(c*100).toFixed(1)+"%")+"</td>"+
