@@ -4780,7 +4780,7 @@ function tagOre(){
   }
   function addOpts(){var grp=$('pw-group');if(!grp)return;if(grp.options.length<4)return;if([].some.call(grp.options,function(o){return o.value==='raw:min';}))return;[['raw:min','\u26cf\ufe0f Minerals'],['raw:ice','\u2744\ufe0f Ice'],['raw:gas','\u2601\ufe0f Gas']].forEach(function(p){var op=document.createElement('option');op.value=p[0];op.textContent=p[1];grp.appendChild(op);});}
   document.addEventListener('click',function(ev){if(!ev.target.closest)return;var b=ev.target.closest('#pw-go');if(!b)return;var grp=$('pw-group');if(!grp||!grp.value)return;ev.stopImmediatePropagation();ev.preventDefault();if(!building)runScan(grp.value);},true);
-  function watchBody(){var body=$('pw-body');if(!body||body._rawObs)return;body._rawObs=1;new MutationObserver(function(){if(active&&!myWrite){if(reTimer)clearTimeout(reTimer);reTimer=setTimeout(function(){if(active&&!building)runScan(active);},450);}}).observe(body,{childList:true});}
+  function watchBody(){var body=$('pw-body');if(!body||body._rawObs)return;body._rawObs=1;new MutationObserver(function(){if(active&&!myWrite){if(reTimer)clearTimeout(reTimer);reTimer=setTimeout(function(){if(active&&!building)runScan((document.getElementById("pw-group")||{}).value||active);},450);}}).observe(body,{childList:true});}
   setInterval(function(){var t=$('tab-top');if(!(t&&!t.hidden&&t.offsetParent!==null))return;addOpts();extras();watchBody();var grp=$('pw-group');if(active&&grp&&grp.value===''&&[].some.call(grp.options,function(o){return o.value===active;})){grp.value=active;}},900);
 })();
 </script>
