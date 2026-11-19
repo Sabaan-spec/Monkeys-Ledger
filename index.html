@@ -8797,7 +8797,7 @@ function tagOre(){
       var opts=SHIPS.map(function(s){ return "<option value="+s[0]+">"+s[1]+"</option>"; }).join("");
       p.innerHTML="<section class=\"panel\"><div>"+
         "<h4>\ud83d\ude80 Jump planner</h4>"+
-        "<div id=jm-bar><label>Jump freighter<select id=jm-ship>"+opts+"</select></label>"+
+        "<div id=jm-bar><label>Ship<select id=jm-ship>"+opts+"</select></label>"+
         "<button id=jm-scan class=tab style=\"padding:9px 16px\">Build jump map</button>"+
         "<span id=jm-status></span><div id=jm-prog><i></i></div></div>"+
         "<div id=jm-body></div>"+
@@ -11799,6 +11799,76 @@ button.mp-reset:hover{border-color:var(--warn);color:var(--text)}
   }
   setTimeout(boot,1000);
   window.__MUTAUI={render:render, pick:pick, chooseBase:chooseBase, rows:rowsData, chance:chanceFor};
+})();
+</script>
+<script>
+/* Jump planner ships v1 */
+(function(){
+  var ORDER=["Black Ops","Jump Freighter","Capital Industrial Ship","Carrier","Force Auxiliary","Dreadnought","Supercarrier","Titan"];
+  var LABEL={"Capital Industrial Ship":"Capital Industrial"};
+  var NKEY="eveJumpShipsV1";
+  var built=false, busy=false;
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+  function groups(){
+    var out=[];
+    try{
+      var ci=JSON.parse(localStorage.getItem("eveCatIdxV1")||"{}");
+      var by={}; (ci.groups||[]).forEach(function(g){ by[String(g.name)]=g; });
+      ORDER.forEach(function(n){ var g=by[n]; if(g && (g.types||[]).length) out.push({name:(LABEL[n]||n), types:g.types.slice()}); });
+    }catch(e){}
+    return out;
+  }
+  async function nameMap(ids){
+    var nm=null;
+    try{ var c=JSON.parse(localStorage.getItem(NKEY)||"null"); if(c && c.t && (Date.now()-c.t)<30*864e5 && c.nm) nm=c.nm; }catch(e){}
+    if(nm){ var miss=ids.filter(function(i){ return !nm[i]; }); if(!miss.length) return nm; }
+    nm=nm||{};
+    for(var i=0;i<ids.length;i+=900){
+      try{
+        var r=await fetch("https://esi.evetech.net/latest/universe/names/",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(ids.slice(i,i+900))});
+        if(r.ok) (await r.json()).forEach(function(n){ nm[n.id]=n.name; });
+      }catch(e){}
+    }
+    try{ localStorage.setItem(NKEY,JSON.stringify({t:Date.now(), nm:nm})); }catch(e){}
+    return nm;
+  }
+  async function fill(){
+    if(built||busy) return;
+    var sel=document.getElementById("jm-ship"); if(!sel) return;
+    var gs=groups(); if(!gs.length) return;
+    busy=true;
+    try{
+      var ids=[]; gs.forEach(function(g){ g.types.forEach(function(t){ ids.push(t); }); });
+      var nm=await nameMap(ids);
+      var keep=sel.value;
+      var html=gs.map(function(g){
+        var ships=g.types.map(function(t){ return [t, nm[t]||""]; }).filter(function(s){ return s[1]; }).sort(function(a,b){ return a[1]<b[1]?-1:1; });
+        if(!ships.length) return "";
+        return '<optgroup label="'+esc(g.name)+'">'+ships.map(function(s){ return '<option value="'+s[0]+'">'+esc(s[1])+"</option>"; }).join("")+"</optgroup>";
+      }).join("");
+      if(html && sel.innerHTML!==html){
+        sel.innerHTML=html;
+        var has=false; [].forEach.call(sel.options,function(o){ if(o.value===keep) has=true; });
+        if(has) sel.value=keep;
+        sel.dispatchEvent(new Event("change",{bubbles:true}));
+      }
+      built=true;
+    }catch(e){}
+    busy=false;
+  }
+  var JFID={28844:1,28850:1,28846:1,28848:1};
+  function jfRow(){
+    var sel=document.getElementById("jm-ship"); if(!sel) return;
+    var isJF=!!JFID[Number(sel.value)];
+    var rows=document.querySelectorAll("#tab-jump .jm-row");
+    [].forEach.call(rows,function(r){
+      if(String(r.textContent).indexOf("Jump Freighters V")<0) return;
+      var want=isJF?"":"none";
+      if(r.style.display!==want) r.style.display=want;
+    });
+  }
+  setInterval(function(){ var t=document.getElementById("tab-jump"); if(t && !t.hidden && t.offsetParent!==null){ fill(); jfRow(); } },1000);
+  window.__JMSHIPS={fill:fill, groups:groups, jfRow:jfRow};
 })();
 </script>
 </body>
